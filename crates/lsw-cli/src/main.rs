@@ -152,6 +152,9 @@ enum Cmd {
         #[arg(long, conflicts_with = "pid")]
         all: bool,
     },
+    /// Import and manage user-provided Windows SDK sysroots.
+    #[command(subcommand)]
+    Sdk(SdkCmd),
     /// IDE integration helpers.
     #[command(subcommand)]
     Ide(IdeCmd),
@@ -163,6 +166,24 @@ enum Cmd {
 enum IdeCmd {
     /// Print the environment description IDE plugins consume (JSON).
     Env,
+}
+
+#[derive(Subcommand)]
+enum SdkCmd {
+    /// Import a user-obtained SDK directory as a named sysroot.
+    Import {
+        name: String,
+        /// Path to the SDK content the user has legally obtained.
+        #[arg(long)]
+        from: PathBuf,
+        /// Overwrite an existing SDK of the same name.
+        #[arg(long)]
+        force: bool,
+    },
+    /// List imported SDKs.
+    List,
+    /// Remove an imported SDK.
+    Remove { name: String },
 }
 
 #[derive(Subcommand)]
@@ -762,6 +783,43 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 eprintln!("usage: lsw kill <pid> | lsw kill --all");
                 return Ok(ExitCode::FAILURE);
             }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Sdk(SdkCmd::Import { name, from, force }) => {
+            println!("Importing SDK '{name}' from {}...", from.display());
+            println!(
+                "Note: you are responsible for the license terms of any Microsoft SDK content you import."
+            );
+            let report = lsw_core::sdkops::import(&dirs, name, from, *force)?;
+            println!(
+                "Imported '{}' ({} files) to {}",
+                report.name,
+                report.files_copied,
+                report.root.display()
+            );
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Sdk(SdkCmd::List) => {
+            let sdks = lsw_core::sdkops::list(&dirs)?;
+            if sdks.is_empty() {
+                println!("No SDKs imported. Import one with: lsw sdk import <name> --from <path>");
+            }
+            for s in sdks {
+                println!(
+                    "{:<20} {:<10} {}",
+                    s.name,
+                    if s.usable { "usable" } else { "incomplete" },
+                    s.source.display()
+                );
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Sdk(SdkCmd::Remove { name }) => {
+            lsw_core::sdkops::remove(&dirs, name)?;
+            println!("Removed SDK '{name}'");
             Ok(ExitCode::SUCCESS)
         }
 

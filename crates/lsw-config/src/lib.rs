@@ -384,6 +384,14 @@ impl Dirs {
         self.environments().join(name)
     }
 
+    pub fn sysroots(&self) -> PathBuf {
+        self.data.join("sysroots")
+    }
+
+    pub fn sysroot(&self, name: &str) -> PathBuf {
+        self.sysroots().join(name)
+    }
+
     pub fn user_config_file(&self) -> PathBuf {
         self.config.join("config.toml")
     }

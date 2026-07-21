@@ -95,6 +95,18 @@ pub enum Error {
     NoTests,
 
     #[error(
+        "LSW2019: SDK '{name}' already exists\n\
+         Possible fixes:\n  lsw sdk import {name} --from <path> --force\n  lsw sdk remove {name}"
+    )]
+    SdkExists { name: String },
+
+    #[error(
+        "LSW2020: SDK '{name}' does not exist\n\
+         List imported SDKs with: lsw sdk list"
+    )]
+    SdkNotFound { name: String },
+
+    #[error(
         "LSW2018: two build artifacts share the name '{name}' ({} and {})\n\
          Packaging them flat would ship the wrong binary. Rename a target or build a single configuration.",
         first.display(), second.display()
