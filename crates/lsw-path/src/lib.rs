@@ -79,6 +79,7 @@ impl PathMapper {
                 path: path.to_path_buf(),
             });
         }
+        let path = normalize_lexically(path);
         for mapping in &self.mappings {
             let Ok(rest) = path.strip_prefix(&mapping.linux) else {
                 continue;
@@ -94,7 +95,11 @@ impl PathMapper {
                         comps.push(part.to_owned());
                     }
                     Component::CurDir => {}
-                    Component::ParentDir => comps.push("..".to_owned()),
+                    Component::ParentDir => {
+                        return Err(PathError::Unmapped {
+                            path: path.to_string_lossy().into_owned(),
+                        });
+                    }
                     Component::RootDir | Component::Prefix(_) => {}
                 }
             }
@@ -129,6 +134,24 @@ impl PathMapper {
         }
         Ok(out)
     }
+}
+
+fn normalize_lexically(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::RootDir | Component::Prefix(_) => out.push(component),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                let popped = out.pop();
+                if !popped || out.as_os_str().is_empty() {
+                    out = PathBuf::from("/");
+                }
+            }
+            Component::Normal(part) => out.push(part),
+        }
+    }
+    out
 }
 
 fn parse_windows(path: &str) -> Result<(char, Vec<&str>), PathError> {
@@ -441,5 +464,46 @@ mod tests {
             mapper.to_linux("C:\\x").unwrap_err(),
             PathError::Unmapped { .. }
         ));
+    }
+
+    #[test]
+    fn to_windows_normalizes_dotdot_instead_of_escaping() {
+        let mapper = PathMapper::for_environment(
+            Path::new("/env/drive_c"),
+            Path::new("/home/alice/code/demo"),
+            "demo",
+        );
+        let err = mapper
+            .to_windows(Path::new("/home/alice/code/demo/../demo-secrets/key.pem"))
+            .unwrap_err();
+        assert!(matches!(err, PathError::Unmapped { .. }));
+        assert_eq!(
+            mapper
+                .to_windows(Path::new("/home/alice/code/demo/build/../src/main.c"))
+                .unwrap(),
+            "C:\\src\\demo\\src\\main.c"
+        );
+        assert_eq!(
+            mapper
+                .to_windows(Path::new("/env/drive_c/Temp/../windows"))
+                .unwrap(),
+            "C:\\windows"
+        );
+    }
+
+    #[test]
+    fn normalize_lexically_stops_at_root() {
+        assert_eq!(
+            normalize_lexically(Path::new("/../../etc/passwd")),
+            PathBuf::from("/etc/passwd")
+        );
+        assert_eq!(
+            normalize_lexically(Path::new("/a/b/../..")),
+            PathBuf::from("/")
+        );
+        assert_eq!(
+            normalize_lexically(Path::new("/a/./b/../c")),
+            PathBuf::from("/a/c")
+        );
     }
 }

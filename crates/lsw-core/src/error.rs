@@ -67,6 +67,21 @@ pub enum Error {
 
     #[error("LSW2011: required tool '{tool}' not found on PATH\nPossible fixes: {fix}")]
     ToolMissing { tool: String, fix: String },
+
+    #[error(
+        "LSW2012: invalid {kind} name '{name}'\n\
+         Names must be non-empty and must not contain path separators, '..', or NUL"
+    )]
+    InvalidName { kind: String, name: String },
+
+    #[error(
+        "LSW2013: build produced '{}' which is not a Windows PE binary ({found})\n\
+         The build ran with host tools but did not cross-compile.\n\
+         Possible fixes:\n  \
+         use the generated CMake toolchain (default `lsw build`), or\n  \
+         make your [build] command honor CC/CXX/CFLAGS/CXXFLAGS/LDFLAGS", artifact.display()
+    )]
+    ArtifactNotPe { artifact: PathBuf, found: String },
 }
 
 impl Error {
