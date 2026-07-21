@@ -1,4 +1,5 @@
 pub mod buildops;
+pub mod compatdb;
 pub mod compatops;
 pub mod daemonops;
 pub mod debugops;

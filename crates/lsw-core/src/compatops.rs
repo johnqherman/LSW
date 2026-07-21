@@ -81,6 +81,24 @@ pub fn compat(
     program: &std::path::Path,
     args: &[String],
 ) -> Result<CompatReport> {
+    compat_inner(env, program, args, None)
+}
+
+pub fn compat_recording(
+    env: &Environment,
+    program: &std::path::Path,
+    args: &[String],
+    dirs: &lsw_config::Dirs,
+) -> Result<CompatReport> {
+    compat_inner(env, program, args, Some(dirs))
+}
+
+fn compat_inner(
+    env: &Environment,
+    program: &std::path::Path,
+    args: &[String],
+    record_to: Option<&lsw_config::Dirs>,
+) -> Result<CompatReport> {
     let trace = traceops::trace(env, program, args, &TraceOptions { relay: false })?;
 
     let imported: Vec<String> = trace
@@ -95,14 +113,28 @@ pub fn compat(
         .collect();
 
     let mut supported = 0usize;
+    let mut supported_keys = Vec::new();
     let mut unsupported = Vec::new();
     for dll in &imported {
         let is_apiset = dll.starts_with("api-ms-win-") || dll.starts_with("ext-ms-win-");
         if is_apiset || loaded.contains(dll) {
             supported += 1;
+            supported_keys.push(dll.clone());
         } else {
             unsupported.push(dll.clone());
         }
+    }
+
+    if let Some(dirs) = record_to {
+        let runtime = format!(
+            "{} {}",
+            env.manifest.runtime.provider, env.manifest.runtime.version
+        );
+        let mut fails = unsupported.clone();
+        fails.extend(trace.unsupported.iter().cloned());
+        let mut db = crate::compatdb::CompatDb::load(dirs)?;
+        db.record(&runtime, &supported_keys, &fails);
+        db.save(dirs)?;
     }
 
     let capabilities = classify(&imported);

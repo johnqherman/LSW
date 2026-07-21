@@ -133,6 +133,14 @@ enum Cmd {
         program: PathBuf,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
+        /// Record observations into the persistent compatibility database.
+        #[arg(long)]
+        db: bool,
+    },
+    /// Query the persistent compatibility database.
+    CompatQuery {
+        /// A DLL name or `module!function` to look up.
+        key: String,
     },
     /// Trace a Windows binary's DLL loads and API calls under the runtime.
     Trace {
@@ -756,9 +764,41 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             Ok(exit_from_status(status))
         }
 
-        Cmd::Compat { program, args } => {
+        Cmd::CompatQuery { key } => {
+            let db = lsw_core::compatdb::CompatDb::load(&dirs)?;
+            match db.query(key) {
+                Some(entry) => {
+                    let verdict = match entry.verdict() {
+                        lsw_core::compatdb::Verdict::Supported => "SUPPORTED",
+                        lsw_core::compatdb::Verdict::Unsupported => "UNSUPPORTED",
+                    };
+                    if cli.format == Format::Json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(entry).expect("serializes")
+                        );
+                    } else {
+                        println!("{key}: {verdict}");
+                        println!(
+                            "  observed supported {} / unsupported {} (last: {})",
+                            entry.supported_count, entry.unsupported_count, entry.last_runtime
+                        );
+                    }
+                }
+                None => println!(
+                    "{key}: not in the compatibility database yet (run `lsw compat --db <app.exe>`)"
+                ),
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Compat { program, args, db } => {
             let (_p, env) = active_env(&dirs)?;
-            let report = lsw_core::compatops::compat(&env, program, args)?;
+            let report = if *db {
+                lsw_core::compatops::compat_recording(&env, program, args, &dirs)?
+            } else {
+                lsw_core::compatops::compat(&env, program, args)?
+            };
             if cli.format == Format::Json {
                 println!(
                     "{}",
