@@ -95,6 +95,12 @@ pub enum Error {
     NoTests,
 
     #[error(
+        "LSW2021: unsupported verification transport '{transport}'\n\
+         Only 'ssh' is implemented; set transport = \"ssh\" in [verify]"
+    )]
+    UnsupportedTransport { transport: String },
+
+    #[error(
         "LSW2019: SDK '{name}' already exists\n\
          Possible fixes:\n  lsw sdk import {name} --from <path> --force\n  lsw sdk remove {name}"
     )]
