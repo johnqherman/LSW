@@ -90,6 +90,12 @@ enum Cmd {
         #[arg(long)]
         headless: bool,
     },
+    /// Build, then verify artifacts on a real Windows host.
+    Verify {
+        /// Run on native Windows (the only supported mode today).
+        #[arg(long)]
+        native_windows: bool,
+    },
     /// Interactive shell: Linux with Windows-target env, or cmd.exe.
     Shell {
         /// Launch an actual Windows shell (cmd.exe) in the environment.
@@ -531,6 +537,40 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     ExitCode::FAILURE
                 },
             )
+        }
+
+        Cmd::Verify { native_windows } => {
+            let (p, env) = active_env(&dirs)?;
+            if !*native_windows {
+                eprintln!("note: only --native-windows verification is supported");
+            }
+            let report = lsw_core::verifyops::verify(&p, &env)?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("serializes")
+                );
+            } else {
+                let status = match report.status {
+                    lsw_core::verifyops::VerifyStatus::WindowsVerified => "WINDOWS_VERIFIED",
+                    lsw_core::verifyops::VerifyStatus::WindowsFailed => "WINDOWS_FAILED",
+                    lsw_core::verifyops::VerifyStatus::WindowsUnavailable => "WINDOWS_UNAVAILABLE",
+                };
+                println!(
+                    "Native verification host: {}",
+                    report.host.as_deref().unwrap_or("none")
+                );
+                for r in &report.results {
+                    println!("  {:<24} exit {:?}", r.artifact, r.exit_code);
+                }
+                println!("Status: {status}");
+                println!("{}", report.detail);
+            }
+            Ok(match report.status {
+                lsw_core::verifyops::VerifyStatus::WindowsVerified => ExitCode::SUCCESS,
+                lsw_core::verifyops::VerifyStatus::WindowsUnavailable => ExitCode::SUCCESS,
+                lsw_core::verifyops::VerifyStatus::WindowsFailed => ExitCode::FAILURE,
+            })
         }
 
         Cmd::Shell { windows } => {

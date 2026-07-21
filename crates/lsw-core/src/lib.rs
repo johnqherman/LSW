@@ -14,6 +14,7 @@ pub mod runops;
 pub mod sdkops;
 pub mod testops;
 pub mod traceops;
+pub mod verifyops;
 
 pub use buildops::{BuildOptions, BuildReport, BuildSystem, build};
 pub use doctorops::{DoctorReport, Section, Status, doctor};
