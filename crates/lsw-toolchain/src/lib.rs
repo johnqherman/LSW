@@ -104,6 +104,12 @@ impl ToolchainProvider for LlvmMingw {
         if let Some(libgcc) = latest_gcc_lib_dir(triple) {
             link_flags.push(format!("-L{}", libgcc.display()));
         }
+        link_flags.push("-static".to_owned());
+        link_flags.push("-lwinpthread".to_owned());
+        let cxx_flags = libstdcxx_include_dirs(&sysroot, triple)
+            .into_iter()
+            .map(|d| format!("-I{}", d.display()))
+            .collect();
         Ok(ResolvedToolchain {
             provider: self.id().to_owned(),
             version: compiler_version(&cc),
@@ -111,11 +117,36 @@ impl ToolchainProvider for LlvmMingw {
                 format!("--target={triple}"),
                 format!("--sysroot={}", sysroot.display()),
             ],
+            cxx_flags,
             link_flags,
             cc,
             cxx,
             sysroot,
         })
+    }
+}
+
+fn libstdcxx_include_dirs(sysroot: &Path, triple: &str) -> Vec<PathBuf> {
+    let base = sysroot.join("include/c++");
+    let mut versions: Vec<PathBuf> = std::fs::read_dir(&base)
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.join("iostream").is_file())
+        .collect();
+    versions.sort();
+    match versions.pop() {
+        Some(dir) => {
+            let target = dir.join(triple);
+            let mut out = vec![dir];
+            if target.is_dir() {
+                out.push(target);
+            }
+            out
+        }
+        None => Vec::new(),
     }
 }
 
@@ -150,7 +181,8 @@ impl ToolchainProvider for MingwGcc {
             provider: self.id().to_owned(),
             version: compiler_version(&cc),
             c_flags: Vec::new(),
-            link_flags: Vec::new(),
+            cxx_flags: Vec::new(),
+            link_flags: vec!["-static".to_owned()],
             cc,
             cxx,
             sysroot: PathBuf::from(format!("/usr/{triple}")),
@@ -306,6 +338,13 @@ pub fn write_cmake_toolchain_file(
         TargetArch::Aarch64 => "ARM64",
     };
     let c_flags = tc.c_flags.join(" ");
+    let cxx_flags = tc
+        .c_flags
+        .iter()
+        .chain(&tc.cxx_flags)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(" ");
     let link_flags = tc.link_flags.join(" ");
 
     let mut text = String::new();
@@ -318,7 +357,7 @@ pub fn write_cmake_toolchain_file(
         tc.cxx.display()
     ));
     text.push_str(&format!("set(CMAKE_C_FLAGS_INIT \"{c_flags}\")\n"));
-    text.push_str(&format!("set(CMAKE_CXX_FLAGS_INIT \"{c_flags}\")\n"));
+    text.push_str(&format!("set(CMAKE_CXX_FLAGS_INIT \"{cxx_flags}\")\n"));
     text.push_str(&format!(
         "set(CMAKE_EXE_LINKER_FLAGS_INIT \"{link_flags}\")\n"
     ));
@@ -418,6 +457,7 @@ mod tests {
                 "--target=x86_64-w64-mingw32".to_owned(),
                 "--sysroot=/usr/x86_64-w64-mingw32".to_owned(),
             ],
+            cxx_flags: vec!["-I/usr/x86_64-w64-mingw32/include/c++/16.1.0".to_owned()],
             link_flags: vec!["-fuse-ld=lld".to_owned()],
         }
     }
@@ -451,7 +491,7 @@ mod tests {
             "set(CMAKE_C_FLAGS_INIT \"--target=x86_64-w64-mingw32 --sysroot=/usr/x86_64-w64-mingw32\")"
         ));
         assert!(text.contains(
-            "set(CMAKE_CXX_FLAGS_INIT \"--target=x86_64-w64-mingw32 --sysroot=/usr/x86_64-w64-mingw32\")"
+            "set(CMAKE_CXX_FLAGS_INIT \"--target=x86_64-w64-mingw32 --sysroot=/usr/x86_64-w64-mingw32 -I/usr/x86_64-w64-mingw32/include/c++/16.1.0\")"
         ));
         assert!(text.contains("set(CMAKE_EXE_LINKER_FLAGS_INIT \"-fuse-ld=lld\")"));
         assert!(text.contains("set(CMAKE_SHARED_LINKER_FLAGS_INIT \"-fuse-ld=lld\")"));
@@ -607,8 +647,13 @@ mod tests {
             tc.link_flags.first().map(String::as_str),
             Some("-fuse-ld=lld")
         );
+        assert!(tc.link_flags.iter().any(|f| f == "-static"));
+        assert!(tc.link_flags.iter().any(|f| f == "-lwinpthread"));
         for extra in &tc.link_flags[1..] {
-            assert!(extra.starts_with("-L"), "unexpected link flag {extra}");
+            assert!(
+                extra.starts_with("-L") || extra == "-static" || extra == "-lwinpthread",
+                "unexpected link flag {extra}"
+            );
         }
 
         let report = LlvmMingw.probe(TargetArch::X86_64).unwrap();
@@ -631,7 +676,7 @@ mod tests {
         assert!(tc.cc.is_absolute());
         assert!(tc.cc.ends_with("x86_64-w64-mingw32-gcc"));
         assert!(tc.c_flags.is_empty());
-        assert!(tc.link_flags.is_empty());
+        assert_eq!(tc.link_flags, vec!["-static"]);
         assert_ne!(tc.version, "unknown");
 
         let report = MingwGcc.probe(TargetArch::X86_64).unwrap();
@@ -684,6 +729,7 @@ mod tests {
             cc,
             sysroot: PathBuf::from("/nonexistent"),
             c_flags: vec![],
+            cxx_flags: vec![],
             link_flags: vec![],
         };
         let report = run_probe("broken", &tc);
