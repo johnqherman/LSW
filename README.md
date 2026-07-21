@@ -28,6 +28,15 @@ A binary produced by `lsw build` is a genuine Windows PE executable; running
 it under LSW exercises the local compatibility runtime (Wine). LSW never
 equates local runtime success with native Windows success.
 
+## Known limitations
+
+- The project is reachable at `C:\src\<name>` inside every environment
+  (forward mapping via a prefix symlink), but Wine derives a process's
+  *working directory* from the kernel-resolved Unix path, so `cd` inside a
+  Windows shell shows the host path under `Z:\` rather than `C:\src\<name>`.
+- Artifacts are linked with static runtimes (`-static`); they depend only on
+  DLLs shipped with Windows 10+ (KERNEL32 + UCRT api sets).
+
 ## License
 
 Apache-2.0 OR MIT.

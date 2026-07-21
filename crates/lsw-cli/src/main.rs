@@ -286,9 +286,10 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             host,
             windows,
         } => {
-            let (_p, env) = active_env(&dirs)?;
+            let (p, env) = active_env(&dirs)?;
             let domain = domain_from_flags(*host, *windows);
-            let report = lsw_core::run(&env, program, args, domain)?;
+            let report = lsw_core::run(&env, Some(&p), program, args, domain)?;
+            note_runtime_domain(&report);
             Ok(exit_from_status(report.status))
         }
 
@@ -297,10 +298,11 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             windows,
             command,
         } => {
-            let (_p, env) = active_env(&dirs)?;
+            let (p, env) = active_env(&dirs)?;
             let domain = domain_from_flags(*host, *windows);
             let (program, args) = command.split_first().expect("clap enforces non-empty");
-            let report = lsw_core::run(&env, &PathBuf::from(program), args, domain)?;
+            let report = lsw_core::run(&env, Some(&p), &PathBuf::from(program), args, domain)?;
+            note_runtime_domain(&report);
             Ok(exit_from_status(report.status))
         }
 
@@ -408,6 +410,16 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 ExitCode::FAILURE
             })
         }
+    }
+}
+
+/// Honesty marker: local runtime success must never read as
+/// native Windows success.
+fn note_runtime_domain(report: &lsw_core::RunReport) {
+    if report.domain == Domain::Windows {
+        eprintln!(
+            "[lsw] executed via local compatibility runtime (wine) - not verified on native Windows"
+        );
     }
 }
 

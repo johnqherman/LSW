@@ -4,6 +4,7 @@ use std::process::{Command, ExitStatus};
 use lsw_pe::BinaryKind;
 use lsw_runtime::{ExecutionRequest, RuntimeProvider, WineRuntime};
 
+use crate::buildops;
 use crate::envops::Environment;
 use crate::error::{Error, Result};
 use crate::project::Project;
@@ -21,39 +22,67 @@ pub struct RunReport {
     pub status: ExitStatus,
 }
 
+#[derive(Debug)]
+enum ResolvedProgram {
+    HostPath(PathBuf),
+    RuntimeResolved(PathBuf),
+}
+
 pub fn run(
     env: &Environment,
+    project: Option<&Project>,
     program: &Path,
     args: &[String],
     domain: Domain,
 ) -> Result<RunReport> {
-    let resolved = resolve_program(program)?;
-    let chosen = match domain {
-        Domain::Auto => match lsw_pe::detect(&resolved)? {
-            BinaryKind::Pe(_) => Domain::Windows,
-            BinaryKind::Elf | BinaryKind::Script => Domain::Host,
-            BinaryKind::Unknown => {
+    let resolved = resolve_program(program, domain)?;
+
+    let (chosen, launch) = match resolved {
+        ResolvedProgram::RuntimeResolved(p) => match domain {
+            Domain::Host => {
                 return Err(Error::NotExecutable {
-                    program: resolved,
-                    detail: "not a PE, ELF, or script; pass --host or --windows to force".into(),
+                    program: p,
+                    detail: "Windows-style paths cannot run in the host domain".into(),
                 });
             }
+            _ => (Domain::Windows, p),
         },
-        d => d,
+        ResolvedProgram::HostPath(p) => {
+            let chosen = match domain {
+                Domain::Auto => match lsw_pe::detect(&p)? {
+                    BinaryKind::Pe(_) => Domain::Windows,
+                    BinaryKind::Elf | BinaryKind::Script => Domain::Host,
+                    BinaryKind::Unknown => {
+                        return Err(Error::NotExecutable {
+                            program: p,
+                            detail: "not a PE, ELF, or script; pass --host or --windows to force"
+                                .into(),
+                        });
+                    }
+                },
+                d => d,
+            };
+            (chosen, p)
+        }
     };
 
     let status = match chosen {
-        Domain::Windows => WineRuntime.execute(&ExecutionRequest {
-            program: resolved,
-            args: args.to_vec(),
-            prefix: env.layout.prefix(),
-            cwd: None,
-            env: windows_env(env),
-        })?,
-        Domain::Host | Domain::Auto => Command::new(&resolved)
+        Domain::Windows => {
+            if let Some(p) = project {
+                buildops::check_lock(p, env)?;
+            }
+            WineRuntime.execute(&ExecutionRequest {
+                program: launch,
+                args: args.to_vec(),
+                prefix: env.layout.prefix(),
+                cwd: windows_cwd(env, project),
+                env: windows_env(env),
+            })?
+        }
+        Domain::Host | Domain::Auto => Command::new(&launch)
             .args(args)
             .status()
-            .map_err(|e| Error::io(resolved.clone(), e))?,
+            .map_err(|e| Error::io(launch.clone(), e))?,
     };
 
     Ok(RunReport {
@@ -69,17 +98,48 @@ fn windows_env(_env: &Environment) -> Vec<(String, String)> {
     ]
 }
 
-fn resolve_program(program: &Path) -> Result<PathBuf> {
-    if program.is_file() {
-        return Ok(program.to_path_buf());
+fn windows_cwd(env: &Environment, project: Option<&Project>) -> Option<PathBuf> {
+    let project = project?;
+    let cwd = std::env::current_dir().ok()?;
+    let mapper = crate::envops::mapper(env, project);
+    let windows = mapper.to_windows(&cwd).ok()?;
+    let rest = windows.strip_prefix("C:\\")?;
+    if rest.is_empty() {
+        return Some(env.layout.drive_c());
     }
+    Some(env.layout.drive_c().join(rest.replace('\\', "/")))
+}
+
+fn resolve_program(program: &Path, domain: Domain) -> Result<ResolvedProgram> {
     let text = program.to_string_lossy();
     if text.len() >= 2 && text.as_bytes()[1] == b':' {
-        return Ok(program.to_path_buf());
+        return Ok(ResolvedProgram::RuntimeResolved(program.to_path_buf()));
+    }
+
+    let has_separator = text.contains('/');
+    if has_separator || program.is_file() {
+        if !program.exists() {
+            return Err(Error::NotExecutable {
+                program: program.to_path_buf(),
+                detail: "file not found".into(),
+            });
+        }
+        let absolute =
+            std::path::absolute(program).map_err(|e| Error::io(program.to_path_buf(), e))?;
+        return Ok(ResolvedProgram::HostPath(absolute));
+    }
+
+    if let Some(found) = buildops::which(&text) {
+        let absolute = std::path::absolute(&found).map_err(|e| Error::io(found.clone(), e))?;
+        return Ok(ResolvedProgram::HostPath(absolute));
+    }
+    if domain == Domain::Windows {
+        return Ok(ResolvedProgram::RuntimeResolved(program.to_path_buf()));
     }
     Err(Error::NotExecutable {
         program: program.to_path_buf(),
-        detail: "file not found".into(),
+        detail: "not found on PATH; pass --windows to let the runtime resolve Windows built-ins"
+            .into(),
     })
 }
 
@@ -89,7 +149,7 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
             program: PathBuf::from("cmd.exe"),
             args: Vec::new(),
             prefix: env.layout.prefix(),
-            cwd: project.map(|p| p.root.clone()),
+            cwd: windows_cwd(env, project),
             env: windows_env(env),
         })?);
     }
@@ -116,14 +176,52 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resolve_program_rejects_missing_host_path() {
-        let err = resolve_program(Path::new("/nope/missing.exe")).unwrap_err();
+    fn missing_path_with_separator_is_rejected() {
+        let err = resolve_program(Path::new("/nope/missing.exe"), Domain::Auto).unwrap_err();
         assert!(err.to_string().contains("LSW2004"));
     }
 
     #[test]
-    fn resolve_program_passes_windows_style_paths_through() {
-        let p = resolve_program(Path::new("C:\\windows\\system32\\cmd.exe")).unwrap();
-        assert_eq!(p, PathBuf::from("C:\\windows\\system32\\cmd.exe"));
+    fn windows_style_paths_pass_through_for_the_runtime() {
+        let r = resolve_program(Path::new("C:\\windows\\system32\\cmd.exe"), Domain::Auto).unwrap();
+        assert!(
+            matches!(r, ResolvedProgram::RuntimeResolved(p) if p.to_str().unwrap().starts_with("C:"))
+        );
+    }
+
+    #[test]
+    fn bare_names_resolve_via_path_for_host_execution() {
+        let r = resolve_program(Path::new("sh"), Domain::Host).unwrap();
+        match r {
+            ResolvedProgram::HostPath(p) => {
+                assert!(p.is_absolute());
+                assert!(p.ends_with("sh"));
+            }
+            ResolvedProgram::RuntimeResolved(_) => panic!("sh must resolve on PATH"),
+        }
+    }
+
+    #[test]
+    fn unknown_bare_name_passes_through_only_for_windows_domain() {
+        let r = resolve_program(Path::new("cmd.exe"), Domain::Windows).unwrap();
+        assert!(matches!(r, ResolvedProgram::RuntimeResolved(_)));
+
+        let err = resolve_program(Path::new("no-such-tool-xyz"), Domain::Auto).unwrap_err();
+        assert!(err.to_string().contains("--windows"));
+    }
+
+    #[test]
+    fn relative_existing_file_is_absolutized() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("prog");
+        std::fs::write(&file, b"#!/bin/sh\n").unwrap();
+        let prev = std::env::current_dir().unwrap();
+        std::env::set_current_dir(tmp.path()).unwrap();
+        let r = resolve_program(Path::new("prog"), Domain::Host);
+        std::env::set_current_dir(prev).unwrap();
+        match r.unwrap() {
+            ResolvedProgram::HostPath(p) => assert!(p.is_absolute()),
+            ResolvedProgram::RuntimeResolved(_) => panic!("existing file must be a host path"),
+        }
     }
 }

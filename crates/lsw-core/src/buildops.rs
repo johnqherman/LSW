@@ -31,6 +31,7 @@ pub struct BuildReport {
 pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Result<BuildReport> {
     envops::link_project(env, project)?;
     let lock_written = sync_lockfile(project, env, opts.update_lock)?;
+    stamp_build_dir(project, env)?;
 
     let explicit = project.manifest.build.as_ref();
     let system = match (opts.system.as_deref(), explicit) {
@@ -88,12 +89,60 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
         }
     }
 
+    let artifacts = find_artifacts(&project.root.join("build"), &project.root);
+    verify_artifacts_are_pe(project, &artifacts)?;
+
     Ok(BuildReport {
         system,
         commands,
-        artifacts: find_artifacts(&project.root.join("build"), &project.root),
+        artifacts,
         lock_written,
     })
+}
+
+fn stamp_build_dir(project: &Project, env: &Environment) -> Result<()> {
+    let build_dir = project.root.join("build");
+    let marker = build_dir.join(".lsw-env");
+    if build_dir.is_dir() {
+        let owner = fs::read_to_string(&marker).unwrap_or_default();
+        if owner.trim() != env.name {
+            fs::remove_dir_all(&build_dir).map_err(|e| Error::io(build_dir.clone(), e))?;
+        }
+    }
+    fs::create_dir_all(&build_dir).map_err(|e| Error::io(build_dir.clone(), e))?;
+    fs::write(&marker, &env.name).map_err(|e| Error::io(marker, e))
+}
+
+fn verify_artifacts_are_pe(project: &Project, artifacts: &[PathBuf]) -> Result<()> {
+    for artifact in artifacts {
+        let absolute = project.root.join(artifact);
+        match lsw_pe::detect(&absolute)? {
+            lsw_pe::BinaryKind::Pe(_) => {}
+            other => {
+                return Err(Error::ArtifactNotPe {
+                    artifact: artifact.clone(),
+                    found: format!("{other:?}"),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn check_lock(project: &Project, env: &Environment) -> Result<()> {
+    let path = project.lockfile_path();
+    if !path.is_file() {
+        return Ok(());
+    }
+    let recorded = Lockfile::load(&path)?;
+    let current = envops::lockfile_for(env)?;
+    if recorded != current {
+        return Err(Error::LockMismatch {
+            environment: env.name.clone(),
+            detail: lock_diff(&recorded, &current),
+        });
+    }
+    Ok(())
 }
 
 fn run_step(
@@ -107,14 +156,25 @@ fn run_step(
     commands.push(rendered.clone());
 
     let tc = &env.manifest.toolchain;
-    let flags = tc.c_flags.join(" ");
+    let c_flags = tc.c_flags.join(" ");
+    let cxx_flags = tc
+        .c_flags
+        .iter()
+        .chain(&tc.cxx_flags)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let link_flags = tc.link_flags.join(" ");
     let status = Command::new(program)
         .args(args)
         .current_dir(&project.root)
         .env("CC", &tc.cc)
         .env("CXX", &tc.cxx)
+        .env("CFLAGS", &c_flags)
+        .env("CXXFLAGS", &cxx_flags)
+        .env("LDFLAGS", &link_flags)
         .env("LSW_ENV", &env.name)
-        .env("LSW_TARGET_FLAGS", flags)
+        .env("LSW_TARGET_FLAGS", &c_flags)
         .status()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {

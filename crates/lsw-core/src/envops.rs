@@ -11,6 +11,22 @@ use lsw_toolchain::ProbeReport;
 use crate::error::{Error, Result};
 use crate::project::Project;
 
+pub fn validate_name(kind: &str, name: &str) -> Result<()> {
+    let bad = name.is_empty()
+        || name == "."
+        || name == ".."
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains('\0');
+    if bad {
+        return Err(Error::InvalidName {
+            kind: kind.to_owned(),
+            name: name.to_owned(),
+        });
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 pub struct Environment {
     pub name: String,
@@ -20,6 +36,7 @@ pub struct Environment {
 
 impl Environment {
     pub fn open(dirs: &Dirs, name: &str) -> Result<Self> {
+        validate_name("environment", name)?;
         let root = dirs.environment(name);
         let layout = EnvironmentLayout::new(root);
         if !layout.manifest().is_file() {
@@ -51,6 +68,7 @@ pub struct EnvCreateReport {
 }
 
 pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
+    validate_name("environment", &opts.name)?;
     let root = dirs.environment(&opts.name);
     let layout = EnvironmentLayout::new(root.clone());
 
@@ -148,6 +166,7 @@ pub fn list(dirs: &Dirs) -> Result<Vec<EnvSummary>> {
 }
 
 pub fn remove(dirs: &Dirs, name: &str) -> Result<()> {
+    validate_name("environment", name)?;
     let root = dirs.environment(name);
     if !root.is_dir() {
         return Err(Error::EnvironmentNotFound {
@@ -175,6 +194,7 @@ pub fn resolve_active(dirs: &Dirs, project: &Project) -> Result<Environment> {
 }
 
 pub fn link_project(env: &Environment, project: &Project) -> Result<PathBuf> {
+    validate_name("project", &project.manifest.project.name)?;
     let src_dir = env.layout.src();
     fs::create_dir_all(&src_dir).map_err(|e| Error::io(src_dir.clone(), e))?;
     let link = src_dir.join(&project.manifest.project.name);
@@ -232,7 +252,17 @@ pub fn lockfile_for(env: &Environment) -> Result<Lockfile> {
 
 fn fingerprint_sysroot(sysroot: &Path) -> Result<String> {
     use std::fmt::Write as _;
-    let mut summary = String::new();
+    let include = sysroot.join("include");
+    if !include.is_dir() {
+        return Err(Error::io(
+            include,
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "sysroot has no include directory; reinstall the mingw-w64 sysroot",
+            ),
+        ));
+    }
+    let mut summary = format!("sysroot:{}\n", sysroot.display());
     for sub in ["include", "lib"] {
         let dir = sysroot.join(sub);
         let mut names: Vec<String> = match fs::read_dir(&dir) {
@@ -278,5 +308,35 @@ mod tests {
             cache: tmp.path().join("cache"),
         };
         assert!(list(&dirs).unwrap().is_empty());
+    }
+
+    #[test]
+    fn hostile_names_are_rejected_before_any_filesystem_touch() {
+        for bad in ["", ".", "..", "a/b", "a\\b", "../../etc", "x\0y"] {
+            let err = validate_name("environment", bad).unwrap_err();
+            assert!(err.to_string().contains("LSW2012"), "accepted {bad:?}");
+        }
+        assert!(validate_name("environment", "win11-x64").is_ok());
+        assert!(validate_name("project", "hello_app.2").is_ok());
+    }
+
+    #[test]
+    fn remove_refuses_traversal_names_and_leaves_siblings_intact() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = Dirs {
+            data: tmp.path().join("data"),
+            config: tmp.path().join("cfg"),
+            cache: tmp.path().join("cache"),
+        };
+        let precious = dirs.data.join("precious.txt");
+        fs::create_dir_all(dirs.environments()).unwrap();
+        fs::write(&precious, b"keep me").unwrap();
+
+        for bad in ["", "..", "../..", "sub/dir"] {
+            let err = remove(&dirs, bad).unwrap_err();
+            assert!(err.to_string().contains("LSW2012"), "removed with {bad:?}");
+        }
+        assert!(precious.is_file());
+        assert!(dirs.environments().is_dir());
     }
 }

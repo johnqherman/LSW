@@ -77,12 +77,31 @@ pub struct WineRuntime;
 pub fn base_env(prefix: &Path) -> Vec<(String, String)> {
     vec![
         ("WINEPREFIX".to_owned(), prefix.display().to_string()),
-        ("WINEDEBUG".to_owned(), "-all".to_owned()),
+        ("WINEDEBUG".to_owned(), "fixme-all".to_owned()),
         (
             "WINEDLLOVERRIDES".to_owned(),
             "winemenubuilder.exe=d".to_owned(),
         ),
     ]
+}
+
+const HOST_WINE_VARS: &[&str] = &[
+    "WINEPREFIX",
+    "WINEARCH",
+    "WINEPATH",
+    "WINEDLLPATH",
+    "WINEDLLOVERRIDES",
+    "WINESERVER",
+    "WINELOADER",
+    "WINEDEBUG",
+    "WINEFSYNC",
+    "WINEESYNC",
+];
+
+fn scrub_host_wine_vars(command: &mut Command) {
+    for var in HOST_WINE_VARS {
+        command.env_remove(var);
+    }
 }
 
 fn full_env(prefix: &Path, extra: &[(String, String)]) -> Vec<(String, String)> {
@@ -166,7 +185,9 @@ impl RuntimeProvider for WineRuntime {
         })?;
 
         tracing::debug!(prefix = %prefix.display(), "initializing wine prefix via wineboot -u");
-        let output = Command::new(&executable)
+        let mut command = Command::new(&executable);
+        scrub_host_wine_vars(&mut command);
+        let output = command
             .args(["wineboot", "-u"])
             .envs(base_env(prefix))
             .output()
@@ -191,6 +212,7 @@ impl RuntimeProvider for WineRuntime {
     fn execute(&self, req: &ExecutionRequest) -> Result<ExitStatus, RuntimeError> {
         let executable = Self::wine_executable()?;
         let mut command = Command::new(&executable);
+        scrub_host_wine_vars(&mut command);
         command
             .arg(&req.program)
             .args(&req.args)
@@ -323,7 +345,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{key} missing"))
         };
         assert_eq!(lookup("WINEPREFIX"), "/data/lsw/environments/e1/prefix");
-        assert_eq!(lookup("WINEDEBUG"), "-all");
+        assert_eq!(lookup("WINEDEBUG"), "fixme-all");
         assert_eq!(lookup("WINEDLLOVERRIDES"), "winemenubuilder.exe=d");
         assert_eq!(env.len(), 3);
     }

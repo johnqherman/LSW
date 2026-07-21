@@ -295,6 +295,8 @@ pub struct ResolvedToolchain {
     #[serde(default)]
     pub c_flags: Vec<String>,
     #[serde(default)]
+    pub cxx_flags: Vec<String>,
+    #[serde(default)]
     pub link_flags: Vec<String>,
 }
 
