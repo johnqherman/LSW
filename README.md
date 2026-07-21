@@ -33,8 +33,30 @@ Additional commands: `lsw exec [--host|--windows] <cmd>`, `lsw path
 --windows|--linux`, `lsw registry get|set|export|import|reset`, `lsw ps`,
 `lsw kill <pid>|--all`, `lsw ide env` (JSON for editor plugins). Windows
 execution can be locked down with `lsw run --sandbox strict <app.exe>`
-(bubblewrap kernel sandbox). Environments target `x86_64` (default) or `x86`
-via `lsw env create --arch x86`.
+(bubblewrap kernel sandbox).
+
+## Target architectures
+
+Environments target `x86_64` (default), `x86`, or `aarch64` via
+`lsw env create --arch <arch>`. The toolchain is discovered from `$PATH` and,
+in addition, from any directories listed in `$LSW_TOOLCHAIN_DIRS`
+(colon-separated) - so a self-contained cross toolchain such as a locally
+extracted [llvm-mingw](https://github.com/mstorsjo/llvm-mingw) can be used
+without touching the system mingw-w64 install. Each provider takes its sysroot
+from the compiler's own location (`<root>/<triple>`), falling back to
+`/usr/<triple>`.
+
+```
+export LSW_TOOLCHAIN_DIRS=/path/to/llvm-mingw/bin   # for aarch64
+lsw env create arm64 --arch aarch64
+lsw build                                           # -> build/app.exe (ARM64 PE)
+```
+
+Building an `aarch64` PE works on an `x86_64` host, but *running* it locally
+does not: Wine cannot execute a foreign-architecture PE without CPU
+translation, which lives outside LSW's core. `lsw run` fails
+honestly ("Bad format") rather than pretending; verify ARM64 output with
+`file` / `lsw inspect`, or on real hardware via `lsw verify --native-windows`.
 
 A binary produced by `lsw build` is a genuine Windows PE executable; running
 it under LSW exercises the local compatibility runtime (Wine). LSW never
