@@ -5,6 +5,7 @@ pub mod error;
 pub mod inspectops;
 pub mod project;
 pub mod runops;
+pub mod testops;
 
 pub use buildops::{BuildOptions, BuildReport, BuildSystem, build};
 pub use doctorops::{DoctorReport, Section, Status, doctor};
@@ -16,5 +17,6 @@ pub use error::{Error, Result};
 pub use inspectops::{ImportStatus, InspectReport, inspect};
 pub use project::{InitReport, Project, init};
 pub use runops::{Domain, RunReport, run, shell};
+pub use testops::{CompatStatus, Outcome, TestOptions, TestReport, test};
 
 pub use lsw_config::{Dirs, TargetArch};
