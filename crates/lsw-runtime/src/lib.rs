@@ -28,6 +28,12 @@ pub enum RuntimeError {
     },
 
     #[error(
+        "LSW1505: strict sandbox requested but bubblewrap (bwrap) is not installed; \
+         install bubblewrap or drop --sandbox"
+    )]
+    SandboxUnavailable,
+
+    #[error(
         "LSW1504: runtime execution failed: {detail}; \
          re-run with WINEDEBUG unset (pass it in the request env) for more diagnostics"
     )]
@@ -41,6 +47,75 @@ pub struct ExecutionRequest {
     pub prefix: PathBuf,
     pub cwd: Option<PathBuf>,
     pub env: Vec<(String, String)>,
+    pub sandbox: Option<SandboxSpec>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SandboxSpec {
+    pub rw_binds: Vec<PathBuf>,
+    pub network: bool,
+}
+
+pub fn bwrap_args(spec: &SandboxSpec) -> Vec<String> {
+    let mut args: Vec<String> = [
+        "--die-with-parent",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",
+        "--ro-bind",
+        "/usr",
+        "/usr",
+        "--ro-bind",
+        "/etc",
+        "/etc",
+        "--symlink",
+        "usr/lib",
+        "/lib",
+        "--symlink",
+        "usr/lib64",
+        "/lib64",
+        "--symlink",
+        "usr/bin",
+        "/bin",
+        "--symlink",
+        "usr/bin",
+        "/sbin",
+        "--unshare-pid",
+        "--unshare-uts",
+        "--unshare-ipc",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+
+    if let Some(home) = dirs_home() {
+        args.push("--tmpfs".into());
+        args.push(home.display().to_string());
+    }
+    for path in &spec.rw_binds {
+        let p = path.display().to_string();
+        args.push("--bind".into());
+        args.push(p.clone());
+        args.push(p);
+    }
+    if !spec.network {
+        args.push("--unshare-net".into());
+    }
+    args
+}
+
+fn dirs_home() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(PathBuf::from)
+}
+
+pub fn find_bwrap() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|d| d.join("bwrap"))
+        .find(|c| c.is_file())
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -240,7 +315,15 @@ impl RuntimeProvider for WineRuntime {
 
     fn execute(&self, req: &ExecutionRequest) -> Result<ExitStatus, RuntimeError> {
         let executable = Self::wine_executable()?;
-        let mut command = Command::new(&executable);
+        let mut command = match &req.sandbox {
+            None => Command::new(&executable),
+            Some(spec) => {
+                let bwrap = find_bwrap().ok_or(RuntimeError::SandboxUnavailable)?;
+                let mut c = Command::new(bwrap);
+                c.args(bwrap_args(spec)).arg(&executable);
+                c
+            }
+        };
         scrub_host_wine_vars(&mut command);
         command
             .arg(&req.program)
@@ -249,7 +332,7 @@ impl RuntimeProvider for WineRuntime {
         if let Some(cwd) = &req.cwd {
             command.current_dir(cwd);
         }
-        tracing::debug!(program = %req.program.display(), prefix = %req.prefix.display(), "executing via wine");
+        tracing::debug!(program = %req.program.display(), prefix = %req.prefix.display(), sandboxed = req.sandbox.is_some(), "executing via wine");
         command
             .status()
             .map_err(|source| RuntimeError::SpawnFailed {
@@ -273,6 +356,43 @@ impl RuntimeProvider for WineRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bwrap_args_lock_down_the_filesystem_and_namespaces() {
+        let spec = SandboxSpec {
+            rw_binds: vec![PathBuf::from("/data/env"), PathBuf::from("/home/u/proj")],
+            network: false,
+        };
+        let args = bwrap_args(&spec);
+        let ro_usr = args.windows(3).any(|w| w == ["--ro-bind", "/usr", "/usr"]);
+        assert!(ro_usr, "must ro-bind /usr");
+        for flag in [
+            "--unshare-pid",
+            "--unshare-uts",
+            "--unshare-ipc",
+            "--unshare-net",
+        ] {
+            assert!(args.iter().any(|a| a == flag), "missing {flag}");
+        }
+        let bind_env = args
+            .windows(3)
+            .position(|w| w == ["--bind", "/data/env", "/data/env"]);
+        assert!(bind_env.is_some(), "env dir must be writable");
+        assert!(
+            args.windows(3)
+                .any(|w| w == ["--bind", "/home/u/proj", "/home/u/proj"]),
+            "project dir must be writable"
+        );
+    }
+
+    #[test]
+    fn bwrap_args_keep_network_when_requested() {
+        let spec = SandboxSpec {
+            rw_binds: vec![],
+            network: true,
+        };
+        assert!(!bwrap_args(&spec).iter().any(|a| a == "--unshare-net"));
+    }
 
     fn skip_without_wine(test: &str) -> bool {
         if find_wine().is_none() {
@@ -455,6 +575,7 @@ mod tests {
                 prefix: prefix.clone(),
                 cwd: Some(dir.path().to_path_buf()),
                 env: Vec::new(),
+                sandbox: None,
             })
             .unwrap();
         assert!(status.success(), "cmd.exe /c exit 0 failed: {status}");

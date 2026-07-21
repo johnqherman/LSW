@@ -21,6 +21,7 @@ fn run_registry_tool(env: &Environment, program: &str, args: Vec<String>) -> Res
         prefix: env.layout.prefix(),
         cwd: None,
         env: Vec::new(),
+        sandbox: None,
     })?;
     if !status.success() {
         return Err(Error::RegistryOperationFailed {

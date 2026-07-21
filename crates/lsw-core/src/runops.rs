@@ -28,12 +28,40 @@ enum ResolvedProgram {
     RuntimeResolved(PathBuf),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Sandbox {
+    #[default]
+    None,
+    Strict,
+}
+
+fn sandbox_spec(
+    env: &Environment,
+    project: Option<&Project>,
+    sandbox: Sandbox,
+) -> Option<lsw_runtime::SandboxSpec> {
+    match sandbox {
+        Sandbox::None => None,
+        Sandbox::Strict => {
+            let mut rw_binds = vec![env.layout.root.clone()];
+            if let Some(p) = project {
+                rw_binds.push(p.root.clone());
+            }
+            let network = project
+                .map(|p| p.manifest.sandbox.network == "host")
+                .unwrap_or(true);
+            Some(lsw_runtime::SandboxSpec { rw_binds, network })
+        }
+    }
+}
+
 pub fn run(
     env: &Environment,
     project: Option<&Project>,
     program: &Path,
     args: &[String],
     domain: Domain,
+    sandbox: Sandbox,
 ) -> Result<RunReport> {
     let resolved = resolve_program(program, domain)?;
 
@@ -77,12 +105,21 @@ pub fn run(
                 prefix: env.layout.prefix(),
                 cwd: windows_cwd(env, project),
                 env: windows_env(env),
+                sandbox: sandbox_spec(env, project, sandbox),
             })?
         }
-        Domain::Host | Domain::Auto => Command::new(&launch)
-            .args(args)
-            .status()
-            .map_err(|e| Error::io(launch.clone(), e))?,
+        Domain::Host | Domain::Auto => {
+            if sandbox != Sandbox::None {
+                return Err(Error::NotExecutable {
+                    program: launch,
+                    detail: "--sandbox applies to the Windows domain only".into(),
+                });
+            }
+            Command::new(&launch)
+                .args(args)
+                .status()
+                .map_err(|e| Error::io(launch.clone(), e))?
+        }
     };
 
     Ok(RunReport {
@@ -151,6 +188,7 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
             prefix: env.layout.prefix(),
             cwd: windows_cwd(env, project),
             env: windows_env(env),
+            sandbox: None,
         })?);
     }
 

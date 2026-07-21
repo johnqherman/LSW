@@ -21,7 +21,7 @@ pub use envops::{
 pub use error::{Error, Result};
 pub use inspectops::{ImportStatus, InspectReport, inspect};
 pub use project::{InitReport, Project, init};
-pub use runops::{Domain, RunReport, run, shell};
+pub use runops::{Domain, RunReport, Sandbox, run, shell};
 pub use testops::{CompatStatus, Outcome, TestOptions, TestReport, test};
 
 pub use lsw_config::{Dirs, TargetArch};
