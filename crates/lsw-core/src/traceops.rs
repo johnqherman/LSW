@@ -102,9 +102,7 @@ fn parse_wine_trace(stderr: &str) -> ParsedTrace {
         let unimplemented = lower.contains("not implemented")
             || lower.contains("unimplemented")
             || lower.contains("no implementation for");
-        if unimplemented
-            && let Some(sym) = extract_unimplemented(line)
-        {
+        if unimplemented && let Some(sym) = extract_unimplemented(line) {
             unsupported.insert(sym);
         }
     }
