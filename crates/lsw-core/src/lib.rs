@@ -2,6 +2,7 @@ pub mod buildops;
 pub mod compatdb;
 pub mod compatops;
 pub mod daemonops;
+pub mod dapops;
 pub mod debugops;
 pub mod doctorops;
 pub mod envops;
