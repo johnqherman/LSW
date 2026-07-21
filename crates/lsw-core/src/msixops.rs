@@ -1,0 +1,345 @@
+use std::path::{Path, PathBuf};
+
+use base64::Engine as _;
+use sha2::{Digest, Sha256};
+
+use lsw_config::{Dirs, TargetArch};
+
+use crate::buildops::which;
+use crate::error::{Error, Result};
+use crate::project::Project;
+
+const BLOCK_SIZE: usize = 65536;
+
+pub fn build_msix(
+    project: &Project,
+    arch: TargetArch,
+    dist: &Path,
+    dir: &Path,
+    stem: &str,
+    files: &[String],
+) -> Result<PathBuf> {
+    if which("zip").is_none() {
+        return Err(Error::ToolMissing {
+            tool: "zip".into(),
+            fix: "install zip, or use --target zip".into(),
+        });
+    }
+    let name = &project.manifest.project.name;
+    let publisher = "CN=LSW Self-Signed (Development)";
+
+    let logo = "logo.png";
+    std::fs::write(dir.join(logo), minimal_png()).map_err(|e| Error::io(dir.join(logo), e))?;
+
+    let entry = files
+        .iter()
+        .find(|f| f.ends_with(".exe"))
+        .cloned()
+        .unwrap_or_else(|| files.first().cloned().unwrap_or_default());
+    std::fs::write(
+        dir.join("AppxManifest.xml"),
+        manifest_xml(name, publisher, arch, &entry, logo),
+    )
+    .map_err(|e| Error::io(dir.join("AppxManifest.xml"), e))?;
+
+    let mut block_files = vec!["AppxManifest.xml".to_owned(), logo.to_owned()];
+    block_files.extend(files.iter().cloned());
+    let block_map = block_map_xml(dir, &block_files)?;
+    std::fs::write(dir.join("AppxBlockMap.xml"), block_map)
+        .map_err(|e| Error::io(dir.join("AppxBlockMap.xml"), e))?;
+
+    std::fs::write(dir.join("[Content_Types].xml"), content_types_xml(files))
+        .map_err(|e| Error::io(dir.join("[Content_Types].xml"), e))?;
+
+    let unsigned = dist.join(format!("{stem}.unsigned.msix"));
+    let _ = std::fs::remove_file(&unsigned);
+    let mut zip_args = vec![
+        "-X".to_owned(),
+        "-r".to_owned(),
+        std::path::absolute(&unsigned)
+            .unwrap_or(unsigned.clone())
+            .display()
+            .to_string(),
+        "[Content_Types].xml".to_owned(),
+        "AppxBlockMap.xml".to_owned(),
+        "AppxManifest.xml".to_owned(),
+        "logo.png".to_owned(),
+    ];
+    zip_args.extend(files.iter().cloned());
+    let status = std::process::Command::new("zip")
+        .args(&zip_args)
+        .current_dir(dir)
+        .status()
+        .map_err(|e| Error::io(PathBuf::from("zip"), e))?;
+    if !status.success() {
+        return Err(Error::BuildFailed {
+            command: "zip (msix)".into(),
+            code: status.code(),
+        });
+    }
+
+    let msix = dist.join(format!("{stem}.msix"));
+    let _ = std::fs::remove_file(&msix);
+    sign_msix(&unsigned, &msix, publisher)?;
+    let _ = std::fs::remove_file(&unsigned);
+    Ok(msix)
+}
+
+fn sign_msix(unsigned: &Path, out: &Path, publisher: &str) -> Result<()> {
+    if which("osslsigncode").is_none() {
+        return Err(Error::ToolMissing {
+            tool: "osslsigncode".into(),
+            fix: "install osslsigncode (AUR or https://github.com/mtrojnar/osslsigncode) to sign MSIX packages".into(),
+        });
+    }
+    let pfx = ensure_signing_identity(publisher)?;
+    let output = std::process::Command::new("osslsigncode")
+        .arg("sign")
+        .args(["-pkcs12"])
+        .arg(&pfx)
+        .args(["-pass", "lsw"])
+        .arg("-in")
+        .arg(unsigned)
+        .arg("-out")
+        .arg(out)
+        .output()
+        .map_err(|e| Error::io(PathBuf::from("osslsigncode"), e))?;
+    if !output.status.success() {
+        return Err(Error::MsixSign {
+            detail: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn ensure_signing_identity(publisher: &str) -> Result<PathBuf> {
+    let dirs = Dirs::resolve()?;
+    let msix_dir = dirs.data.join("msix");
+    std::fs::create_dir_all(&msix_dir).map_err(|e| Error::io(msix_dir.clone(), e))?;
+    let pfx = msix_dir.join("signing.pfx");
+    if pfx.is_file() {
+        return Ok(pfx);
+    }
+    if which("openssl").is_none() {
+        return Err(Error::ToolMissing {
+            tool: "openssl".into(),
+            fix: "install openssl to generate a signing certificate".into(),
+        });
+    }
+    let key = msix_dir.join("signing.key.pem");
+    let cert = msix_dir.join("signing.cert.pem");
+    run_openssl(&[
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:2048",
+        "-keyout",
+        &key.display().to_string(),
+        "-out",
+        &cert.display().to_string(),
+        "-days",
+        "3650",
+        "-nodes",
+        "-subj",
+        &format!("/{}", publisher.replace(", ", "/")),
+        "-addext",
+        "extendedKeyUsage=codeSigning",
+    ])?;
+    run_openssl(&[
+        "pkcs12",
+        "-export",
+        "-out",
+        &pfx.display().to_string(),
+        "-inkey",
+        &key.display().to_string(),
+        "-in",
+        &cert.display().to_string(),
+        "-passout",
+        "pass:lsw",
+    ])?;
+    Ok(pfx)
+}
+
+fn run_openssl(args: &[&str]) -> Result<()> {
+    let output = std::process::Command::new("openssl")
+        .args(args)
+        .output()
+        .map_err(|e| Error::io(PathBuf::from("openssl"), e))?;
+    if !output.status.success() {
+        return Err(Error::MsixSign {
+            detail: format!(
+                "openssl {} failed: {}",
+                args.first().copied().unwrap_or(""),
+                String::from_utf8_lossy(&output.stderr).trim()
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn minimal_png() -> Vec<u8> {
+    base64::engine::general_purpose::STANDARD
+        .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
+        .expect("static PNG decodes")
+}
+
+fn manifest_xml(name: &str, publisher: &str, arch: TargetArch, entry: &str, logo: &str) -> String {
+    let proc_arch = match arch {
+        TargetArch::X86_64 | TargetArch::Arm64Ec => "x64",
+        TargetArch::X86 => "x86",
+        TargetArch::Aarch64 => "arm64",
+        TargetArch::Armv7 => "arm",
+    };
+    let ident = sanitize_identity(name);
+    format!(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
+<Package xmlns=\"http://schemas.microsoft.com/appx/manifest/foundation/windows10\" \
+xmlns:uap=\"http://schemas.microsoft.com/appx/manifest/uap/windows10\" \
+xmlns:rescap=\"http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities\">\n\
+  <Identity Name=\"{ident}\" Publisher=\"{publisher}\" Version=\"1.0.0.0\" ProcessorArchitecture=\"{proc_arch}\"/>\n\
+  <Properties>\n\
+    <DisplayName>{name}</DisplayName>\n\
+    <PublisherDisplayName>LSW</PublisherDisplayName>\n\
+    <Logo>{logo}</Logo>\n\
+  </Properties>\n\
+  <Dependencies>\n\
+    <TargetDeviceFamily Name=\"Windows.Desktop\" MinVersion=\"10.0.17763.0\" MaxVersionTested=\"10.0.22621.0\"/>\n\
+  </Dependencies>\n\
+  <Capabilities>\n\
+    <rescap:Capability Name=\"runFullTrust\"/>\n\
+  </Capabilities>\n\
+  <Applications>\n\
+    <Application Id=\"App\" Executable=\"{entry}\" EntryPoint=\"Windows.FullTrustApplication\">\n\
+      <uap:VisualElements DisplayName=\"{name}\" Description=\"{name}\" BackgroundColor=\"#464646\" \
+Square150x150Logo=\"{logo}\" Square44x44Logo=\"{logo}\"/>\n\
+    </Application>\n\
+  </Applications>\n\
+</Package>\n"
+    )
+}
+
+fn sanitize_identity(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    format!("LSW.{}", cleaned.trim_matches('-'))
+}
+
+fn block_map_xml(dir: &Path, files: &[String]) -> Result<String> {
+    let mut out = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<BlockMap xmlns=\"http://schemas.microsoft.com/appx/2010/blockmap\" \
+HashMethod=\"http://www.w3.org/2001/04/xmlenc#sha256\">\n",
+    );
+    for file in files {
+        let data = std::fs::read(dir.join(file)).map_err(|e| Error::io(dir.join(file), e))?;
+        let lfh = 30 + file.len();
+        out.push_str(&format!(
+            "  <File Name=\"{}\" Size=\"{}\" LfhSize=\"{}\">\n",
+            file.replace('/', "\\"),
+            data.len(),
+            lfh
+        ));
+        let blocks = if data.is_empty() {
+            vec![&data[..]]
+        } else {
+            data.chunks(BLOCK_SIZE).collect()
+        };
+        for block in blocks {
+            let digest = Sha256::digest(block);
+            let hash = base64::engine::general_purpose::STANDARD.encode(digest);
+            out.push_str(&format!("    <Block Hash=\"{hash}\"/>\n"));
+        }
+        out.push_str("  </File>\n");
+    }
+    out.push_str("</BlockMap>\n");
+    Ok(out)
+}
+
+fn content_types_xml(files: &[String]) -> String {
+    let mut exts: std::collections::BTreeSet<String> = files
+        .iter()
+        .filter_map(|f| f.rsplit('.').next().map(|e| e.to_ascii_lowercase()))
+        .collect();
+    exts.insert("xml".to_owned());
+    let mut out = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n",
+    );
+    for ext in &exts {
+        let ct = if ext == "xml" {
+            "application/vnd.ms-appx.manifest+xml"
+        } else {
+            "application/octet-stream"
+        };
+        out.push_str(&format!(
+            "  <Default Extension=\"{ext}\" ContentType=\"{ct}\"/>\n"
+        ));
+    }
+    out.push_str(
+        "  <Override PartName=\"/AppxBlockMap.xml\" ContentType=\"application/vnd.ms-appx.blockmap+xml\"/>\n\
+  <Override PartName=\"/AppxSignature.p7x\" ContentType=\"application/vnd.ms-appx.signature\"/>\n\
+</Types>\n",
+    );
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_identity_produces_valid_name() {
+        assert_eq!(sanitize_identity("hello world!"), "LSW.hello-world");
+        assert_eq!(sanitize_identity("my.app-1"), "LSW.my.app-1");
+    }
+
+    #[test]
+    fn block_map_hashes_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data = vec![7u8; BLOCK_SIZE * 2 + 10];
+        std::fs::write(tmp.path().join("app.exe"), &data).unwrap();
+        let xml = block_map_xml(tmp.path(), &["app.exe".to_owned()]).unwrap();
+        assert_eq!(xml.matches("<Block ").count(), 3);
+        assert!(xml.contains("Name=\"app.exe\""));
+        assert!(xml.contains(&format!("Size=\"{}\"", data.len())));
+    }
+
+    #[test]
+    fn content_types_covers_payload_and_overrides() {
+        let ct = content_types_xml(&["app.exe".to_owned(), "lib.dll".to_owned()]);
+        assert!(ct.contains("Extension=\"exe\""));
+        assert!(ct.contains("Extension=\"dll\""));
+        assert!(ct.contains("/AppxSignature.p7x"));
+        assert!(ct.contains("/AppxBlockMap.xml"));
+    }
+
+    #[test]
+    fn manifest_has_identity_and_application() {
+        let m = manifest_xml(
+            "Hello",
+            "CN=Test",
+            TargetArch::X86_64,
+            "hello.exe",
+            "logo.png",
+        );
+        assert!(m.contains("Publisher=\"CN=Test\""));
+        assert!(m.contains("ProcessorArchitecture=\"x64\""));
+        assert!(m.contains("Executable=\"hello.exe\""));
+        assert!(m.contains("Name=\"LSW.Hello\""));
+        assert!(m.contains("<Logo>logo.png</Logo>"));
+    }
+
+    #[test]
+    fn minimal_png_is_valid_png() {
+        let png = minimal_png();
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+    }
+}

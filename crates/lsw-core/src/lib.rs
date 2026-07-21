@@ -9,6 +9,7 @@ pub mod envops;
 pub mod error;
 pub mod ideops;
 pub mod inspectops;
+pub mod msixops;
 pub mod packageops;
 pub mod pluginops;
 pub mod project;
