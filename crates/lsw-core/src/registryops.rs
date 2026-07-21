@@ -22,6 +22,7 @@ fn run_registry_tool(env: &Environment, program: &str, args: Vec<String>) -> Res
         cwd: None,
         env: Vec::new(),
         sandbox: None,
+        display: lsw_runtime::DisplayMode::Inherit,
     })?;
     if !status.success() {
         return Err(Error::RegistryOperationFailed {

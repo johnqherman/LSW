@@ -63,6 +63,9 @@ enum Cmd {
         /// Kernel sandbox for Windows execution ("strict").
         #[arg(long)]
         sandbox: Option<SandboxArg>,
+        /// Run GUI programs under a virtual display (headless CI).
+        #[arg(long)]
+        headless: bool,
     },
     /// Run a command in an explicit execution domain.
     Exec {
@@ -75,6 +78,9 @@ enum Cmd {
         /// Kernel sandbox for Windows execution ("strict").
         #[arg(long)]
         sandbox: Option<SandboxArg>,
+        /// Run GUI programs under a virtual display (headless CI).
+        #[arg(long)]
+        headless: bool,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
         command: Vec<String>,
     },
@@ -205,6 +211,14 @@ fn sandbox_from(a: Option<SandboxArg>) -> lsw_core::Sandbox {
     match a {
         Some(SandboxArg::Strict) => lsw_core::Sandbox::Strict,
         None => lsw_core::Sandbox::None,
+    }
+}
+
+fn display_from(headless: bool) -> lsw_core::Display {
+    if headless {
+        lsw_core::Display::Headless
+    } else {
+        lsw_core::Display::Auto
     }
 }
 
@@ -388,6 +402,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             host,
             windows,
             sandbox,
+            headless,
         } => {
             let (p, env) = active_env(&dirs)?;
             let domain = domain_from_flags(*host, *windows);
@@ -398,6 +413,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 args,
                 domain,
                 sandbox_from(*sandbox),
+                display_from(*headless),
             )?;
             note_runtime_domain(&report);
             Ok(exit_from_status(report.status))
@@ -407,6 +423,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             host,
             windows,
             sandbox,
+            headless,
             command,
         } => {
             let (p, env) = active_env(&dirs)?;
@@ -419,6 +436,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 args,
                 domain,
                 sandbox_from(*sandbox),
+                display_from(*headless),
             )?;
             note_runtime_domain(&report);
             Ok(exit_from_status(report.status))
