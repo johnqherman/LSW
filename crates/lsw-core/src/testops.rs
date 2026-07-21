@@ -117,10 +117,10 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
 }
 
 fn test_command(project: &Project) -> Result<Vec<String>> {
-    if let Some(spec) = &project.manifest.test {
-        if !spec.command.is_empty() {
-            return Ok(spec.command.clone());
-        }
+    if let Some(spec) = &project.manifest.test
+        && !spec.command.is_empty()
+    {
+        return Ok(spec.command.clone());
     }
     if has_ctest_config(&project.root.join("build")) {
         return Ok(vec![
