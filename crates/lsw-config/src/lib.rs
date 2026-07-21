@@ -75,6 +75,19 @@ pub struct ProjectManifest {
     pub test: Option<CommandSection>,
     #[serde(default)]
     pub sandbox: SandboxSection,
+    #[serde(default)]
+    pub verify: VerifySection,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct VerifySection {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transport: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
