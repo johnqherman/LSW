@@ -11,6 +11,7 @@ use crate::project::Project;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuildSystem {
     Cmake,
+    Cargo,
     Explicit,
 }
 
@@ -36,10 +37,13 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
     let explicit = project.manifest.build.as_ref();
     let system = match (opts.system.as_deref(), explicit) {
         (Some("cmake"), _) => BuildSystem::Cmake,
+        (Some("cargo"), _) => BuildSystem::Cargo,
         (Some(_), Some(_)) | (None, Some(_)) => BuildSystem::Explicit,
         (Some(_), None) | (None, None) => {
             if project.root.join("CMakeLists.txt").is_file() {
                 BuildSystem::Cmake
+            } else if project.root.join("Cargo.toml").is_file() {
+                BuildSystem::Cargo
             } else {
                 return Err(Error::NoBuildSystem);
             }
@@ -47,10 +51,31 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
     };
 
     let mut commands = Vec::new();
+    let mut artifact_dir = project.root.join("build");
     match system {
         BuildSystem::Explicit => {
             let spec = explicit.ok_or(Error::NoBuildSystem)?;
             run_step(project, env, &spec.command, &mut commands)?;
+        }
+        BuildSystem::Cargo => {
+            let triple = env.manifest.target_arch.rust_gnu_triple().ok_or_else(|| {
+                Error::RustTargetUnavailable {
+                    arch: env.manifest.target_arch.to_string(),
+                }
+            })?;
+            crate::rustops::ensure_target(env.manifest.target_arch)?;
+            run_step(
+                project,
+                env,
+                &[
+                    "cargo".to_owned(),
+                    "build".to_owned(),
+                    "--target".to_owned(),
+                    triple.to_owned(),
+                ],
+                &mut commands,
+            )?;
+            artifact_dir = project.root.join("target").join(triple).join("debug");
         }
         BuildSystem::Cmake => {
             let toolchain_file = env.layout.cmake_toolchain_file();
@@ -93,7 +118,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
         }
     }
 
-    let artifacts = find_artifacts(&project.root.join("build"), &project.root);
+    let artifacts = find_artifacts(&artifact_dir, &project.root);
     verify_artifacts_are_pe(project, &artifacts)?;
 
     Ok(BuildReport {
@@ -171,7 +196,7 @@ fn run_step(
     let link_flags = tc.link_flags.join(" ");
     let mut command = Command::new(program);
     lsw_runtime::scrub_wine_env(&mut command);
-    let status = command
+    command
         .args(args)
         .current_dir(&project.root)
         .env("WINEPREFIX", env.layout.prefix())
@@ -181,18 +206,17 @@ fn run_step(
         .env("CXXFLAGS", &cxx_flags)
         .env("LDFLAGS", &link_flags)
         .env("LSW_ENV", &env.name)
-        .env("LSW_TARGET_FLAGS", &c_flags)
-        .status()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                Error::ToolMissing {
-                    tool: program.clone(),
-                    fix: format!("install {program} or adjust [build].command in lsw.toml"),
-                }
-            } else {
-                Error::io(PathBuf::from(program), e)
+        .env("LSW_TARGET_FLAGS", &c_flags);
+    let status = command.status().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            Error::ToolMissing {
+                tool: program.clone(),
+                fix: format!("install {program} or adjust [build].command in lsw.toml"),
             }
-        })?;
+        } else {
+            Error::io(PathBuf::from(program), e)
+        }
+    })?;
 
     if !status.success() {
         return Err(Error::BuildFailed {

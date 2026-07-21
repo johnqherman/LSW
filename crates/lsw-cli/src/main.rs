@@ -158,6 +158,9 @@ enum Cmd {
         #[arg(long, conflicts_with = "pid")]
         all: bool,
     },
+    /// First-class Rust support.
+    #[command(subcommand)]
+    Rust(RustCmd),
     /// Talk to the optional lswd daemon.
     #[command(subcommand)]
     Daemon(DaemonCmd),
@@ -192,6 +195,14 @@ enum DaemonCmd {
     Status,
     /// Ask a running daemon to stop.
     Stop,
+}
+
+#[derive(Subcommand)]
+enum RustCmd {
+    /// Scaffold a Rust project wired for Windows targeting.
+    Init { name: Option<String> },
+    /// Report Rust->Windows toolchain readiness for the active environment.
+    Doctor,
 }
 
 #[derive(Subcommand)]
@@ -293,6 +304,10 @@ enum ArchArg {
     X86,
     #[value(name = "aarch64")]
     Aarch64,
+    #[value(name = "armv7")]
+    Armv7,
+    #[value(name = "arm64ec")]
+    Arm64Ec,
 }
 
 impl From<ArchArg> for TargetArch {
@@ -301,6 +316,8 @@ impl From<ArchArg> for TargetArch {
             ArchArg::X86_64 => TargetArch::X86_64,
             ArchArg::X86 => TargetArch::X86,
             ArchArg::Aarch64 => TargetArch::Aarch64,
+            ArchArg::Armv7 => TargetArch::Armv7,
+            ArchArg::Arm64Ec => TargetArch::Arm64Ec,
         }
     }
 }
@@ -848,6 +865,41 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             } else {
                 eprintln!("usage: lsw kill <pid> | lsw kill --all");
                 return Ok(ExitCode::FAILURE);
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Rust(RustCmd::Init { name }) => {
+            let report = lsw_core::rustops::init(&cwd(), name.as_deref())?;
+            println!("Initialized LSW Rust project at {}", report.root.display());
+            for f in &report.created {
+                println!("  created {}", f.display());
+            }
+            println!("Next: lsw env create <name> && lsw build");
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Rust(RustCmd::Doctor) => {
+            let (_p, env) = active_env(&dirs)?;
+            let report = lsw_core::rustops::doctor(&env)?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("serializes")
+                );
+            } else {
+                let mark = |c: lsw_core::rustops::Check| match c {
+                    lsw_core::rustops::Check::Ok => "OK",
+                    lsw_core::rustops::Check::NotConfigured => "NOT CONFIGURED",
+                    lsw_core::rustops::Check::Missing => "MISSING",
+                };
+                println!("LSW Rust Doctor  (target {})\n", report.target);
+                println!("  Compiler target   {}", mark(report.compiler_target));
+                println!("  Linker            {}", mark(report.linker));
+                println!("  CRT               {}", mark(report.crt));
+                println!("  Windows imports   {}", mark(report.windows_imports));
+                println!("  Runtime execution {}", mark(report.runtime_execution));
+                println!("  Native validation {}", mark(report.native_validation));
             }
             Ok(ExitCode::SUCCESS)
         }
