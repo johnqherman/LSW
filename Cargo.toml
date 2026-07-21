@@ -1,0 +1,41 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/lsw-cli",
+    "crates/lsw-core",
+    "crates/lsw-config",
+    "crates/lsw-toolchain",
+    "crates/lsw-runtime",
+    "crates/lsw-path",
+    "crates/lsw-pe",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+repository = "https://example.invalid/lsw"
+
+[workspace.dependencies]
+lsw-core = { path = "crates/lsw-core" }
+lsw-config = { path = "crates/lsw-config" }
+lsw-toolchain = { path = "crates/lsw-toolchain" }
+lsw-runtime = { path = "crates/lsw-runtime" }
+lsw-path = { path = "crates/lsw-path" }
+lsw-pe = { path = "crates/lsw-pe" }
+
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+object = { version = "0.37", default-features = false, features = ["read", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+toml = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tempfile = "3"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
