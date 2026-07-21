@@ -269,15 +269,16 @@ fn content_types_xml(files: &[String]) -> String {
         .filter_map(|f| f.rsplit('.').next().map(|e| e.to_ascii_lowercase()))
         .collect();
     exts.insert("xml".to_owned());
+    exts.insert("png".to_owned());
     let mut out = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
 <Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n",
     );
     for ext in &exts {
-        let ct = if ext == "xml" {
-            "application/vnd.ms-appx.manifest+xml"
-        } else {
-            "application/octet-stream"
+        let ct = match ext.as_str() {
+            "xml" => "application/vnd.ms-appx.manifest+xml",
+            "png" => "image/png",
+            _ => "application/octet-stream",
         };
         out.push_str(&format!(
             "  <Default Extension=\"{ext}\" ContentType=\"{ct}\"/>\n"
@@ -317,6 +318,7 @@ mod tests {
         let ct = content_types_xml(&["app.exe".to_owned(), "lib.dll".to_owned()]);
         assert!(ct.contains("Extension=\"exe\""));
         assert!(ct.contains("Extension=\"dll\""));
+        assert!(ct.contains("Extension=\"png\" ContentType=\"image/png\""));
         assert!(ct.contains("/AppxSignature.p7x"));
         assert!(ct.contains("/AppxBlockMap.xml"));
     }
