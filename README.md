@@ -16,13 +16,25 @@ pinning, and deterministic Linux<->Windows path mapping.
 ```
 lsw init hello && cd hello    # scaffold lsw.toml + CMake hello project
 lsw env create win11-x64      # isolated Wine prefix + toolchain probe
+lsw use win11-x64             # select the active environment
 lsw build                     # cross-compile to build/hello.exe (real PE)
 lsw run build/hello.exe       # execute locally through the Wine runtime
+lsw test                      # run tests under the runtime (honest compat status)
 lsw inspect build/hello.exe   # PE format, arch, subsystem, imports
+lsw trace build/hello.exe     # observe DLL loads + unsupported APIs
+lsw debug build/hello.exe     # winedbg (or --gdb proxy for IDE attach)
+lsw package                   # assemble dist/<name>-<arch>[.zip]
 lsw doctor                    # diagnose host / runtime / toolchain / project
 lsw shell                     # Linux shell with Windows-target env exported
 lsw shell --windows           # cmd.exe inside the environment
 ```
+
+Additional commands: `lsw exec [--host|--windows] <cmd>`, `lsw path
+--windows|--linux`, `lsw registry get|set|export|import|reset`, `lsw ps`,
+`lsw kill <pid>|--all`, `lsw ide env` (JSON for editor plugins). Windows
+execution can be locked down with `lsw run --sandbox strict <app.exe>`
+(bubblewrap kernel sandbox). Environments target `x86_64` (default) or `x86`
+via `lsw env create --arch x86`.
 
 A binary produced by `lsw build` is a genuine Windows PE executable; running
 it under LSW exercises the local compatibility runtime (Wine). LSW never
