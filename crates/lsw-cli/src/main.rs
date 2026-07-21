@@ -60,6 +60,9 @@ enum Cmd {
         /// Force the Windows execution domain.
         #[arg(long)]
         windows: bool,
+        /// Kernel sandbox for Windows execution ("strict").
+        #[arg(long)]
+        sandbox: Option<SandboxArg>,
     },
     /// Run a command in an explicit execution domain.
     Exec {
@@ -69,6 +72,9 @@ enum Cmd {
         /// Windows domain.
         #[arg(long)]
         windows: bool,
+        /// Kernel sandbox for Windows execution ("strict").
+        #[arg(long)]
+        sandbox: Option<SandboxArg>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
         command: Vec<String>,
     },
@@ -178,6 +184,19 @@ enum EnvCmd {
     List,
     /// Delete an environment and its Wine prefix.
     Remove { name: String },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum SandboxArg {
+    #[value(name = "strict")]
+    Strict,
+}
+
+fn sandbox_from(a: Option<SandboxArg>) -> lsw_core::Sandbox {
+    match a {
+        Some(SandboxArg::Strict) => lsw_core::Sandbox::Strict,
+        None => lsw_core::Sandbox::None,
+    }
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -359,10 +378,18 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             args,
             host,
             windows,
+            sandbox,
         } => {
             let (p, env) = active_env(&dirs)?;
             let domain = domain_from_flags(*host, *windows);
-            let report = lsw_core::run(&env, Some(&p), program, args, domain)?;
+            let report = lsw_core::run(
+                &env,
+                Some(&p),
+                program,
+                args,
+                domain,
+                sandbox_from(*sandbox),
+            )?;
             note_runtime_domain(&report);
             Ok(exit_from_status(report.status))
         }
@@ -370,12 +397,20 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Exec {
             host,
             windows,
+            sandbox,
             command,
         } => {
             let (p, env) = active_env(&dirs)?;
             let domain = domain_from_flags(*host, *windows);
             let (program, args) = command.split_first().expect("clap enforces non-empty");
-            let report = lsw_core::run(&env, Some(&p), &PathBuf::from(program), args, domain)?;
+            let report = lsw_core::run(
+                &env,
+                Some(&p),
+                &PathBuf::from(program),
+                args,
+                domain,
+                sandbox_from(*sandbox),
+            )?;
             note_runtime_domain(&report);
             Ok(exit_from_status(report.status))
         }
