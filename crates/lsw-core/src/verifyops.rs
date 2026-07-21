@@ -101,9 +101,51 @@ pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
         .remote_dir
         .clone()
         .unwrap_or_else(|| default_remote_dir(project));
+
+    validate_windows_dir(&remote_dir)?;
     let plan = plan(project, &build.artifacts, &remote_dir);
+    for (_, name) in &plan.uploads {
+        validate_windows_name(name)?;
+    }
 
     run_ssh_plan(&host, &plan)
+}
+
+fn validate_windows_dir(dir: &str) -> Result<()> {
+    let bad = || Error::UnsafeRemotePath {
+        value: dir.to_owned(),
+    };
+    let rest = dir
+        .strip_prefix(|c: char| c.is_ascii_alphabetic())
+        .and_then(|r| r.strip_prefix(':'))
+        .and_then(|r| r.strip_prefix('\\'))
+        .ok_or_else(bad)?;
+    if rest.is_empty() {
+        return Err(bad());
+    }
+    for segment in rest.split('\\') {
+        if segment.is_empty() {
+            return Err(bad());
+        }
+        validate_windows_name(segment).map_err(|_| bad())?;
+    }
+    Ok(())
+}
+
+fn validate_windows_name(name: &str) -> Result<()> {
+    let ok = !name.is_empty()
+        && name != "."
+        && name != ".."
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '+'));
+    if ok {
+        Ok(())
+    } else {
+        Err(Error::UnsafeRemotePath {
+            value: name.to_owned(),
+        })
+    }
 }
 
 fn run_ssh_plan(host: &str, plan: &AgentPlan) -> Result<VerifyReport> {
@@ -153,9 +195,11 @@ fn run_ssh_plan(host: &str, plan: &AgentPlan) -> Result<VerifyReport> {
     let mut results = Vec::new();
     let mut all_passed = true;
     for program in &plan.run {
+        let sentinel = "__LSW_EXIT__";
         let remote_cmd = format!(
-            "cmd /c \"cd /d \"{}\" && \"{}\"\"",
-            plan.remote_dir, program
+            "cmd /c \"cd /d \"{dir}\" && \"{prog}\" & echo {sentinel}!errorlevel!\"",
+            dir = plan.remote_dir,
+            prog = program,
         );
         let out = Command::new("ssh")
             .args(ssh_opts())
@@ -163,14 +207,28 @@ fn run_ssh_plan(host: &str, plan: &AgentPlan) -> Result<VerifyReport> {
             .arg(&remote_cmd)
             .output()
             .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
-        let code = out.status.code();
-        if code != Some(0) {
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+
+        let remote_code = parse_sentinel_code(&stdout, sentinel);
+        if remote_code.is_none() {
+            return Ok(VerifyReport {
+                status: VerifyStatus::WindowsUnavailable,
+                host: Some(host.to_owned()),
+                results,
+                detail: format!(
+                    "lost the Windows host '{host}' during the run phase (ssh exit {:?}): {}",
+                    out.status.code(),
+                    String::from_utf8_lossy(&out.stderr).trim()
+                ),
+            });
+        }
+        if remote_code != Some(0) {
             all_passed = false;
         }
         results.push(AgentResult {
             artifact: program.clone(),
-            exit_code: code,
-            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+            exit_code: remote_code,
+            stdout,
             stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
         });
     }
@@ -193,6 +251,14 @@ fn run_ssh_plan(host: &str, plan: &AgentPlan) -> Result<VerifyReport> {
         results,
         detail,
     })
+}
+
+fn parse_sentinel_code(stdout: &str, sentinel: &str) -> Option<i32> {
+    stdout
+        .lines()
+        .rev()
+        .find_map(|l| l.trim().strip_prefix(sentinel))
+        .and_then(|n| n.trim().parse::<i32>().ok())
 }
 
 fn ssh_opts() -> [&'static str; 4] {
@@ -232,6 +298,48 @@ mod tests {
         assert_eq!(p.run, vec!["app.exe"]);
         assert_eq!(p.remote_dir, "C:\\lsw-verify\\demo");
         assert_eq!(p.uploads[0].1, "app.exe");
+    }
+
+    #[test]
+    fn windows_dir_validator_rejects_injection() {
+        assert!(validate_windows_dir("C:\\lsw-verify\\demo").is_ok());
+        assert!(validate_windows_dir("D:\\a\\b_c.1").is_ok());
+        for bad in [
+            "C:\\x\" & powershell -enc AA & rem \"",
+            "C:\\x & del /q /s C:\\",
+            "C:\\a\\..\\b",
+            "C:\\a b",
+            "C:\\a|b",
+            "\\\\unc\\share",
+            "relative\\path",
+            "C:\\",
+        ] {
+            assert!(validate_windows_dir(bad).is_err(), "accepted {bad:?}");
+        }
+    }
+
+    #[test]
+    fn windows_name_validator_rejects_metachars() {
+        assert!(validate_windows_name("app.exe").is_ok());
+        for bad in ["a&b.exe", "a b.exe", "..", "a\"b", "a\\b", ""] {
+            assert!(validate_windows_name(bad).is_err(), "accepted {bad:?}");
+        }
+    }
+
+    #[test]
+    fn sentinel_distinguishes_remote_code_from_ssh_failure() {
+        assert_eq!(
+            parse_sentinel_code("Hello\r\n__LSW_EXIT__0\r\n", "__LSW_EXIT__"),
+            Some(0)
+        );
+        assert_eq!(
+            parse_sentinel_code("boom\n__LSW_EXIT__3\n", "__LSW_EXIT__"),
+            Some(3)
+        );
+        assert_eq!(
+            parse_sentinel_code("ssh: connect timed out", "__LSW_EXIT__"),
+            None
+        );
     }
 
     #[test]
