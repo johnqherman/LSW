@@ -151,6 +151,25 @@ impl TargetArch {
         }
     }
 
+    pub fn msvc_triple(self) -> &'static str {
+        match self {
+            TargetArch::X86_64 => "x86_64-pc-windows-msvc",
+            TargetArch::X86 => "i686-pc-windows-msvc",
+            TargetArch::Aarch64 => "aarch64-pc-windows-msvc",
+            TargetArch::Armv7 => "thumbv7a-pc-windows-msvc",
+            TargetArch::Arm64Ec => "arm64ec-pc-windows-msvc",
+        }
+    }
+
+    pub fn msvc_lib_dir(self) -> &'static str {
+        match self {
+            TargetArch::X86_64 => "x64",
+            TargetArch::X86 => "x86",
+            TargetArch::Aarch64 | TargetArch::Arm64Ec => "arm64",
+            TargetArch::Armv7 => "arm",
+        }
+    }
+
     pub fn rust_gnu_triple(self) -> Option<&'static str> {
         match self {
             TargetArch::X86_64 => Some("x86_64-pc-windows-gnu"),
