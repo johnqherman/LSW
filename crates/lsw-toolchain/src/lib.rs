@@ -99,6 +99,10 @@ impl ToolchainProvider for LlvmMingw {
                 ),
             ));
         }
+        let mut link_flags = vec!["-fuse-ld=lld".to_owned()];
+        if let Some(libgcc) = latest_gcc_lib_dir(triple) {
+            link_flags.push(format!("-L{}", libgcc.display()));
+        }
         Ok(ResolvedToolchain {
             provider: self.id().to_owned(),
             version: compiler_version(&cc),
@@ -106,12 +110,24 @@ impl ToolchainProvider for LlvmMingw {
                 format!("--target={triple}"),
                 format!("--sysroot={}", sysroot.display()),
             ],
-            link_flags: vec!["-fuse-ld=lld".to_owned()],
+            link_flags,
             cc,
             cxx,
             sysroot,
         })
     }
+}
+
+fn latest_gcc_lib_dir(triple: &str) -> Option<PathBuf> {
+    let base = PathBuf::from("/usr/lib/gcc").join(triple);
+    let mut versions: Vec<PathBuf> = std::fs::read_dir(&base)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir() && p.join("libgcc.a").is_file())
+        .collect();
+    versions.sort();
+    versions.pop()
 }
 
 pub struct MingwGcc;
@@ -580,7 +596,10 @@ mod tests {
         assert!(tc.cxx.is_absolute());
         assert!(tc.c_flags.iter().any(|f| f.starts_with("--target=")));
         assert!(tc.c_flags.iter().any(|f| f.starts_with("--sysroot=")));
-        assert_eq!(tc.link_flags, vec!["-fuse-ld=lld"]);
+        assert_eq!(tc.link_flags.first().map(String::as_str), Some("-fuse-ld=lld"));
+        for extra in &tc.link_flags[1..] {
+            assert!(extra.starts_with("-L"), "unexpected link flag {extra}");
+        }
 
         let report = LlvmMingw.probe(TargetArch::X86_64).unwrap();
         assert_eq!(report.provider, LLVM_MINGW_ID);
