@@ -255,6 +255,8 @@ enum PackageTargetArg {
     PortableDirectory,
     #[value(name = "zip")]
     Zip,
+    #[value(name = "msi")]
+    Msi,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -740,6 +742,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     lsw_core::packageops::PackageTarget::PortableDirectory
                 }
                 PackageTargetArg::Zip => lsw_core::packageops::PackageTarget::Zip,
+                PackageTargetArg::Msi => lsw_core::packageops::PackageTarget::Msi,
             };
             let report = lsw_core::packageops::package(&p, &env, target)?;
             println!("Packaged: {}", report.directory.display());
@@ -748,6 +751,9 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             }
             if let Some(zip) = &report.zip {
                 println!("Archive:  {}", zip.display());
+            }
+            if let Some(msi) = &report.msi {
+                println!("Installer: {}", msi.display());
             }
             Ok(ExitCode::SUCCESS)
         }
