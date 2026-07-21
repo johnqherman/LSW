@@ -132,6 +132,7 @@ fn compat_inner(
         );
         let mut fails = unsupported.clone();
         fails.extend(trace.unsupported.iter().cloned());
+        let _guard = crate::compatdb::CompatDb::lock(dirs)?;
         let mut db = crate::compatdb::CompatDb::load(dirs)?;
         db.record(&runtime, &supported_keys, &fails);
         db.save(dirs)?;
