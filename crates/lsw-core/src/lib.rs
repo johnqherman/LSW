@@ -1,9 +1,11 @@
 pub mod buildops;
+pub mod debugops;
 pub mod doctorops;
 pub mod envops;
 pub mod error;
 pub mod ideops;
 pub mod inspectops;
+pub mod packageops;
 pub mod project;
 pub mod psops;
 pub mod registryops;
