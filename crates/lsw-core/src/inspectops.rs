@@ -41,8 +41,11 @@ pub fn inspect(path: &Path, env: Option<&Environment>) -> Result<InspectReport> 
 }
 
 fn dll_available(env: &Environment, dll: &str) -> bool {
-    let system32 = env.layout.drive_c().join("windows/system32");
     let wanted = dll.to_ascii_lowercase();
+    if wanted.starts_with("api-ms-win-") || wanted.starts_with("ext-ms-win-") {
+        return true;
+    }
+    let system32 = env.layout.drive_c().join("windows/system32");
     let Ok(entries) = fs::read_dir(&system32) else {
         return false;
     };
