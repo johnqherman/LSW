@@ -98,6 +98,13 @@ pub enum Error {
     PluginProtocol { name: String, detail: String },
 
     #[error(
+        "LSW2023: lsw daemon not available at {}: {detail}\n\
+         Start it with: lswd  (the daemon is optional; most commands work without it)",
+        path.display()
+    )]
+    DaemonUnavailable { path: PathBuf, detail: String },
+
+    #[error(
         "LSW2021: unsupported verification transport '{transport}'\n\
          Only 'ssh' is implemented; set transport = \"ssh\" in [verify]"
     )]
