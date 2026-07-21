@@ -30,6 +30,8 @@ fn clang_triple(arch: TargetArch) -> &'static str {
         TargetArch::X86_64 => "x86_64-pc-windows-gnu",
         TargetArch::X86 => "i686-pc-windows-gnu",
         TargetArch::Aarch64 => "aarch64-pc-windows-gnu",
+        TargetArch::Armv7 => "armv7-pc-windows-gnu",
+        TargetArch::Arm64Ec => "arm64ec-pc-windows-gnu",
     }
 }
 

@@ -336,7 +336,8 @@ pub fn write_cmake_toolchain_file(
     let processor = match arch {
         TargetArch::X86_64 => "AMD64",
         TargetArch::X86 => "X86",
-        TargetArch::Aarch64 => "ARM64",
+        TargetArch::Aarch64 | TargetArch::Arm64Ec => "ARM64",
+        TargetArch::Armv7 => "ARM",
     };
     let c_flags = tc.c_flags.join(" ");
     let cxx_flags = tc

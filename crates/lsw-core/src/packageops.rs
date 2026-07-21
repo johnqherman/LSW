@@ -151,7 +151,8 @@ fn build_msi(
     let arch = match env.manifest.target_arch {
         lsw_config::TargetArch::X86_64 => "x64",
         lsw_config::TargetArch::X86 => "x86",
-        lsw_config::TargetArch::Aarch64 => "arm64",
+        lsw_config::TargetArch::Aarch64 | lsw_config::TargetArch::Arm64Ec => "arm64",
+        lsw_config::TargetArch::Armv7 => "arm",
     };
 
     let abs_wxs = std::path::absolute(&wxs_path).map_err(|e| Error::io(wxs_path.clone(), e))?;

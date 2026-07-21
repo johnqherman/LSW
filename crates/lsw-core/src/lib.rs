@@ -13,6 +13,7 @@ pub mod project;
 pub mod psops;
 pub mod registryops;
 pub mod runops;
+pub mod rustops;
 pub mod sdkops;
 pub mod testops;
 pub mod traceops;
