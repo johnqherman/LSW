@@ -75,6 +75,12 @@ pub enum Error {
     InvalidName { kind: String, name: String },
 
     #[error(
+        "LSW2015: registry operation failed (exit code {code:?})\n\
+         Check the key path (e.g. 'HKCU\\Software\\Example\\App') and see the output above"
+    )]
+    RegistryOperationFailed { code: Option<i32> },
+
+    #[error(
         "LSW2014: nothing to test\n\
          Possible fixes:\n  \
          add add_test(...) to CMakeLists.txt and rebuild, or\n  \

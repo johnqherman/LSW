@@ -95,8 +95,32 @@ enum Cmd {
         #[arg(long)]
         linux: Option<String>,
     },
+    /// Read and write the environment's isolated registry.
+    #[command(subcommand)]
+    Registry(RegistryCmd),
     /// Diagnose host, runtime, toolchain, and project health.
     Doctor,
+}
+
+#[derive(Subcommand)]
+enum RegistryCmd {
+    /// Query a key (optionally one value), e.g. 'HKCU\Software\Example'.
+    Get { key: String, value: Option<String> },
+    /// Set a value under a key.
+    Set {
+        key: String,
+        value: String,
+        data: String,
+        /// Registry value type.
+        #[arg(long, default_value = "REG_SZ")]
+        kind: String,
+    },
+    /// Export a key to a .reg file on the host.
+    Export { key: String, file: PathBuf },
+    /// Merge a host .reg file into the environment's registry.
+    Import { file: PathBuf },
+    /// Discard all registry state and rebuild prefix defaults.
+    Reset,
 }
 
 #[derive(Subcommand)]
@@ -436,6 +460,37 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 _ => {
                     eprintln!("usage: lsw path --windows <linux-path> | --linux <windows-path>");
                     return Ok(ExitCode::FAILURE);
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Registry(op) => {
+            let (_p, env) = active_env(&dirs)?;
+            match op {
+                RegistryCmd::Get { key, value } => {
+                    lsw_core::registryops::get(&env, key, value.as_deref())?;
+                }
+                RegistryCmd::Set {
+                    key,
+                    value,
+                    data,
+                    kind,
+                } => {
+                    lsw_core::registryops::set(&env, key, value, data, kind)?;
+                    println!("set {key}\\{value}");
+                }
+                RegistryCmd::Export { key, file } => {
+                    lsw_core::registryops::export(&env, key, file)?;
+                    println!("exported {key} to {}", file.display());
+                }
+                RegistryCmd::Import { file } => {
+                    lsw_core::registryops::import(&env, file)?;
+                    println!("imported {}", file.display());
+                }
+                RegistryCmd::Reset => {
+                    lsw_core::registryops::reset(&env)?;
+                    println!("registry reset to prefix defaults for '{}'", env.name);
                 }
             }
             Ok(ExitCode::SUCCESS)
