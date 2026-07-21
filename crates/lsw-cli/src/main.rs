@@ -98,8 +98,26 @@ enum Cmd {
     /// Read and write the environment's isolated registry.
     #[command(subcommand)]
     Registry(RegistryCmd),
+    /// List the environment's Windows/runtime processes.
+    Ps,
+    /// Terminate an environment process (or all with --all).
+    Kill {
+        pid: Option<u32>,
+        /// Shut down every process in the environment.
+        #[arg(long, conflicts_with = "pid")]
+        all: bool,
+    },
+    /// IDE integration helpers.
+    #[command(subcommand)]
+    Ide(IdeCmd),
     /// Diagnose host, runtime, toolchain, and project health.
     Doctor,
+}
+
+#[derive(Subcommand)]
+enum IdeCmd {
+    /// Print the environment description IDE plugins consume (JSON).
+    Env,
 }
 
 #[derive(Subcommand)]
@@ -493,6 +511,50 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     println!("registry reset to prefix defaults for '{}'", env.name);
                 }
             }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Ps => {
+            let (_p, env) = active_env(&dirs)?;
+            let processes = lsw_core::psops::ps(&env)?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&processes).expect("serializes")
+                );
+            } else if processes.is_empty() {
+                println!("No processes running in environment '{}'", env.name);
+            } else {
+                println!("{:<8} COMMAND", "PID");
+                for p in processes {
+                    println!("{:<8} {}", p.pid, p.command);
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Kill { pid, all } => {
+            let (_p, env) = active_env(&dirs)?;
+            if *all {
+                lsw_core::psops::kill_all(&env)?;
+                println!("environment '{}' shut down", env.name);
+            } else if let Some(pid) = pid {
+                lsw_core::psops::kill(&env, *pid)?;
+                println!("sent SIGTERM to {pid}");
+            } else {
+                eprintln!("usage: lsw kill <pid> | lsw kill --all");
+                return Ok(ExitCode::FAILURE);
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Ide(IdeCmd::Env) => {
+            let (p, env) = active_env(&dirs)?;
+            let description = lsw_core::ideops::ide_env(&env, Some(&p));
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&description).expect("serializes")
+            );
             Ok(ExitCode::SUCCESS)
         }
 
