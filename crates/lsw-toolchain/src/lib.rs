@@ -83,7 +83,7 @@ impl ToolchainProvider for LlvmMingw {
         let cc = which("clang").ok_or_else(|| unavailable(self.id(), "'clang' not on PATH"))?;
         let cxx =
             which("clang++").ok_or_else(|| unavailable(self.id(), "'clang++' not on PATH"))?;
-        let sysroot = PathBuf::from(format!("/usr/{triple}"));
+        let sysroot = derive_sysroot(&cc, triple);
         if !sysroot.is_dir() {
             return Err(unavailable(
                 self.id(),
@@ -177,6 +177,7 @@ impl ToolchainProvider for MingwGcc {
             which(&gcc).ok_or_else(|| unavailable(self.id(), &format!("'{gcc}' not on PATH")))?;
         let cxx =
             which(&gxx).ok_or_else(|| unavailable(self.id(), &format!("'{gxx}' not on PATH")))?;
+        let sysroot = derive_sysroot(&cc, triple);
         Ok(ResolvedToolchain {
             provider: self.id().to_owned(),
             version: compiler_version(&cc),
@@ -185,7 +186,7 @@ impl ToolchainProvider for MingwGcc {
             link_flags: vec!["-static".to_owned()],
             cc,
             cxx,
-            sysroot: PathBuf::from(format!("/usr/{triple}")),
+            sysroot,
         })
     }
 }
@@ -417,6 +418,12 @@ fn to_hex(digest: impl AsRef<[u8]>) -> String {
 }
 
 fn which(name: &str) -> Option<PathBuf> {
+    for dir in extra_toolchain_dirs() {
+        let candidate = dir.join(name);
+        if is_executable_file(&candidate) {
+            return Some(candidate);
+        }
+    }
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
         if dir.as_os_str().is_empty() {
@@ -428,6 +435,29 @@ fn which(name: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn extra_toolchain_dirs() -> Vec<PathBuf> {
+    match std::env::var_os("LSW_TOOLCHAIN_DIRS") {
+        Some(v) => std::env::split_paths(&v)
+            .filter(|d| !d.as_os_str().is_empty())
+            .collect(),
+        None => Vec::new(),
+    }
+}
+
+fn derive_sysroot(cc: &Path, triple: &str) -> PathBuf {
+    if let Some(bindir) = cc.parent()
+        && let Some(root) = bindir.parent()
+    {
+        let candidate = root.join(triple);
+        if candidate.join("include").join("windows.h").is_file()
+            || candidate.join("include").join("Windows.h").is_file()
+        {
+            return candidate;
+        }
+    }
+    PathBuf::from(format!("/usr/{triple}"))
 }
 
 fn is_executable_file(path: &Path) -> bool {
@@ -445,6 +475,32 @@ fn is_executable_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn derive_sysroot_prefers_self_contained_then_falls_back_to_usr() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let bindir = root.join("bin");
+        std::fs::create_dir_all(&bindir).unwrap();
+        let inc = root.join("aarch64-w64-mingw32/include");
+        std::fs::create_dir_all(&inc).unwrap();
+        std::fs::write(inc.join("windows.h"), b"// h").unwrap();
+        let cc = bindir.join("aarch64-w64-mingw32-gcc");
+        std::fs::write(&cc, b"").unwrap();
+
+        assert_eq!(
+            derive_sysroot(&cc, "aarch64-w64-mingw32"),
+            root.join("aarch64-w64-mingw32")
+        );
+
+        assert_eq!(
+            derive_sysroot(
+                std::path::Path::new("/usr/bin/x86_64-w64-mingw32-gcc"),
+                "no-such-triple"
+            ),
+            PathBuf::from("/usr/no-such-triple")
+        );
+    }
 
     fn fake_toolchain() -> ResolvedToolchain {
         ResolvedToolchain {
