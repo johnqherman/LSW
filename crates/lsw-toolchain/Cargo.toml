@@ -7,11 +7,9 @@ license.workspace = true
 [dependencies]
 lsw-config.workspace = true
 sha2.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-
-[dev-dependencies]
-tempfile.workspace = true
 
 [lints]
 workspace = true
