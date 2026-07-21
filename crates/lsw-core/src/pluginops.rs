@@ -54,12 +54,7 @@ pub struct Plugin {
 
 impl Plugin {
     pub fn connect(name: &str, path: &std::path::Path) -> Result<Self> {
-        let mut child = Command::new(path)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .map_err(|e| Error::io(path.to_path_buf(), e))?;
+        let mut child = spawn_plugin(path)?;
 
         let stdin = child.stdin.take().expect("piped stdin");
         let stdout = child.stdout.take().expect("piped stdout");
@@ -209,6 +204,25 @@ fn plugin_err(name: &str, detail: String) -> Error {
     Error::PluginProtocol {
         name: name.to_owned(),
         detail,
+    }
+}
+
+fn spawn_plugin(path: &std::path::Path) -> Result<Child> {
+    let mut attempt = 0;
+    loop {
+        match Command::new(path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+        {
+            Ok(child) => return Ok(child),
+            Err(e) if e.raw_os_error() == Some(26) && attempt < 25 => {
+                attempt += 1;
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Err(e) => return Err(Error::io(path.to_path_buf(), e)),
+        }
     }
 }
 
