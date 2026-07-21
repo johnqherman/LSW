@@ -98,6 +98,12 @@ pub enum Error {
     PluginProtocol { name: String, detail: String },
 
     #[error(
+        "LSW2025: Rust has no GNU-ABI Windows target for arch '{arch}'\n\
+         Rust builds support x86_64, x86, and aarch64. armv7/arm64ec are MSVC-only in Rust."
+    )]
+    RustTargetUnavailable { arch: String },
+
+    #[error(
         "LSW2023: lsw daemon not available at {}: {detail}\n\
          Start it with: lswd  (the daemon is optional; most commands work without it)",
         path.display()

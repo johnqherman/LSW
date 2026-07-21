@@ -134,6 +134,10 @@ pub enum TargetArch {
     X86,
     #[serde(rename = "aarch64")]
     Aarch64,
+    #[serde(rename = "armv7")]
+    Armv7,
+    #[serde(rename = "arm64ec")]
+    Arm64Ec,
 }
 
 impl TargetArch {
@@ -142,6 +146,16 @@ impl TargetArch {
             TargetArch::X86_64 => "x86_64-w64-mingw32",
             TargetArch::X86 => "i686-w64-mingw32",
             TargetArch::Aarch64 => "aarch64-w64-mingw32",
+            TargetArch::Armv7 => "armv7-w64-mingw32",
+            TargetArch::Arm64Ec => "arm64ec-w64-mingw32",
+        }
+    }
+
+    pub fn rust_gnu_triple(self) -> Option<&'static str> {
+        match self {
+            TargetArch::X86_64 => Some("x86_64-pc-windows-gnu"),
+            TargetArch::X86 => Some("i686-pc-windows-gnu"),
+            TargetArch::Aarch64 | TargetArch::Armv7 | TargetArch::Arm64Ec => None,
         }
     }
 }
@@ -152,6 +166,8 @@ impl std::fmt::Display for TargetArch {
             TargetArch::X86_64 => "x86_64",
             TargetArch::X86 => "x86",
             TargetArch::Aarch64 => "aarch64",
+            TargetArch::Armv7 => "armv7",
+            TargetArch::Arm64Ec => "arm64ec",
         })
     }
 }
