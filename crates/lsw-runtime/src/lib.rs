@@ -100,6 +100,7 @@ pub fn bwrap_args(spec: &SandboxSpec) -> Vec<String> {
         "--unshare-pid",
         "--unshare-uts",
         "--unshare-ipc",
+        "--new-session",
     ]
     .into_iter()
     .map(str::to_owned)
@@ -123,6 +124,35 @@ pub fn bwrap_args(spec: &SandboxSpec) -> Vec<String> {
 
 fn dirs_home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
+}
+
+fn sandbox_base_env() -> Vec<(String, String)> {
+    const ALLOW: &[&str] = &[
+        "PATH",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "TERM",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "DISPLAY",
+        "XAUTHORITY",
+        "WAYLAND_DISPLAY",
+        "XDG_RUNTIME_DIR",
+    ];
+    let mut out = Vec::new();
+    for key in ALLOW {
+        if let Some(value) = std::env::var_os(key)
+            && let Ok(value) = value.into_string()
+        {
+            out.push(((*key).to_owned(), value));
+        }
+    }
+    if !out.iter().any(|(k, _)| k == "PATH") {
+        out.push(("PATH".to_owned(), "/usr/bin:/bin".to_owned()));
+    }
+    out
 }
 
 pub fn find_bwrap() -> Option<PathBuf> {
@@ -201,6 +231,10 @@ fn scrub_host_wine_vars(command: &mut Command) {
     }
 }
 
+pub fn scrub_wine_env(command: &mut Command) {
+    scrub_host_wine_vars(command);
+}
+
 fn full_env(prefix: &Path, extra: &[(String, String)]) -> Vec<(String, String)> {
     let mut env = base_env(prefix);
     env.extend(extra.iter().cloned());
@@ -244,14 +278,7 @@ impl WineRuntime {
     }
 
     pub fn shutdown_prefix(&self, prefix: &Path) -> Result<(), RuntimeError> {
-        let wine = Self::wine_executable()?;
-        let wineserver = wine
-            .parent()
-            .map(|d| d.join("wineserver"))
-            .filter(|p| p.is_file());
-        let Some(wineserver) = wineserver else {
-            return Ok(());
-        };
+        let wineserver = Self::wineserver_executable()?;
         for flag in ["-k", "-w"] {
             let status = command_with_prefix(&wineserver, prefix)
                 .arg(flag)
@@ -263,6 +290,25 @@ impl WineRuntime {
             let _ = status;
         }
         Ok(())
+    }
+
+    fn wineserver_executable() -> Result<PathBuf, RuntimeError> {
+        let wine = Self::wine_executable()?;
+        if let Some(sibling) = wine.parent().map(|d| d.join("wineserver"))
+            && sibling.is_file()
+        {
+            return Ok(sibling);
+        }
+        if let Some(path_var) = std::env::var_os("PATH")
+            && let Some(found) = find_in_paths("wineserver", &path_var)
+        {
+            return Ok(found);
+        }
+        Err(RuntimeError::PrefixInitFailed {
+            detail:
+                "wineserver not found next to wine or on PATH; cannot safely settle prefix state"
+                    .into(),
+        })
     }
 }
 
@@ -339,47 +385,49 @@ impl RuntimeProvider for WineRuntime {
         let executable = Self::wine_executable()?;
 
         let virtual_display = req.display == DisplayMode::Virtual;
-        let xvfb = if virtual_display {
-            Some(find_xvfb_run().ok_or(RuntimeError::VirtualDisplayUnavailable)?)
-        } else {
-            None
-        };
+        let sandboxed = req.sandbox.is_some();
+        let mut argv: Vec<std::ffi::OsString> = Vec::new();
 
-        let mut command = match &xvfb {
-            Some(xvfb_run) => {
-                let mut c = Command::new(xvfb_run);
-                c.args(["-a", "--"]);
-                c
-            }
-            None => Command::new(&executable),
-        };
+        if virtual_display {
+            let xvfb = find_xvfb_run().ok_or(RuntimeError::VirtualDisplayUnavailable)?;
+            argv.push(xvfb.into_os_string());
+            argv.push("-a".into());
+            argv.push("--".into());
+        }
 
-        match &req.sandbox {
-            None => {
-                if xvfb.is_some() {
-                    command.arg(&executable);
+        if let Some(spec) = &req.sandbox {
+            let bwrap = find_bwrap().ok_or(RuntimeError::SandboxUnavailable)?;
+            argv.push(bwrap.into_os_string());
+            argv.extend(bwrap_args(spec).into_iter().map(Into::into));
+            if virtual_display {
+                for a in ["--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix"] {
+                    argv.push(a.into());
                 }
-            }
-            Some(spec) => {
-                let bwrap = find_bwrap().ok_or(RuntimeError::SandboxUnavailable)?;
-                command.arg(bwrap);
-                command.args(bwrap_args(spec));
-                if virtual_display {
-                    command.args(["--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix"]);
-                }
-                command.arg(&executable);
             }
         }
 
-        scrub_host_wine_vars(&mut command);
-        command
-            .arg(&req.program)
-            .args(&req.args)
-            .envs(full_env(&req.prefix, &req.env));
+        argv.push(executable.clone().into_os_string());
+        argv.push(req.program.clone().into_os_string());
+        argv.extend(req.args.iter().map(Into::into));
+
+        let (head, tail) = argv.split_first().expect("argv always has wine at minimum");
+        let mut command = Command::new(head);
+        command.args(tail);
+
+        if sandboxed {
+            command.env_clear();
+            for (key, value) in sandbox_base_env() {
+                command.env(key, value);
+            }
+            command.envs(full_env(&req.prefix, &req.env));
+        } else {
+            scrub_host_wine_vars(&mut command);
+            command.envs(full_env(&req.prefix, &req.env));
+        }
         if let Some(cwd) = &req.cwd {
             command.current_dir(cwd);
         }
-        tracing::debug!(program = %req.program.display(), prefix = %req.prefix.display(), sandboxed = req.sandbox.is_some(), virtual_display, "executing via wine");
+        tracing::debug!(program = %req.program.display(), prefix = %req.prefix.display(), sandboxed, virtual_display, "executing via wine");
         command
             .status()
             .map_err(|source| RuntimeError::SpawnFailed {
@@ -623,7 +671,7 @@ mod tests {
                 cwd: Some(dir.path().to_path_buf()),
                 env: Vec::new(),
                 sandbox: None,
-                display: lsw_runtime::DisplayMode::Inherit,
+                display: DisplayMode::Inherit,
             })
             .unwrap();
         assert!(status.success(), "cmd.exe /c exit 0 failed: {status}");

@@ -77,6 +77,7 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
 
     let mut command = Command::new(spawn);
     command.args(&spawn_args).current_dir(&project.root);
+    lsw_runtime::scrub_wine_env(&mut command);
     for (k, v) in lsw_runtime::base_env(&env.layout.prefix()) {
         command.env(k, v);
     }
@@ -98,9 +99,10 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
     print!("{}", String::from_utf8_lossy(&output.stdout));
     eprint!("{}", String::from_utf8_lossy(&output.stderr));
 
-    let passed = output.status.success();
     let (tests_passed, tests_failed) =
         parse_ctest_summary(&String::from_utf8_lossy(&output.stdout));
+
+    let passed = output.status.success() && tests_failed.is_none_or(|f| f == 0);
 
     let _ = build_report;
     Ok(TestReport {
@@ -133,12 +135,17 @@ fn test_command(project: &Project) -> Result<Vec<String>> {
     {
         return Ok(spec.command.clone());
     }
-    if has_ctest_config(&project.root.join("build")) {
+    let build_dir = project.root.join("build");
+    if has_ctest_config(&build_dir) {
+        if !configured_with_emulator(&build_dir) {
+            return Err(Error::TestEmulatorMissing);
+        }
         return Ok(vec![
             "ctest".into(),
             "--test-dir".into(),
             "build".into(),
             "--output-on-failure".into(),
+            "--no-tests=error".into(),
         ]);
     }
     Err(Error::NoTests)
@@ -148,7 +155,19 @@ fn has_ctest_config(build_dir: &Path) -> bool {
     build_dir.join("CTestTestfile.cmake").is_file()
 }
 
+fn configured_with_emulator(build_dir: &Path) -> bool {
+    std::fs::read_to_string(build_dir.join("CMakeCache.txt"))
+        .map(|cache| {
+            cache.lines().any(|l| {
+                l.starts_with("CMAKE_CROSSCOMPILING_EMULATOR")
+                    && l.split('=').nth(1).is_some_and(|v| !v.trim().is_empty())
+            })
+        })
+        .unwrap_or(false)
+}
+
 fn parse_ctest_summary(stdout: &str) -> (Option<u32>, Option<u32>) {
+    let mut result = (None, None);
     for line in stdout.lines() {
         let line = line.trim();
         let Some(rest) = line.split("tests passed, ").nth(1) else {
@@ -160,9 +179,9 @@ fn parse_ctest_summary(stdout: &str) -> (Option<u32>, Option<u32>) {
             (Some(t), Some(f)) => Some(t.saturating_sub(f)),
             _ => None,
         };
-        return (passed, failed);
+        result = (passed, failed);
     }
-    (None, None)
+    result
 }
 
 #[cfg(test)]
@@ -178,5 +197,13 @@ mod tests {
         assert_eq!((p, f), (Some(2), Some(2)));
 
         assert_eq!(parse_ctest_summary("no summary here"), (None, None));
+    }
+
+    #[test]
+    fn ctest_summary_uses_the_last_matching_line() {
+        let stdout = "old: 100% tests passed, 0 tests failed out of 9\n\
+                      ...\n\
+                      50% tests passed, 1 tests failed out of 2";
+        assert_eq!(parse_ctest_summary(stdout), (Some(1), Some(1)));
     }
 }

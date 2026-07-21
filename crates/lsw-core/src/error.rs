@@ -95,6 +95,24 @@ pub enum Error {
     NoTests,
 
     #[error(
+        "LSW2018: two build artifacts share the name '{name}' ({} and {})\n\
+         Packaging them flat would ship the wrong binary. Rename a target or build a single configuration.",
+        first.display(), second.display()
+    )]
+    PackageNameCollision {
+        name: String,
+        first: PathBuf,
+        second: PathBuf,
+    },
+
+    #[error(
+        "LSW2017: the build was not configured to run Windows tests through the runtime\n\
+         Test binaries would execute as host processes and a pass would be meaningless.\n\
+         Possible fix: remove the build/ directory and re-run `lsw test` (a fresh configure sets the emulator)"
+    )]
+    TestEmulatorMissing,
+
+    #[error(
         "LSW2013: build produced '{}' which is not a Windows PE binary ({found})\n\
          The build ran with host tools but did not cross-compile.\n\
          Possible fixes:\n  \
