@@ -333,6 +333,7 @@ dependencies = [
 name = "lsw-core"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "lsw-config",
  "lsw-path",
  "lsw-pe",

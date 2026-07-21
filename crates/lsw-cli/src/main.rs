@@ -608,9 +608,10 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             gdb,
             no_start,
         } => {
-            let (_p, env) = active_env(&dirs)?;
+            let (p, env) = active_env(&dirs)?;
             let status = lsw_core::debugops::debug(
                 &env,
+                Some(&p),
                 program,
                 args,
                 &lsw_core::debugops::DebugOptions {
@@ -718,7 +719,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
 
         Cmd::Ide(IdeCmd::Env) => {
             let (p, env) = active_env(&dirs)?;
-            let description = lsw_core::ideops::ide_env(&env, Some(&p));
+            let description = lsw_core::ideops::ide_env(&env, Some(&p))?;
             println!(
                 "{}",
                 serde_json::to_string_pretty(&description).expect("serializes")

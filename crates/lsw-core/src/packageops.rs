@@ -50,6 +50,22 @@ pub fn package(
     }
     fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
 
+    let mut seen: std::collections::HashMap<String, PathBuf> = std::collections::HashMap::new();
+    for artifact in &build.artifacts {
+        let name = artifact
+            .file_name()
+            .expect("artifacts always have file names")
+            .to_string_lossy()
+            .into_owned();
+        if let Some(previous) = seen.insert(name.clone(), artifact.clone()) {
+            return Err(Error::PackageNameCollision {
+                name,
+                first: previous,
+                second: artifact.clone(),
+            });
+        }
+    }
+
     let mut files = Vec::new();
     for artifact in &build.artifacts {
         let source = project.root.join(artifact);

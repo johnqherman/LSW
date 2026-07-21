@@ -27,6 +27,7 @@ lsw-pe = { path = "crates/lsw-pe" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
+libc = "0.2"
 object = { version = "0.37", default-features = false, features = ["read", "std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

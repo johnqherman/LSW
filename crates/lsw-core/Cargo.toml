@@ -10,6 +10,7 @@ lsw-toolchain.workspace = true
 lsw-runtime.workspace = true
 lsw-path.workspace = true
 lsw-pe.workspace = true
+libc.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
