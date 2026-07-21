@@ -15,6 +15,7 @@ pub mod registryops;
 pub mod runops;
 pub mod rustops;
 pub mod sdkops;
+pub mod serviceops;
 pub mod testops;
 pub mod traceops;
 pub mod verifyops;

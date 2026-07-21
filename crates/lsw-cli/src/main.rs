@@ -158,6 +158,9 @@ enum Cmd {
         #[arg(long, conflicts_with = "pid")]
         all: bool,
     },
+    /// Manage Windows services inside the environment.
+    #[command(subcommand)]
+    Service(ServiceCmd),
     /// First-class Rust support.
     #[command(subcommand)]
     Rust(RustCmd),
@@ -203,6 +206,25 @@ enum RustCmd {
     Init { name: Option<String> },
     /// Report Rust->Windows toolchain readiness for the active environment.
     Doctor,
+}
+
+#[derive(Subcommand)]
+enum ServiceCmd {
+    /// Register a service from a Windows binary path.
+    Create {
+        name: String,
+        /// Windows path to the service executable (e.g. C:\svc\app.exe).
+        #[arg(long)]
+        bin: String,
+    },
+    /// Start a service.
+    Start { name: String },
+    /// Stop a service.
+    Stop { name: String },
+    /// Query a service's state.
+    Query { name: String },
+    /// Delete a service.
+    Delete { name: String },
 }
 
 #[derive(Subcommand)]
@@ -871,6 +893,40 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             } else {
                 eprintln!("usage: lsw kill <pid> | lsw kill --all");
                 return Ok(ExitCode::FAILURE);
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Service(op) => {
+            let (_p, env) = active_env(&dirs)?;
+            match op {
+                ServiceCmd::Create { name, bin } => {
+                    lsw_core::serviceops::create(&env, name, bin)?;
+                    println!("created service '{name}'");
+                }
+                ServiceCmd::Start { name } => {
+                    lsw_core::serviceops::start(&env, name)?;
+                    println!("started service '{name}'");
+                }
+                ServiceCmd::Stop { name } => {
+                    lsw_core::serviceops::stop(&env, name)?;
+                    println!("stopped service '{name}'");
+                }
+                ServiceCmd::Query { name } => {
+                    let status = lsw_core::serviceops::query(&env, name)?;
+                    if cli.format == Format::Json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&status).expect("serializes")
+                        );
+                    } else {
+                        println!("{:<24} {}", status.name, status.state);
+                    }
+                }
+                ServiceCmd::Delete { name } => {
+                    lsw_core::serviceops::delete(&env, name)?;
+                    println!("deleted service '{name}'");
+                }
             }
             Ok(ExitCode::SUCCESS)
         }
