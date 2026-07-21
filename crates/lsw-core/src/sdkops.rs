@@ -122,8 +122,11 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<usize> {
     {
         let from = entry.path();
         let to = dst.join(entry.file_name());
-        let file_type = entry.file_type().map_err(|e| Error::io(from.clone(), e))?;
-        if file_type.is_dir() {
+        let meta = match fs::metadata(&from) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if meta.is_dir() {
             fs::create_dir_all(&to).map_err(|e| Error::io(to.clone(), e))?;
             count += copy_tree(&from, &to)?;
         } else {
