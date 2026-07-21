@@ -81,7 +81,8 @@ impl ToolchainProvider for LlvmMingw {
     fn resolve(&self, arch: TargetArch) -> Result<ResolvedToolchain, ToolchainError> {
         let triple = arch.mingw_triple();
         let cc = which("clang").ok_or_else(|| unavailable(self.id(), "'clang' not on PATH"))?;
-        let cxx = which("clang++").ok_or_else(|| unavailable(self.id(), "'clang++' not on PATH"))?;
+        let cxx =
+            which("clang++").ok_or_else(|| unavailable(self.id(), "'clang++' not on PATH"))?;
         let sysroot = PathBuf::from(format!("/usr/{triple}"));
         if !sysroot.is_dir() {
             return Err(unavailable(
@@ -230,7 +231,11 @@ fn run_probe(provider_id: &str, tc: &ResolvedToolchain) -> ProbeReport {
     }
 
     match run_tool(&tc.cc, |cmd| {
-        cmd.args(&tc.c_flags).arg("-c").arg(&src).arg("-o").arg(&obj);
+        cmd.args(&tc.c_flags)
+            .arg("-c")
+            .arg(&src)
+            .arg("-o")
+            .arg(&obj);
     }) {
         Ok(stderr) => {
             report.compiled = true;
@@ -314,7 +319,9 @@ pub fn write_cmake_toolchain_file(
     ));
     text.push_str(&format!("set(CMAKE_C_FLAGS_INIT \"{c_flags}\")\n"));
     text.push_str(&format!("set(CMAKE_CXX_FLAGS_INIT \"{c_flags}\")\n"));
-    text.push_str(&format!("set(CMAKE_EXE_LINKER_FLAGS_INIT \"{link_flags}\")\n"));
+    text.push_str(&format!(
+        "set(CMAKE_EXE_LINKER_FLAGS_INIT \"{link_flags}\")\n"
+    ));
     text.push_str(&format!(
         "set(CMAKE_SHARED_LINKER_FLAGS_INIT \"{link_flags}\")\n"
     ));
@@ -596,7 +603,10 @@ mod tests {
         assert!(tc.cxx.is_absolute());
         assert!(tc.c_flags.iter().any(|f| f.starts_with("--target=")));
         assert!(tc.c_flags.iter().any(|f| f.starts_with("--sysroot=")));
-        assert_eq!(tc.link_flags.first().map(String::as_str), Some("-fuse-ld=lld"));
+        assert_eq!(
+            tc.link_flags.first().map(String::as_str),
+            Some("-fuse-ld=lld")
+        );
         for extra in &tc.link_flags[1..] {
             assert!(extra.starts_with("-L"), "unexpected link flag {extra}");
         }

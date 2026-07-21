@@ -199,10 +199,12 @@ impl RuntimeProvider for WineRuntime {
             command.current_dir(cwd);
         }
         tracing::debug!(program = %req.program.display(), prefix = %req.prefix.display(), "executing via wine");
-        command.status().map_err(|source| RuntimeError::SpawnFailed {
-            program: req.program.clone(),
-            source,
-        })
+        command
+            .status()
+            .map_err(|source| RuntimeError::SpawnFailed {
+                program: req.program.clone(),
+                source,
+            })
     }
 
     fn diagnostics(&self, prefix: &Path) -> RuntimeDiagnostics {

@@ -108,8 +108,7 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
     }
     cmd.env("PS1", format!("(lsw:{}) \\w \\$ ", env.name));
 
-    cmd.status()
-        .map_err(|e| Error::io(PathBuf::from(shell), e))
+    cmd.status().map_err(|e| Error::io(PathBuf::from(shell), e))
 }
 
 #[cfg(test)]

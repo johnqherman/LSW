@@ -515,7 +515,10 @@ mod tests {
     #[test]
     fn environment_layout_paths() {
         let l = EnvironmentLayout::new(PathBuf::from("/data/lsw/environments/e1"));
-        assert_eq!(l.prefix(), PathBuf::from("/data/lsw/environments/e1/prefix"));
+        assert_eq!(
+            l.prefix(),
+            PathBuf::from("/data/lsw/environments/e1/prefix")
+        );
         assert_eq!(
             l.drive_c(),
             PathBuf::from("/data/lsw/environments/e1/prefix/drive_c")
