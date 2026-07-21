@@ -73,6 +73,27 @@ pub struct ProjectManifest {
     pub build: Option<CommandSection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test: Option<CommandSection>,
+    #[serde(default)]
+    pub sandbox: SandboxSection,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SandboxSection {
+    #[serde(default = "default_sandbox_network")]
+    pub network: String,
+}
+
+fn default_sandbox_network() -> String {
+    "host".to_owned()
+}
+
+impl Default for SandboxSection {
+    fn default() -> Self {
+        Self {
+            network: default_sandbox_network(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
