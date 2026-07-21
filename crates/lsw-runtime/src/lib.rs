@@ -145,6 +145,35 @@ impl WineRuntime {
     fn wine_executable() -> Result<PathBuf, RuntimeError> {
         find_wine().ok_or(RuntimeError::WineNotFound)
     }
+
+    pub fn shutdown_prefix(&self, prefix: &Path) -> Result<(), RuntimeError> {
+        let wine = Self::wine_executable()?;
+        let wineserver = wine
+            .parent()
+            .map(|d| d.join("wineserver"))
+            .filter(|p| p.is_file());
+        let Some(wineserver) = wineserver else {
+            return Ok(());
+        };
+        for flag in ["-k", "-w"] {
+            let status = command_with_prefix(&wineserver, prefix)
+                .arg(flag)
+                .status()
+                .map_err(|source| RuntimeError::SpawnFailed {
+                    program: wineserver.clone(),
+                    source,
+                })?;
+            let _ = status;
+        }
+        Ok(())
+    }
+}
+
+fn command_with_prefix(program: &Path, prefix: &Path) -> Command {
+    let mut command = Command::new(program);
+    scrub_host_wine_vars(&mut command);
+    command.env("WINEPREFIX", prefix.as_os_str());
+    command
 }
 
 impl RuntimeProvider for WineRuntime {

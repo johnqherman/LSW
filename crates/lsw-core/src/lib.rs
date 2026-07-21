@@ -4,6 +4,7 @@ pub mod envops;
 pub mod error;
 pub mod inspectops;
 pub mod project;
+pub mod registryops;
 pub mod runops;
 pub mod testops;
 
