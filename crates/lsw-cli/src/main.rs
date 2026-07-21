@@ -72,6 +72,12 @@ enum Cmd {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
         command: Vec<String>,
     },
+    /// Build, then run tests under the local compatibility runtime.
+    Test {
+        /// CI mode: no interactive display (exports LSW_HEADLESS=1).
+        #[arg(long)]
+        headless: bool,
+    },
     /// Interactive shell: Linux with Windows-target env, or cmd.exe.
     Shell {
         /// Launch an actual Windows shell (cmd.exe) in the environment.
@@ -304,6 +310,68 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             let report = lsw_core::run(&env, Some(&p), &PathBuf::from(program), args, domain)?;
             note_runtime_domain(&report);
             Ok(exit_from_status(report.status))
+        }
+
+        Cmd::Test { headless } => {
+            let (p, env) = active_env(&dirs)?;
+            let report = lsw_core::test(
+                &p,
+                &env,
+                &lsw_core::TestOptions {
+                    headless: *headless,
+                },
+            )?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("report serializes")
+                );
+            } else {
+                let outcome = |o: lsw_core::Outcome| match o {
+                    lsw_core::Outcome::Pass => "PASS",
+                    lsw_core::Outcome::Fail => "FAIL",
+                    lsw_core::Outcome::NotRun => "NOT RUN",
+                };
+                println!("\nLSW Test Report\n");
+                println!("Build:");
+                println!(
+                    "  {:<24} {}",
+                    report.build.label,
+                    outcome(report.build.outcome)
+                );
+                println!("Runtime:");
+                println!(
+                    "  {:<24} {}",
+                    report.runtime.label,
+                    outcome(report.runtime.outcome)
+                );
+                println!("Native:");
+                println!(
+                    "  {:<24} {}",
+                    report.native.label,
+                    outcome(report.native.outcome)
+                );
+                if let (Some(p), Some(f)) = (report.tests_passed, report.tests_failed) {
+                    println!("\nTests:\n  {p} passed, {f} failed");
+                }
+                let compat = match report.compatibility {
+                    lsw_core::CompatStatus::LocalCompatibilityVerified => {
+                        "LOCAL_COMPATIBILITY_VERIFIED"
+                    }
+                    lsw_core::CompatStatus::LocalCompatibilityFailed => {
+                        "LOCAL_COMPATIBILITY_FAILED"
+                    }
+                    lsw_core::CompatStatus::NotRun => "NOT_RUN",
+                };
+                println!("\nCompatibility status:\n  {compat}");
+            }
+            Ok(
+                if report.compatibility == lsw_core::CompatStatus::LocalCompatibilityVerified {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                },
+            )
         }
 
         Cmd::Shell { windows } => {

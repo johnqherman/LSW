@@ -54,6 +54,10 @@ add_executable({name} src/main.c)
 
 # For a GUI application (no console window):
 # set_target_properties({name} PROPERTIES WIN32_EXECUTABLE ON)
+
+# `lsw test` runs these through the environment's Windows runtime.
+enable_testing()
+add_test(NAME {name}_runs COMMAND {name})
 "#;
 
 const TEMPLATE_GITIGNORE: &str = "build/\n";

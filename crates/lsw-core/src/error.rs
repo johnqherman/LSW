@@ -75,6 +75,14 @@ pub enum Error {
     InvalidName { kind: String, name: String },
 
     #[error(
+        "LSW2014: nothing to test\n\
+         Possible fixes:\n  \
+         add add_test(...) to CMakeLists.txt and rebuild, or\n  \
+         set [test].command in lsw.toml"
+    )]
+    NoTests,
+
+    #[error(
         "LSW2013: build produced '{}' which is not a Windows PE binary ({found})\n\
          The build ran with host tools but did not cross-compile.\n\
          Possible fixes:\n  \

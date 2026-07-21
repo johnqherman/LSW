@@ -74,6 +74,10 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 "build".to_owned(),
                 format!("-DCMAKE_TOOLCHAIN_FILE={}", toolchain_file.display()),
                 "-DCMAKE_BUILD_TYPE=Debug".to_owned(),
+                format!(
+                    "-DCMAKE_CROSSCOMPILING_EMULATOR={}",
+                    env.manifest.runtime.executable.display()
+                ),
             ];
             if let Some(g) = generator {
                 configure.push("-G".to_owned());
