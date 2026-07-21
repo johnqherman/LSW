@@ -35,6 +35,24 @@ Additional commands: `lsw exec [--host|--windows] <cmd>`, `lsw path
 execution can be locked down with `lsw run --sandbox strict <app.exe>`
 (bubblewrap kernel sandbox).
 
+## Packaging
+
+`lsw package` assembles a distributable from the build output:
+
+```
+lsw package --target portable-directory   # dist/<name>-<arch>/
+lsw package --target zip                   # + .zip
+lsw package --target msi                   # Windows Installer (needs wixl/msitools)
+lsw package --target msix                  # signed MSIX (needs zip + osslsigncode)
+```
+
+MSIX packages are built natively - LSW generates the `AppxManifest.xml`,
+`AppxBlockMap.xml` (SHA-256 block hashes) and content types, zips the OPC
+package, and signs it with [osslsigncode](https://github.com/mtrojnar/osslsigncode)
+using a cached self-signed identity (`~/.local/share/lsw/msix/`). A self-signed
+package installs only where its certificate is trusted (or in Windows developer
+mode); as with `lsw verify`, actual Windows installation is not asserted here.
+
 ## Target architectures
 
 Environments target `x86_64` (default), `x86`, or `aarch64` via

@@ -14,6 +14,7 @@ pub enum PackageTarget {
     PortableDirectory,
     Zip,
     Msi,
+    Msix,
 }
 
 #[derive(Debug, Serialize)]
@@ -21,6 +22,7 @@ pub struct PackageReport {
     pub directory: PathBuf,
     pub zip: Option<PathBuf>,
     pub msi: Option<PathBuf>,
+    pub msix: Option<PathBuf>,
     pub files: Vec<String>,
 }
 
@@ -82,6 +84,7 @@ pub fn package(
 
     let mut zip = None;
     let mut msi = None;
+    let mut msix = None;
     match target {
         PackageTarget::PortableDirectory => {}
         PackageTarget::Zip => {
@@ -113,12 +116,23 @@ pub fn package(
         PackageTarget::Msi => {
             msi = Some(build_msi(project, env, &dist, &dir, &stem, &files)?);
         }
+        PackageTarget::Msix => {
+            msix = Some(crate::msixops::build_msix(
+                project,
+                env.manifest.target_arch,
+                &dist,
+                &dir,
+                &stem,
+                &files,
+            )?);
+        }
     }
 
     Ok(PackageReport {
         directory: dir,
         zip,
         msi,
+        msix,
         files,
     })
 }

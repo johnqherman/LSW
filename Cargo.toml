@@ -25,6 +25,7 @@ lsw-path = { path = "crates/lsw-path" }
 lsw-pe = { path = "crates/lsw-pe" }
 
 anyhow = "1"
+base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
 libc = "0.2"

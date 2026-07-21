@@ -330,6 +330,8 @@ enum PackageTargetArg {
     Zip,
     #[value(name = "msi")]
     Msi,
+    #[value(name = "msix")]
+    Msix,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -900,6 +902,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 }
                 PackageTargetArg::Zip => lsw_core::packageops::PackageTarget::Zip,
                 PackageTargetArg::Msi => lsw_core::packageops::PackageTarget::Msi,
+                PackageTargetArg::Msix => lsw_core::packageops::PackageTarget::Msix,
             };
             let report = lsw_core::packageops::package(&p, &env, target)?;
             println!("Packaged: {}", report.directory.display());
@@ -911,6 +914,9 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             }
             if let Some(msi) = &report.msi {
                 println!("Installer: {}", msi.display());
+            }
+            if let Some(msix) = &report.msix {
+                println!("MSIX:      {} (self-signed)", msix.display());
             }
             Ok(ExitCode::SUCCESS)
         }
