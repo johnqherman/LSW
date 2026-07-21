@@ -1,5 +1,6 @@
 pub mod buildops;
 pub mod compatops;
+pub mod daemonops;
 pub mod debugops;
 pub mod doctorops;
 pub mod envops;

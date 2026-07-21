@@ -8,6 +8,10 @@ license.workspace = true
 name = "lsw"
 path = "src/main.rs"
 
+[[bin]]
+name = "lswd"
+path = "src/lswd.rs"
+
 [dependencies]
 lsw-core.workspace = true
 lsw-config.workspace = true

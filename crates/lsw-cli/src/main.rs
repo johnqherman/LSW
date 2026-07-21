@@ -158,6 +158,9 @@ enum Cmd {
         #[arg(long, conflicts_with = "pid")]
         all: bool,
     },
+    /// Talk to the optional lswd daemon.
+    #[command(subcommand)]
+    Daemon(DaemonCmd),
     /// Discover and inspect out-of-process provider plugins.
     #[command(subcommand)]
     Plugin(PluginCmd),
@@ -181,6 +184,14 @@ enum IdeCmd {
 enum PluginCmd {
     /// List discovered `lsw-provider-*` plugins and their handshake info.
     List,
+}
+
+#[derive(Subcommand)]
+enum DaemonCmd {
+    /// Show whether the daemon is running and its version.
+    Status,
+    /// Ask a running daemon to stop.
+    Stop,
 }
 
 #[derive(Subcommand)]
@@ -838,6 +849,26 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 eprintln!("usage: lsw kill <pid> | lsw kill --all");
                 return Ok(ExitCode::FAILURE);
             }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Daemon(DaemonCmd::Status) => {
+            let probe = lsw_core::daemonops::DaemonClient::connect(&dirs)
+                .and_then(|mut c| c.call("version"));
+            match probe {
+                Ok(v) => println!(
+                    "lswd running (protocol v{}, version {})",
+                    v["protocol"], v["version"]
+                ),
+                Err(_) => println!("lswd not running (start it with: lswd)"),
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Daemon(DaemonCmd::Stop) => {
+            let mut client = lsw_core::daemonops::DaemonClient::connect(&dirs)?;
+            client.call("shutdown")?;
+            println!("lswd stopping");
             Ok(ExitCode::SUCCESS)
         }
 
