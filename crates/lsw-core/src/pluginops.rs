@@ -1,6 +1,7 @@
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +10,10 @@ use crate::error::{Error, Result};
 pub const PROTOCOL_VERSION: u32 = 1;
 
 const PREFIX: &str = "lsw-provider-";
+
+const MAX_LINE_BYTES: u64 = 1024 * 1024;
+
+const CALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Handshake {
@@ -29,7 +34,7 @@ struct Request<'a> {
 
 #[derive(Deserialize)]
 struct Response {
-    #[allow(dead_code)]
+    #[serde(default)]
     id: u64,
     #[serde(default)]
     result: Option<serde_json::Value>,
@@ -40,8 +45,9 @@ struct Response {
 pub struct Plugin {
     name: String,
     child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
+    stdin: Option<ChildStdin>,
+    rx: std::sync::mpsc::Receiver<std::io::Result<Vec<u8>>>,
+    reader: Option<std::thread::JoinHandle<()>>,
     next_id: u64,
     pub handshake: Handshake,
 }
@@ -56,13 +62,33 @@ impl Plugin {
             .map_err(|e| Error::io(path.to_path_buf(), e))?;
 
         let stdin = child.stdin.take().expect("piped stdin");
-        let stdout = BufReader::new(child.stdout.take().expect("piped stdout"));
+        let stdout = child.stdout.take().expect("piped stdout");
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            let mut buf = BufReader::new(stdout);
+            loop {
+                match read_bounded_line(&mut buf, MAX_LINE_BYTES) {
+                    Ok(Some(line)) => {
+                        if tx.send(Ok(line)).is_err() {
+                            break;
+                        }
+                    }
+                    Ok(None) => break,
+                    Err(e) => {
+                        let _ = tx.send(Err(e));
+                        break;
+                    }
+                }
+            }
+        });
 
         let mut plugin = Plugin {
             name: name.to_owned(),
             child,
-            stdin,
-            stdout,
+            stdin: Some(stdin),
+            rx,
+            reader: Some(reader),
             next_id: 0,
             handshake: Handshake {
                 protocol: 0,
@@ -101,43 +127,110 @@ impl Plugin {
         let request = Request { id, method, params };
         let mut line = serde_json::to_string(&request).expect("request serializes");
         line.push('\n');
-        self.stdin
-            .write_all(line.as_bytes())
-            .map_err(|e| self.protocol_err(format!("write failed: {e}")))?;
-        self.stdin
-            .flush()
-            .map_err(|e| self.protocol_err(format!("flush failed: {e}")))?;
-
-        let mut response_line = String::new();
-        let read = self
-            .stdout
-            .read_line(&mut response_line)
-            .map_err(|e| self.protocol_err(format!("read failed: {e}")))?;
-        if read == 0 {
-            return Err(self.protocol_err("plugin closed the connection".into()));
+        {
+            let stdin = self
+                .stdin
+                .as_mut()
+                .ok_or_else(|| plugin_err(&self.name, "plugin stdin closed".into()))?;
+            stdin
+                .write_all(line.as_bytes())
+                .map_err(|e| plugin_err(&self.name, format!("write failed: {e}")))?;
+            stdin
+                .flush()
+                .map_err(|e| plugin_err(&self.name, format!("flush failed: {e}")))?;
         }
 
-        let response: Response = serde_json::from_str(response_line.trim())
-            .map_err(|e| self.protocol_err(format!("malformed response: {e}")))?;
+        let raw = match self.rx.recv_timeout(CALL_TIMEOUT) {
+            Ok(Ok(bytes)) => bytes,
+            Ok(Err(e)) => return Err(plugin_err(&self.name, format!("read failed: {e}"))),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                let _ = self.child.kill();
+                return Err(plugin_err(
+                    &self.name,
+                    format!(
+                        "no response within {}s; plugin killed",
+                        CALL_TIMEOUT.as_secs()
+                    ),
+                ));
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(plugin_err(
+                    &self.name,
+                    "plugin closed the connection".into(),
+                ));
+            }
+        };
+
+        let response: Response = serde_json::from_slice(&raw)
+            .map_err(|e| plugin_err(&self.name, format!("malformed response: {e}")))?;
+        if response.id != id {
+            return Err(plugin_err(
+                &self.name,
+                format!("response id {} does not match request id {id}", response.id),
+            ));
+        }
         if let Some(error) = response.error {
-            return Err(self.protocol_err(format!("plugin returned error: {error}")));
+            return Err(plugin_err(
+                &self.name,
+                format!("plugin returned error: {error}"),
+            ));
         }
         response
             .result
-            .ok_or_else(|| self.protocol_err("response has neither result nor error".into()))
-    }
-
-    fn protocol_err(&self, detail: String) -> Error {
-        Error::PluginProtocol {
-            name: self.name.clone(),
-            detail,
-        }
+            .ok_or_else(|| plugin_err(&self.name, "response has neither result nor error".into()))
     }
 
     pub fn shutdown(mut self) {
         let _ = self.call("shutdown", serde_json::Value::Null);
-        drop(self.stdin);
+    }
+}
+
+impl Drop for Plugin {
+    fn drop(&mut self) {
+        drop(self.stdin.take());
+        for _ in 0..20 {
+            match self.child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+                Err(_) => break,
+            }
+        }
+        if matches!(self.child.try_wait(), Ok(None)) {
+            let _ = self.child.kill();
+        }
         let _ = self.child.wait();
+        if let Some(reader) = self.reader.take() {
+            let _ = reader.join();
+        }
+    }
+}
+
+fn plugin_err(name: &str, detail: String) -> Error {
+    Error::PluginProtocol {
+        name: name.to_owned(),
+        detail,
+    }
+}
+
+fn read_bounded_line<R: BufRead>(reader: &mut R, max: u64) -> std::io::Result<Option<Vec<u8>>> {
+    let mut limited = reader.take(max + 1);
+    let mut buf = Vec::new();
+    let mut byte = [0u8; 1];
+    loop {
+        let n = limited.read(&mut byte)?;
+        if n == 0 {
+            return Ok(if buf.is_empty() { None } else { Some(buf) });
+        }
+        if byte[0] == b'\n' {
+            return Ok(Some(buf));
+        }
+        buf.push(byte[0]);
+        if buf.len() as u64 > max {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "plugin response line exceeded size limit",
+            ));
+        }
     }
 }
 
@@ -185,6 +278,46 @@ fn is_executable(path: &std::path::Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bounded_line_reads_and_caps() {
+        let data = b"hello\nworld\n";
+        let mut reader = BufReader::new(&data[..]);
+        assert_eq!(
+            read_bounded_line(&mut reader, 1024).unwrap().unwrap(),
+            b"hello"
+        );
+        assert_eq!(
+            read_bounded_line(&mut reader, 1024).unwrap().unwrap(),
+            b"world"
+        );
+        assert!(read_bounded_line(&mut reader, 1024).unwrap().is_none());
+
+        let huge = [b'a'; 100];
+        let mut reader = BufReader::new(&huge[..]);
+        assert!(read_bounded_line(&mut reader, 10).is_err());
+    }
+
+    #[test]
+    fn mismatched_response_id_is_rejected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(format!("{PREFIX}liar"));
+        let script = "#!/bin/sh\n\
+             n=0\n\
+             while IFS= read -r line; do\n\
+             \x20 case \"$line\" in\n\
+             \x20   *handshake*) printf '{\"id\":0,\"result\":{\"protocol\":1,\"provider\":\"liar\",\"providerVersion\":\"1\",\"kind\":\"runtime\"}}\\n' ;;\n\
+             \x20   *) printf '{\"id\":999,\"result\":{}}\\n' ;;\n\
+             \x20 esac\n\
+             done\n";
+        std::fs::write(&path, script).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let mut plugin = Plugin::connect("liar", &path).unwrap();
+        let err = plugin.call("ping", serde_json::Value::Null);
+        assert!(err.is_err_and(|e| e.to_string().contains("does not match request id")));
+    }
 
     fn write_mock_plugin(dir: &std::path::Path, name: &str, protocol: u32) -> PathBuf {
         let path = dir.join(format!("{PREFIX}{name}"));

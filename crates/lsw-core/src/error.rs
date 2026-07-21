@@ -105,6 +105,13 @@ pub enum Error {
     DaemonUnavailable { path: PathBuf, detail: String },
 
     #[error(
+        "LSW2024: unsafe value '{value}' for native verification\n\
+         Remote paths and artifact names must be a drive-letter path with segments of [A-Za-z0-9._+-] only.\n\
+         This prevents command injection on the Windows host."
+    )]
+    UnsafeRemotePath { value: String },
+
+    #[error(
         "LSW2021: unsupported verification transport '{transport}'\n\
          Only 'ssh' is implemented; set transport = \"ssh\" in [verify]"
     )]

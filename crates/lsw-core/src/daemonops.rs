@@ -1,8 +1,9 @@
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +13,10 @@ use crate::envops;
 use crate::error::{Error, Result};
 
 pub const PROTOCOL_VERSION: u32 = 1;
+
+const CLIENT_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+
+const ACCEPT_POLL: Duration = Duration::from_millis(100);
 
 pub fn socket_path(dirs: &Dirs) -> PathBuf {
     match std::env::var_os("XDG_RUNTIME_DIR") {
@@ -41,24 +46,55 @@ pub fn serve(dirs: &Dirs) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| Error::io(parent.to_path_buf(), e))?;
     }
-    let _ = std::fs::remove_file(&path);
-    let listener = UnixListener::bind(&path).map_err(|e| Error::io(path.clone(), e))?;
+    let listener = bind_socket(&path)?;
+    run_accept_loop(listener, &path, dirs)
+}
+
+fn run_accept_loop(listener: UnixListener, path: &Path, dirs: &Dirs) -> Result<()> {
+    listener
+        .set_nonblocking(true)
+        .map_err(|e| Error::io(path.to_path_buf(), e))?;
 
     let running = Arc::new(AtomicBool::new(true));
-    for stream in listener.incoming() {
-        if !running.load(Ordering::SeqCst) {
-            break;
-        }
-        match stream {
-            Ok(stream) => handle_connection(stream, dirs, &running),
+    while running.load(Ordering::SeqCst) {
+        match listener.accept() {
+            Ok((stream, _)) => {
+                let _ = stream.set_read_timeout(Some(CLIENT_IDLE_TIMEOUT));
+                let dirs = dirs.clone();
+                let running = Arc::clone(&running);
+                std::thread::spawn(move || handle_connection(stream, &dirs, &running));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(ACCEPT_POLL);
+            }
             Err(e) => {
                 tracing::warn!("lswd accept error: {e}");
                 break;
             }
         }
     }
-    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(path);
     Ok(())
+}
+
+fn bind_socket(path: &Path) -> Result<UnixListener> {
+    let listener = match UnixListener::bind(path) {
+        Ok(listener) => listener,
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            if UnixStream::connect(path).is_ok() {
+                return Err(Error::DaemonUnavailable {
+                    path: path.to_path_buf(),
+                    detail: "another lswd is already running on this socket".into(),
+                });
+            }
+            let _ = std::fs::remove_file(path);
+            UnixListener::bind(path).map_err(|e| Error::io(path.to_path_buf(), e))?
+        }
+        Err(e) => return Err(Error::io(path.to_path_buf(), e)),
+    };
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    Ok(listener)
 }
 
 fn handle_connection(stream: UnixStream, dirs: &Dirs, running: &Arc<AtomicBool>) {
@@ -229,10 +265,11 @@ mod tests {
         let server_dirs = dirs.clone();
         let sock_for_server = sock.clone();
         let handle = std::thread::spawn(move || {
-            serve_on(&sock_for_server, &server_dirs).unwrap();
+            let listener = bind_socket(&sock_for_server).unwrap();
+            run_accept_loop(listener, &sock_for_server, &server_dirs).unwrap();
         });
 
-        for _ in 0..100 {
+        for _ in 0..200 {
             if sock.exists() {
                 break;
             }
@@ -251,26 +288,39 @@ mod tests {
         client.call("shutdown").unwrap();
 
         handle.join().unwrap();
+        assert!(!sock.exists(), "socket left behind after shutdown");
     }
 
-    fn serve_on(sock: &std::path::Path, dirs: &Dirs) -> Result<()> {
-        let _ = std::fs::remove_file(sock);
-        let listener = UnixListener::bind(sock).map_err(|e| Error::io(sock.to_path_buf(), e))?;
-        let running = Arc::new(AtomicBool::new(true));
-        for stream in listener.incoming() {
-            if !running.load(Ordering::SeqCst) {
+    #[test]
+    fn bind_refuses_to_clobber_a_live_daemon() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = temp_dirs(tmp.path());
+        std::fs::create_dir_all(&dirs.cache).unwrap();
+        std::fs::create_dir_all(dirs.environments()).unwrap();
+        let sock = dirs.cache.join("lswd.sock");
+
+        let server_dirs = dirs.clone();
+        let sock_for_server = sock.clone();
+        let handle = std::thread::spawn(move || {
+            let listener = bind_socket(&sock_for_server).unwrap();
+            run_accept_loop(listener, &sock_for_server, &server_dirs).unwrap();
+        });
+        for _ in 0..200 {
+            if sock.exists() {
                 break;
             }
-            match stream {
-                Ok(stream) => handle_connection(stream, dirs, &running),
-                Err(_) => break,
-            }
-            if !running.load(Ordering::SeqCst) {
-                break;
-            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        let _ = std::fs::remove_file(sock);
-        Ok(())
+
+        let err = bind_socket(&sock).unwrap_err();
+        assert!(err.to_string().contains("already running"));
+
+        connect_to(&sock).unwrap().call("shutdown").unwrap();
+        handle.join().unwrap();
+
+        std::fs::write(&sock, b"").ok();
+        let _ = std::fs::remove_file(&sock);
+        assert!(bind_socket(&sock).is_ok());
     }
 
     fn connect_to(sock: &std::path::Path) -> Result<DaemonClient> {
