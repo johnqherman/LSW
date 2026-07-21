@@ -82,11 +82,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             run_step(
                 project,
                 env,
-                &[
-                    "cmake".to_owned(),
-                    "--build".to_owned(),
-                    "build".to_owned(),
-                ],
+                &["cmake".to_owned(), "--build".to_owned(), "build".to_owned()],
                 &mut commands,
             )?;
         }

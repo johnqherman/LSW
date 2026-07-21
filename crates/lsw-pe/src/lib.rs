@@ -185,11 +185,19 @@ fn pe_info<Pe: ImageNtHeaders>(format: PeFormat, nt: &Pe) -> PeInfo {
 fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<String>, PeError> {
     let file = PeFile::<Pe>::parse(data).map_err(|e| PeError::malformed(path, e))?;
     let mut dlls: Vec<String> = Vec::new();
-    let Some(table) = file.import_table().map_err(|e| PeError::malformed(path, e))? else {
+    let Some(table) = file
+        .import_table()
+        .map_err(|e| PeError::malformed(path, e))?
+    else {
         return Ok(dlls);
     };
-    let mut descriptors = table.descriptors().map_err(|e| PeError::malformed(path, e))?;
-    while let Some(descriptor) = descriptors.next().map_err(|e| PeError::malformed(path, e))? {
+    let mut descriptors = table
+        .descriptors()
+        .map_err(|e| PeError::malformed(path, e))?;
+    while let Some(descriptor) = descriptors
+        .next()
+        .map_err(|e| PeError::malformed(path, e))?
+    {
         let raw = table
             .name(descriptor.name.get(LE))
             .map_err(|e| PeError::malformed(path, e))?;

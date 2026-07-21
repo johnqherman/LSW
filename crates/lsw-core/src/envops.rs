@@ -75,8 +75,7 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
     }
 
-    let (resolved_toolchain, probe) =
-        lsw_toolchain::select(opts.toolchain.as_deref(), opts.arch)?;
+    let (resolved_toolchain, probe) = lsw_toolchain::select(opts.toolchain.as_deref(), opts.arch)?;
 
     let manifest = EnvironmentManifest {
         name: opts.name.clone(),
@@ -120,8 +119,7 @@ pub fn list(dirs: &Dirs) -> Result<Vec<EnvSummary>> {
         let name = entry.file_name().to_string_lossy().into_owned();
         match Environment::open(dirs, &name) {
             Ok(env) => {
-                let diag =
-                    lsw_runtime::WineRuntime.diagnostics(&env.layout.prefix());
+                let diag = lsw_runtime::WineRuntime.diagnostics(&env.layout.prefix());
                 out.push(EnvSummary {
                     name,
                     arch: env.manifest.target_arch,
@@ -193,8 +191,7 @@ pub fn link_project(env: &Environment, project: &Project) -> Result<PathBuf> {
         });
     }
 
-    std::os::unix::fs::symlink(&project.root, &link)
-        .map_err(|e| Error::io(link.clone(), e))?;
+    std::os::unix::fs::symlink(&project.root, &link).map_err(|e| Error::io(link.clone(), e))?;
     Ok(link)
 }
 
@@ -217,8 +214,7 @@ pub fn lockfile_for(env: &Environment) -> Result<Lockfile> {
         toolchain: LockedComponent {
             provider: tc.provider.clone(),
             version: tc.version.clone(),
-            sha256: lsw_toolchain::sha256_file(&tc.cc)
-                .map_err(|e| Error::io(tc.cc.clone(), e))?,
+            sha256: lsw_toolchain::sha256_file(&tc.cc).map_err(|e| Error::io(tc.cc.clone(), e))?,
         },
         runtime: LockedComponent {
             provider: rt.provider.clone(),

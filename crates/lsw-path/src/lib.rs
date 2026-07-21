@@ -201,7 +201,9 @@ mod tests {
             "C:\\Temp\\out.log"
         );
         assert_eq!(
-            mapper.to_windows(&drive_c.join("windows/system32")).unwrap(),
+            mapper
+                .to_windows(&drive_c.join("windows/system32"))
+                .unwrap(),
             "C:\\windows\\system32"
         );
     }

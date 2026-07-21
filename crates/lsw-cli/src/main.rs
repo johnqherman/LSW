@@ -2,9 +2,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use lsw_core::{
-    BuildOptions, Dirs, Domain, EnvCreateOptions, Project, Status, TargetArch,
-};
+use lsw_core::{BuildOptions, Dirs, Domain, EnvCreateOptions, Project, Status, TargetArch};
 
 #[derive(Parser)]
 #[command(
@@ -206,7 +204,10 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             let m = &report.environment.manifest;
             println!("Environment '{name}' ready");
             println!("  arch      {}", m.target_arch);
-            println!("  toolchain {} {}", m.toolchain.provider, m.toolchain.version);
+            println!(
+                "  toolchain {} {}",
+                m.toolchain.provider, m.toolchain.version
+            );
             println!("  runtime   {} {}", m.runtime.provider, m.runtime.version);
             println!("  probe     {}", report.probe.detail);
             Ok(ExitCode::SUCCESS)
@@ -394,7 +395,11 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 }
                 println!(
                     "Overall: {}",
-                    if report.healthy { "healthy" } else { "PROBLEMS FOUND" }
+                    if report.healthy {
+                        "healthy"
+                    } else {
+                        "PROBLEMS FOUND"
+                    }
                 );
             }
             Ok(if report.healthy {

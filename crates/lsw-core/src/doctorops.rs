@@ -62,7 +62,11 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
     let mut runtime_rows = Vec::new();
     match lsw_runtime::WineRuntime.resolve() {
         Ok(rt) => {
-            runtime_rows.push(row("Wine", format!("{} ({})", rt.version, rt.executable.display()), Status::Ok));
+            runtime_rows.push(row(
+                "Wine",
+                format!("{} ({})", rt.version, rt.executable.display()),
+                Status::Ok,
+            ));
         }
         Err(e) => runtime_rows.push(row("Wine", e.to_string(), Status::Fail)),
     }
