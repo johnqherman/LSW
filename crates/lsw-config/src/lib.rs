@@ -161,12 +161,12 @@ impl TargetArch {
         }
     }
 
-    pub fn msvc_lib_dir(self) -> &'static str {
+    pub fn msvc_lib_dirs(self) -> &'static [&'static str] {
         match self {
-            TargetArch::X86_64 => "x64",
-            TargetArch::X86 => "x86",
-            TargetArch::Aarch64 | TargetArch::Arm64Ec => "arm64",
-            TargetArch::Armv7 => "arm",
+            TargetArch::X86_64 => &["x64", "x86_64"],
+            TargetArch::X86 => &["x86"],
+            TargetArch::Aarch64 | TargetArch::Arm64Ec => &["arm64", "aarch64"],
+            TargetArch::Armv7 => &["arm", "armv7"],
         }
     }
 

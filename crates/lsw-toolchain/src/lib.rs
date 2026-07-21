@@ -223,8 +223,7 @@ pub fn resolve_msvc(
     }
 
     let triple = arch.msvc_triple();
-    let lib_arch = arch.msvc_lib_dir();
-    let (includes, libs) = msvc_search_paths(sdk_root, lib_arch);
+    let (includes, libs) = msvc_search_paths(sdk_root, arch.msvc_lib_dirs());
     if includes.is_empty() {
         return Err(unavailable(
             CLANG_CL_ID,
@@ -257,7 +256,7 @@ pub fn resolve_msvc(
     })
 }
 
-fn msvc_search_paths(root: &Path, lib_arch: &str) -> (Vec<PathBuf>, Vec<PathBuf>) {
+fn msvc_search_paths(root: &Path, lib_archs: &[&str]) -> (Vec<PathBuf>, Vec<PathBuf>) {
     let mut includes = Vec::new();
     let mut libs = Vec::new();
     let push_if = |v: &mut Vec<PathBuf>, p: PathBuf| {
@@ -270,82 +269,104 @@ fn msvc_search_paths(root: &Path, lib_arch: &str) -> (Vec<PathBuf>, Vec<PathBuf>
     for comp in ["ucrt", "um", "shared", "winrt", "cppwinrt"] {
         push_if(&mut includes, root.join("sdk/include").join(comp));
     }
-    push_if(&mut libs, root.join("crt/lib").join(lib_arch));
-    for comp in ["ucrt", "um"] {
-        push_if(&mut libs, root.join("sdk/lib").join(comp).join(lib_arch));
+    for arch in lib_archs {
+        push_if(&mut libs, root.join("crt/lib").join(arch));
+        for comp in ["ucrt", "um"] {
+            push_if(&mut libs, root.join("sdk/lib").join(comp).join(arch));
+        }
     }
 
     push_if(&mut includes, root.join("include"));
-    push_if(&mut libs, root.join("lib").join(lib_arch));
+    for arch in lib_archs {
+        push_if(&mut libs, root.join("lib").join(arch));
+    }
     push_if(&mut libs, root.join("lib"));
 
     (includes, libs)
 }
 
 pub fn probe_msvc(tc: &ResolvedToolchain) -> ProbeReport {
+    let fail = |detail: String, compiled: bool| ProbeReport {
+        provider: CLANG_CL_ID.to_owned(),
+        compiled,
+        linked: false,
+        produced_pe: false,
+        detail,
+    };
+
     let dir = match tempfile::tempdir() {
         Ok(d) => d,
-        Err(e) => {
-            return ProbeReport {
-                provider: CLANG_CL_ID.to_owned(),
-                compiled: false,
-                linked: false,
-                produced_pe: false,
-                detail: format!("cannot create temp dir: {e}"),
-            };
-        }
+        Err(e) => return fail(format!("cannot create temp dir: {e}"), false),
     };
     let src = dir.path().join("probe.c");
-    let obj = dir.path().join("probe.obj");
-    if std::fs::write(&src, "int mainCRTStartup(void){return 0;}\n").is_err() {
-        return ProbeReport {
-            provider: CLANG_CL_ID.to_owned(),
-            compiled: false,
-            linked: false,
-            produced_pe: false,
-            detail: "cannot write probe source".to_owned(),
-        };
+    let exe = dir.path().join("probe.exe");
+    if std::fs::write(&src, "int main(void){return 0;}\n").is_err() {
+        return fail("cannot write probe source".to_owned(), false);
     }
 
     let mut cmd = Command::new(&tc.cc);
-    cmd.args(&tc.c_flags)
-        .arg("/c")
-        .arg(&src)
-        .arg(format!("/Fo{}", obj.display()));
-    let output = cmd.output();
-    match output {
-        Ok(out) if out.status.success() && obj.is_file() => {
-            let has_libs = tc.link_flags.iter().any(|f| f.starts_with("/libpath:"));
-            ProbeReport {
-                provider: CLANG_CL_ID.to_owned(),
-                compiled: true,
-                linked: false,
-                produced_pe: false,
-                detail: if has_libs {
-                    "clang-cl compiles; link/PE not attempted (needs a full SDK build)".to_owned()
-                } else {
-                    "clang-cl compiles, but no SDK import libraries were found - import a Windows SDK to link".to_owned()
-                },
+    cmd.args(&tc.c_flags);
+    if tc.link_flags.iter().any(|f| f == "-fuse-ld=lld-link") {
+        cmd.arg("-fuse-ld=lld-link");
+    }
+    cmd.arg(&src)
+        .arg(format!("/Fe{}", exe.display()))
+        .arg("/link");
+    for f in &tc.link_flags {
+        if f.starts_with("-fuse-ld=") {
+            continue;
+        }
+        cmd.arg(f);
+    }
+
+    match cmd.output() {
+        Ok(out) if out.status.success() && starts_with_mz(&exe) => ProbeReport {
+            provider: CLANG_CL_ID.to_owned(),
+            compiled: true,
+            linked: true,
+            produced_pe: true,
+            detail: "clang-cl produced an MSVC-ABI PE against the imported SDK".to_owned(),
+        },
+        link_result => {
+            let obj = dir.path().join("probe.obj");
+            let mut compile = Command::new(&tc.cc);
+            compile
+                .args(&tc.c_flags)
+                .arg("/c")
+                .arg(&src)
+                .arg(format!("/Fo{}", obj.display()));
+            let compiled = compile
+                .output()
+                .map(|o| o.status.success() && obj.is_file())
+                .unwrap_or(false);
+            let link_err = match link_result {
+                Ok(out) => String::from_utf8_lossy(&out.stderr).trim().to_owned(),
+                Err(e) => e.to_string(),
+            };
+            if compiled {
+                fail(
+                    format!(
+                        "clang-cl compiles but could not link a PE (SDK import libraries incomplete?): {link_err}"
+                    ),
+                    true,
+                )
+            } else {
+                fail(format!("clang-cl failed: {link_err}"), false)
             }
         }
-        Ok(out) => ProbeReport {
-            provider: CLANG_CL_ID.to_owned(),
-            compiled: false,
-            linked: false,
-            produced_pe: false,
-            detail: format!(
-                "clang-cl compile failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            ),
-        },
-        Err(e) => ProbeReport {
-            provider: CLANG_CL_ID.to_owned(),
-            compiled: false,
-            linked: false,
-            produced_pe: false,
-            detail: format!("cannot run clang-cl: {e}"),
-        },
     }
+}
+
+fn starts_with_mz(path: &Path) -> bool {
+    use std::io::Read as _;
+    std::fs::File::open(path)
+        .ok()
+        .and_then(|mut f| {
+            let mut magic = [0u8; 2];
+            f.read_exact(&mut magic).ok().map(|_| magic)
+        })
+        .map(|m| &m == b"MZ")
+        .unwrap_or(false)
 }
 
 pub fn providers() -> Vec<Box<dyn ToolchainProvider>> {
@@ -668,7 +689,7 @@ mod tests {
         ] {
             std::fs::create_dir_all(root.join(d)).unwrap();
         }
-        let (inc, lib) = msvc_search_paths(root, "x64");
+        let (inc, lib) = msvc_search_paths(root, &["x64", "x86_64"]);
         assert!(inc.contains(&root.join("crt/include")));
         assert!(inc.contains(&root.join("sdk/include/ucrt")));
         assert!(inc.contains(&root.join("sdk/include/um")));
