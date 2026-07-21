@@ -128,6 +128,8 @@ enum Cmd {
         #[arg(long, requires = "gdb")]
         no_start: bool,
     },
+    /// Run a Debug Adapter Protocol server over stdio for IDEs.
+    Dap,
     /// Measured compatibility report (imports + runtime trace).
     Compat {
         program: PathBuf,
@@ -762,6 +764,16 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 },
             )?;
             Ok(exit_from_status(status))
+        }
+
+        Cmd::Dap => {
+            let (_p, env) = active_env(&dirs)?;
+            let stdin = std::io::stdin();
+            let mut reader = stdin.lock();
+            let stdout = std::io::stdout();
+            let mut writer = stdout.lock();
+            lsw_core::dapops::serve(&env, &mut reader, &mut writer)?;
+            Ok(ExitCode::SUCCESS)
         }
 
         Cmd::CompatQuery { key } => {
