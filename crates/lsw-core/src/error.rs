@@ -97,6 +97,13 @@ pub enum Error {
     #[error("LSW2022: provider plugin '{name}' protocol error: {detail}")]
     PluginProtocol { name: String, detail: String },
 
+    #[error("LSW2026: service '{op}' failed for '{name}': {detail}")]
+    ServiceFailed {
+        op: String,
+        name: String,
+        detail: String,
+    },
+
     #[error(
         "LSW2025: Rust has no GNU-ABI Windows target for arch '{arch}'\n\
          Rust builds support x86_64, x86, and aarch64. armv7/arm64ec are MSVC-only in Rust."
