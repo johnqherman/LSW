@@ -158,6 +158,9 @@ enum Cmd {
         #[arg(long, conflicts_with = "pid")]
         all: bool,
     },
+    /// Discover and inspect out-of-process provider plugins.
+    #[command(subcommand)]
+    Plugin(PluginCmd),
     /// Import and manage user-provided Windows SDK sysroots.
     #[command(subcommand)]
     Sdk(SdkCmd),
@@ -172,6 +175,12 @@ enum Cmd {
 enum IdeCmd {
     /// Print the environment description IDE plugins consume (JSON).
     Env,
+}
+
+#[derive(Subcommand)]
+enum PluginCmd {
+    /// List discovered `lsw-provider-*` plugins and their handshake info.
+    List,
 }
 
 #[derive(Subcommand)]
@@ -828,6 +837,34 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             } else {
                 eprintln!("usage: lsw kill <pid> | lsw kill --all");
                 return Ok(ExitCode::FAILURE);
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Plugin(PluginCmd::List) => {
+            let discovered = lsw_core::pluginops::discover();
+            if discovered.is_empty() {
+                println!(
+                    "No provider plugins found (looked for lsw-provider-* on PATH, protocol v{})",
+                    lsw_core::pluginops::PROTOCOL_VERSION
+                );
+            }
+            for d in discovered {
+                match lsw_core::pluginops::Plugin::connect(&d.name, &d.path) {
+                    Ok(plugin) => {
+                        let h = &plugin.handshake;
+                        println!(
+                            "{:<16} {:<10} {:<8} proto v{}  {}",
+                            d.name,
+                            h.provider_version,
+                            h.kind,
+                            h.protocol,
+                            d.path.display()
+                        );
+                        plugin.shutdown();
+                    }
+                    Err(e) => println!("{:<16} ERROR: {e}", d.name),
+                }
             }
             Ok(ExitCode::SUCCESS)
         }

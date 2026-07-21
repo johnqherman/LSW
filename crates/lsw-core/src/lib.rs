@@ -7,6 +7,7 @@ pub mod error;
 pub mod ideops;
 pub mod inspectops;
 pub mod packageops;
+pub mod pluginops;
 pub mod project;
 pub mod psops;
 pub mod registryops;

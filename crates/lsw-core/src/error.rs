@@ -94,6 +94,9 @@ pub enum Error {
     )]
     NoTests,
 
+    #[error("LSW2022: provider plugin '{name}' protocol error: {detail}")]
+    PluginProtocol { name: String, detail: String },
+
     #[error(
         "LSW2021: unsupported verification transport '{transport}'\n\
          Only 'ssh' is implemented; set transport = \"ssh\" in [verify]"
