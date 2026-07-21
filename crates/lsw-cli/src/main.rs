@@ -116,6 +116,15 @@ enum Cmd {
         #[arg(long, requires = "gdb")]
         no_start: bool,
     },
+    /// Trace a Windows binary's DLL loads and API calls under the runtime.
+    Trace {
+        program: PathBuf,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+        /// Also capture the full (very verbose) relay call trace.
+        #[arg(long)]
+        relay: bool,
+    },
     /// Build and assemble a distributable package.
     Package {
         /// Package target.
@@ -592,6 +601,48 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 },
             )?;
             Ok(exit_from_status(status))
+        }
+
+        Cmd::Trace {
+            program,
+            args,
+            relay,
+        } => {
+            let (_p, env) = active_env(&dirs)?;
+            let report = lsw_core::traceops::trace(
+                &env,
+                program,
+                args,
+                &lsw_core::traceops::TraceOptions { relay: *relay },
+            )?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("serializes")
+                );
+            } else {
+                println!("\nLSW TRACE  {}\n", program.display());
+                println!("Imported DLLs: {}", report.imported_dlls.len());
+                println!("Loaded DLLs:   {}", report.loaded_dlls.len());
+                for d in &report.loaded_dlls {
+                    println!("  + {d}");
+                }
+                if !report.observed_calls.is_empty() {
+                    println!("Observed API calls: {}", report.observed_calls.len());
+                    for c in &report.observed_calls {
+                        println!("  + {c}");
+                    }
+                }
+                if report.unsupported.is_empty() {
+                    println!("Unsupported APIs: none observed");
+                } else {
+                    println!("Unsupported APIs:");
+                    for u in &report.unsupported {
+                        println!("  X {u}");
+                    }
+                }
+            }
+            Ok(ExitCode::SUCCESS)
         }
 
         Cmd::Package { target } => {
