@@ -198,6 +198,156 @@ fn unavailable(id: &str, detail: &str) -> ToolchainError {
     }
 }
 
+pub const CLANG_CL_ID: &str = "clang-cl";
+
+pub fn resolve_msvc(
+    arch: TargetArch,
+    sdk_root: &Path,
+) -> Result<ResolvedToolchain, ToolchainError> {
+    let cc = which("clang-cl")
+        .ok_or_else(|| unavailable(CLANG_CL_ID, "'clang-cl' not on PATH (install clang)"))?;
+    if which("lld-link").is_none() {
+        return Err(unavailable(
+            CLANG_CL_ID,
+            "'lld-link' not on PATH (install lld); required as the MSVC-ABI linker",
+        ));
+    }
+    if !sdk_root.is_dir() {
+        return Err(unavailable(
+            CLANG_CL_ID,
+            &format!(
+                "SDK sysroot {} does not exist; import one with 'lsw sdk import'",
+                sdk_root.display()
+            ),
+        ));
+    }
+
+    let triple = arch.msvc_triple();
+    let lib_arch = arch.msvc_lib_dir();
+    let (includes, libs) = msvc_search_paths(sdk_root, lib_arch);
+    if includes.is_empty() {
+        return Err(unavailable(
+            CLANG_CL_ID,
+            &format!(
+                "no MSVC/SDK include directories found under {}; expected an xwin (crt/ + sdk/) or flat (include/ + lib/) layout",
+                sdk_root.display()
+            ),
+        ));
+    }
+
+    let mut c_flags = vec![format!("--target={triple}")];
+    for inc in &includes {
+        c_flags.push("-imsvc".to_owned());
+        c_flags.push(inc.display().to_string());
+    }
+    let mut link_flags = vec!["-fuse-ld=lld-link".to_owned()];
+    for lib in &libs {
+        link_flags.push(format!("/libpath:{}", lib.display()));
+    }
+
+    Ok(ResolvedToolchain {
+        provider: CLANG_CL_ID.to_owned(),
+        version: compiler_version(&cc),
+        c_flags,
+        cxx_flags: Vec::new(),
+        link_flags,
+        cc: cc.clone(),
+        cxx: cc,
+        sysroot: sdk_root.to_path_buf(),
+    })
+}
+
+fn msvc_search_paths(root: &Path, lib_arch: &str) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    let mut includes = Vec::new();
+    let mut libs = Vec::new();
+    let push_if = |v: &mut Vec<PathBuf>, p: PathBuf| {
+        if p.is_dir() {
+            v.push(p);
+        }
+    };
+
+    push_if(&mut includes, root.join("crt/include"));
+    for comp in ["ucrt", "um", "shared", "winrt", "cppwinrt"] {
+        push_if(&mut includes, root.join("sdk/include").join(comp));
+    }
+    push_if(&mut libs, root.join("crt/lib").join(lib_arch));
+    for comp in ["ucrt", "um"] {
+        push_if(&mut libs, root.join("sdk/lib").join(comp).join(lib_arch));
+    }
+
+    push_if(&mut includes, root.join("include"));
+    push_if(&mut libs, root.join("lib").join(lib_arch));
+    push_if(&mut libs, root.join("lib"));
+
+    (includes, libs)
+}
+
+pub fn probe_msvc(tc: &ResolvedToolchain) -> ProbeReport {
+    let dir = match tempfile::tempdir() {
+        Ok(d) => d,
+        Err(e) => {
+            return ProbeReport {
+                provider: CLANG_CL_ID.to_owned(),
+                compiled: false,
+                linked: false,
+                produced_pe: false,
+                detail: format!("cannot create temp dir: {e}"),
+            };
+        }
+    };
+    let src = dir.path().join("probe.c");
+    let obj = dir.path().join("probe.obj");
+    if std::fs::write(&src, "int mainCRTStartup(void){return 0;}\n").is_err() {
+        return ProbeReport {
+            provider: CLANG_CL_ID.to_owned(),
+            compiled: false,
+            linked: false,
+            produced_pe: false,
+            detail: "cannot write probe source".to_owned(),
+        };
+    }
+
+    let mut cmd = Command::new(&tc.cc);
+    cmd.args(&tc.c_flags)
+        .arg("/c")
+        .arg(&src)
+        .arg(format!("/Fo{}", obj.display()));
+    let output = cmd.output();
+    match output {
+        Ok(out) if out.status.success() && obj.is_file() => {
+            let has_libs = tc.link_flags.iter().any(|f| f.starts_with("/libpath:"));
+            ProbeReport {
+                provider: CLANG_CL_ID.to_owned(),
+                compiled: true,
+                linked: false,
+                produced_pe: false,
+                detail: if has_libs {
+                    "clang-cl compiles; link/PE not attempted (needs a full SDK build)".to_owned()
+                } else {
+                    "clang-cl compiles, but no SDK import libraries were found - import a Windows SDK to link".to_owned()
+                },
+            }
+        }
+        Ok(out) => ProbeReport {
+            provider: CLANG_CL_ID.to_owned(),
+            compiled: false,
+            linked: false,
+            produced_pe: false,
+            detail: format!(
+                "clang-cl compile failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+        },
+        Err(e) => ProbeReport {
+            provider: CLANG_CL_ID.to_owned(),
+            compiled: false,
+            linked: false,
+            produced_pe: false,
+            detail: format!("cannot run clang-cl: {e}"),
+        },
+    }
+}
+
 pub fn providers() -> Vec<Box<dyn ToolchainProvider>> {
     vec![Box::new(LlvmMingw), Box::new(MingwGcc)]
 }
@@ -501,6 +651,74 @@ mod tests {
             ),
             PathBuf::from("/usr/no-such-triple")
         );
+    }
+
+    #[test]
+    fn msvc_search_paths_reads_xwin_and_flat_layouts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for d in [
+            "crt/include",
+            "sdk/include/ucrt",
+            "sdk/include/um",
+            "sdk/include/shared",
+            "crt/lib/x64",
+            "sdk/lib/ucrt/x64",
+            "sdk/lib/um/x64",
+        ] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        let (inc, lib) = msvc_search_paths(root, "x64");
+        assert!(inc.contains(&root.join("crt/include")));
+        assert!(inc.contains(&root.join("sdk/include/ucrt")));
+        assert!(inc.contains(&root.join("sdk/include/um")));
+        assert!(lib.contains(&root.join("crt/lib/x64")));
+        assert!(lib.contains(&root.join("sdk/lib/ucrt/x64")));
+        assert!(lib.contains(&root.join("sdk/lib/um/x64")));
+    }
+
+    #[test]
+    fn resolve_msvc_assembles_clang_cl_flags() {
+        if which("clang-cl").is_none() || which("lld-link").is_none() {
+            eprintln!("skipping: clang-cl/lld-link not installed");
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("include")).unwrap();
+        std::fs::create_dir_all(root.join("lib/x64")).unwrap();
+
+        let tc = resolve_msvc(TargetArch::X86_64, root).unwrap();
+        assert_eq!(tc.provider, CLANG_CL_ID);
+        assert!(tc.cc.ends_with("clang-cl"));
+        assert!(
+            tc.c_flags
+                .contains(&"--target=x86_64-pc-windows-msvc".to_owned())
+        );
+        let imsvc_pos = tc.c_flags.iter().position(|f| f == "-imsvc").unwrap();
+        assert_eq!(
+            tc.c_flags[imsvc_pos + 1],
+            root.join("include").display().to_string()
+        );
+        assert!(tc.link_flags.contains(&"-fuse-ld=lld-link".to_owned()));
+        assert!(
+            tc.link_flags
+                .iter()
+                .any(|f| f.starts_with("/libpath:") && f.contains("lib/x64"))
+        );
+    }
+
+    #[test]
+    fn probe_msvc_compiles_headerless() {
+        if which("clang-cl").is_none() || which("lld-link").is_none() {
+            eprintln!("skipping: clang-cl/lld-link not installed");
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("include")).unwrap();
+        let tc = resolve_msvc(TargetArch::X86_64, tmp.path()).unwrap();
+        let report = probe_msvc(&tc);
+        assert!(report.compiled, "probe detail: {}", report.detail);
     }
 
     fn fake_toolchain() -> ResolvedToolchain {
