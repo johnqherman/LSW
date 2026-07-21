@@ -6,10 +6,11 @@ conceptually the inverse of WSL: where WSL hosts a Linux environment on
 Windows, LSW makes Windows a first-class *target* from a Linux host.
 
 LSW composes existing, mature technology - Wine as the execution runtime,
-Clang/MinGW-w64 as the cross toolchain, CMake/Ninja as build orchestrators -
-behind one coherent CLI with isolated per-environment Wine prefixes,
-declarative `lsw.toml` project configuration, `lsw.lock` reproducibility
-pinning, and deterministic Linux<->Windows path mapping.
+Clang/MinGW-w64 (GNU ABI) or clang-cl (MSVC ABI) as the cross toolchain,
+CMake/Ninja/Cargo as build orchestrators - behind one coherent CLI with
+isolated per-environment Wine prefixes, declarative `lsw.toml` project
+configuration, `lsw.lock` reproducibility pinning, and deterministic
+Linux<->Windows path mapping. C, C++, and Rust are first-class languages.
 
 ## Quickstart
 
@@ -21,6 +22,7 @@ lsw build                     # cross-compile to build/hello.exe (real PE)
 lsw run build/hello.exe       # execute locally through the Wine runtime
 lsw test                      # run tests under the runtime (honest compat status)
 lsw inspect build/hello.exe   # PE format, arch, subsystem, imports
+lsw compat build/hello.exe    # measured compatibility report (imports + trace)
 lsw trace build/hello.exe     # observe DLL loads + unsupported APIs
 lsw debug build/hello.exe     # winedbg (or --gdb proxy for IDE attach)
 lsw package                   # assemble dist/<name>-<arch>[.zip]
@@ -29,11 +31,25 @@ lsw shell                     # Linux shell with Windows-target env exported
 lsw shell --windows           # cmd.exe inside the environment
 ```
 
-Additional commands: `lsw exec [--host|--windows] <cmd>`, `lsw path
---windows|--linux`, `lsw registry get|set|export|import|reset`, `lsw ps`,
-`lsw kill <pid>|--all`, `lsw ide env` (JSON for editor plugins). Windows
-execution can be locked down with `lsw run --sandbox strict <app.exe>`
-(bubblewrap kernel sandbox).
+### More commands
+
+- **Execution / paths** - `lsw exec [--host|--windows] <cmd>`,
+  `lsw path --windows|--linux`, `lsw run --sandbox strict <app.exe>`
+  (bubblewrap kernel sandbox), `lsw run --headless <gui.exe>` (virtual X
+  display for CI).
+- **Environment state** - `lsw registry get|set|export|import|reset`,
+  `lsw ps`, `lsw kill <pid>|--all`, `lsw service create|start|stop|query|delete`
+  (Windows services via the prefix's `sc.exe`).
+- **Compatibility** - `lsw compat --db <app.exe>` records into a persistent
+  compatibility database; `lsw compat-query <dll|module!func>` looks it up.
+- **Native verification** - `lsw verify --native-windows` builds, then runs the
+  artifacts on a real Windows host over SSH (configured in `[verify]`), yielding
+  an honest `WINDOWS_VERIFIED` / `WINDOWS_UNAVAILABLE` status distinct from the
+  local Wine result.
+- **Integration** - `lsw ide env` (JSON for editor plugins), `lsw dap` (a Debug
+  Adapter Protocol server over stdio for IDEs), `lsw plugin list` (out-of-process
+  `lsw-provider-*` JSON-RPC providers), `lswd` + `lsw daemon status|stop` (an
+  optional caching daemon; not required for normal use).
 
 ## Packaging
 
@@ -53,11 +69,39 @@ using a cached self-signed identity (`~/.local/share/lsw/msix/`). A self-signed
 package installs only where its certificate is trusted (or in Windows developer
 mode); as with `lsw verify`, actual Windows installation is not asserted here.
 
+## Languages
+
+**C / C++** build through CMake (auto-detected via `CMakeLists.txt`) or an
+explicit `[build]` command in `lsw.toml`.
+
+**Rust** is first-class (`Cargo.toml` auto-detected):
+
+```
+lsw rust init hello-rs && cd hello-rs   # scaffold a cargo project for Windows
+lsw env create win && lsw build         # cargo build --target <arch>-pc-windows-gnu
+lsw run target/.../hello-rs.exe         # runs under Wine
+lsw rust doctor                         # report Rust->Windows toolchain readiness
+```
+
+## Target ABIs
+
+By default LSW builds **GNU-ABI** binaries with MinGW-w64. It can also build
+**MSVC-ABI** binaries with clang-cl against a Windows SDK you supply (LSW never
+redistributes SDK content):
+
+```
+lsw sdk import winsdk --from ~/splat    # import an SDK (e.g. an `xwin splat`)
+lsw env create msvc --sdk winsdk        # clang-cl + lld-link, MSVC ABI
+lsw build                               # produces an MSVC-ABI PE
+```
+
+`lsw sdk list` / `lsw sdk remove` manage imported SDKs.
+
 ## Target architectures
 
-Environments target `x86_64` (default), `x86`, or `aarch64` via
-`lsw env create --arch <arch>`. The toolchain is discovered from `$PATH` and,
-in addition, from any directories listed in `$LSW_TOOLCHAIN_DIRS`
+Environments target `x86_64` (default), `x86`, `aarch64`, `armv7`, or
+`arm64ec` via `lsw env create --arch <arch>`. The toolchain is discovered from
+`$PATH` and, in addition, from any directories listed in `$LSW_TOOLCHAIN_DIRS`
 (colon-separated) - so a self-contained cross toolchain such as a locally
 extracted [llvm-mingw](https://github.com/mstorsjo/llvm-mingw) can be used
 without touching the system mingw-w64 install. Each provider takes its sysroot
