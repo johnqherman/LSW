@@ -255,6 +255,10 @@ enum EnvCmd {
         /// Toolchain provider id (llvm-mingw, mingw-gcc); default auto-probe.
         #[arg(long)]
         toolchain: Option<String>,
+        /// Build against an imported Windows SDK using the clang-cl MSVC ABI.
+        /// Names an SDK from `lsw sdk import`.
+        #[arg(long)]
+        sdk: Option<String>,
         /// Recreate if it already exists.
         #[arg(long)]
         force: bool,
@@ -377,6 +381,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             name,
             arch,
             toolchain,
+            sdk,
             force,
         }) => {
             println!("Creating environment '{name}' (this initializes a Wine prefix)...");
@@ -386,6 +391,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     name: name.clone(),
                     arch: (*arch).into(),
                     toolchain: toolchain.clone(),
+                    sdk: sdk.clone(),
                     force: *force,
                 },
             )?;

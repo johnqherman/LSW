@@ -58,6 +58,7 @@ pub struct EnvCreateOptions {
     pub name: String,
     pub arch: TargetArch,
     pub toolchain: Option<String>,
+    pub sdk: Option<String>,
     pub force: bool,
 }
 
@@ -93,7 +94,21 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
     }
 
-    let (resolved_toolchain, probe) = lsw_toolchain::select(opts.toolchain.as_deref(), opts.arch)?;
+    let (resolved_toolchain, probe) = match &opts.sdk {
+        Some(sdk_name) => {
+            validate_name("sdk", sdk_name)?;
+            let sdk_root = dirs.sysroot(sdk_name);
+            if !sdk_root.is_dir() {
+                return Err(Error::SdkNotFound {
+                    name: sdk_name.clone(),
+                });
+            }
+            let tc = lsw_toolchain::resolve_msvc(opts.arch, &sdk_root)?;
+            let probe = lsw_toolchain::probe_msvc(&tc);
+            (tc, probe)
+        }
+        None => lsw_toolchain::select(opts.toolchain.as_deref(), opts.arch)?,
+    };
 
     let manifest = EnvironmentManifest {
         name: opts.name.clone(),
