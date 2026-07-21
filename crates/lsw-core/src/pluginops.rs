@@ -241,11 +241,15 @@ pub struct DiscoveredPlugin {
 }
 
 pub fn discover() -> Vec<DiscoveredPlugin> {
-    let Some(path_var) = std::env::var_os("PATH") else {
-        return Vec::new();
-    };
+    match std::env::var_os("PATH") {
+        Some(path_var) => discover_in(std::env::split_paths(&path_var)),
+        None => Vec::new(),
+    }
+}
+
+fn discover_in(dirs: impl IntoIterator<Item = PathBuf>) -> Vec<DiscoveredPlugin> {
     let mut seen = std::collections::BTreeMap::new();
-    for dir in std::env::split_paths(&path_var) {
+    for dir in dirs {
         let Ok(entries) = std::fs::read_dir(&dir) else {
             continue;
         };
@@ -370,18 +374,7 @@ mod tests {
         write_mock_plugin(tmp.path(), "beta", PROTOCOL_VERSION);
         std::fs::write(tmp.path().join("not-a-plugin"), b"x").unwrap();
 
-        let prev = std::env::var_os("PATH");
-        unsafe {
-            std::env::set_var("PATH", tmp.path());
-        }
-        let found = discover();
-        unsafe {
-            match prev {
-                Some(p) => std::env::set_var("PATH", p),
-                None => std::env::remove_var("PATH"),
-            }
-        }
-
+        let found = discover_in([tmp.path().to_path_buf()]);
         let names: Vec<_> = found.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(names, vec!["alpha", "beta"]);
     }
