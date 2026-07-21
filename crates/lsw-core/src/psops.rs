@@ -54,17 +54,21 @@ fn process_uses_prefix(pid: u32, prefix: &Path) -> bool {
 }
 
 pub fn kill(env: &Environment, pid: u32) -> Result<()> {
-    if !process_uses_prefix(pid, &env.layout.prefix()) {
+    let prefix = env.layout.prefix();
+    if !process_uses_prefix(pid, &prefix) {
         return Err(Error::ProcessNotInEnvironment {
             pid,
             environment: env.name.clone(),
         });
     }
-    let status = std::process::Command::new("kill")
-        .args(["-TERM", &pid.to_string()])
-        .status()
-        .map_err(|e| Error::io(Path::new("/usr/bin/kill").to_path_buf(), e))?;
-    if !status.success() {
+    if !process_uses_prefix(pid, &prefix) {
+        return Err(Error::ProcessNotInEnvironment {
+            pid,
+            environment: env.name.clone(),
+        });
+    }
+    let rc = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+    if rc != 0 {
         return Err(Error::ProcessNotInEnvironment {
             pid,
             environment: env.name.clone(),

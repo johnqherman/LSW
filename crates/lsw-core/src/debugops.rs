@@ -12,6 +12,7 @@ pub struct DebugOptions {
 
 pub fn debug(
     env: &Environment,
+    project: Option<&crate::project::Project>,
     program: &Path,
     args: &[String],
     opts: &DebugOptions,
@@ -24,12 +25,17 @@ pub fn debug(
     }
     let program = std::path::absolute(program).map_err(|e| Error::io(program.to_path_buf(), e))?;
 
+    if let Some(p) = project {
+        crate::buildops::check_lock(p, env)?;
+    }
+
     let winedbg = find_winedbg().ok_or_else(|| Error::ToolMissing {
         tool: "winedbg".into(),
         fix: "install wine (winedbg ships with it)".into(),
     })?;
 
     let mut command = Command::new(&winedbg);
+    lsw_runtime::scrub_wine_env(&mut command);
     if opts.gdb {
         command.arg("--gdb");
         if opts.no_start {
@@ -39,6 +45,7 @@ pub fn debug(
     command.arg(&program).args(args);
     command.env("WINEPREFIX", env.layout.prefix());
     command.env("WINEDEBUG", "fixme-all");
+    command.env("WINEDLLOVERRIDES", "winemenubuilder.exe=d");
 
     command.status().map_err(|e| Error::io(winedbg.clone(), e))
 }

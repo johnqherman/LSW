@@ -169,9 +169,12 @@ fn run_step(
         .collect::<Vec<_>>()
         .join(" ");
     let link_flags = tc.link_flags.join(" ");
-    let status = Command::new(program)
+    let mut command = Command::new(program);
+    lsw_runtime::scrub_wine_env(&mut command);
+    let status = command
         .args(args)
         .current_dir(&project.root)
+        .env("WINEPREFIX", env.layout.prefix())
         .env("CC", &tc.cc)
         .env("CXX", &tc.cxx)
         .env("CFLAGS", &c_flags)
