@@ -75,6 +75,12 @@ pub enum Error {
     InvalidName { kind: String, name: String },
 
     #[error(
+        "LSW2016: process {pid} does not belong to environment '{environment}' (or already exited)\n\
+         Use 'lsw ps' to list this environment's processes"
+    )]
+    ProcessNotInEnvironment { pid: u32, environment: String },
+
+    #[error(
         "LSW2015: registry operation failed (exit code {code:?})\n\
          Check the key path (e.g. 'HKCU\\Software\\Example\\App') and see the output above"
     )]
