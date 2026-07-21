@@ -122,6 +122,12 @@ enum Cmd {
         #[arg(long, requires = "gdb")]
         no_start: bool,
     },
+    /// Measured compatibility report (imports + runtime trace).
+    Compat {
+        program: PathBuf,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Trace a Windows binary's DLL loads and API calls under the runtime.
     Trace {
         program: PathBuf,
@@ -620,6 +626,48 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 },
             )?;
             Ok(exit_from_status(status))
+        }
+
+        Cmd::Compat { program, args } => {
+            let (_p, env) = active_env(&dirs)?;
+            let report = lsw_core::compatops::compat(&env, program, args)?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("serializes")
+                );
+            } else {
+                println!("\nLSW Compatibility Report  {}\n", program.display());
+                println!("Required imported DLLs:  {}", report.imported_dlls);
+                println!("Loaded at runtime:       {}", report.loaded_dlls);
+                println!("Supported locally:       {}", report.supported_locally);
+                println!(
+                    "Potentially unsupported: {}",
+                    report.potentially_unsupported.len()
+                );
+                for d in &report.potentially_unsupported {
+                    println!("  ? {d}");
+                }
+                if !report.unsupported_apis.is_empty() {
+                    println!("Unimplemented APIs:");
+                    for a in &report.unsupported_apis {
+                        println!("  X {a}");
+                    }
+                }
+                println!("\nFeature                Local");
+                println!("---------------------------------");
+                for c in &report.capabilities {
+                    let s = match c.local {
+                        lsw_core::compatops::Support::Yes => "yes",
+                        lsw_core::compatops::Support::Partial => "partial",
+                        lsw_core::compatops::Support::No => "no",
+                        lsw_core::compatops::Support::Unused => "-",
+                    };
+                    println!("{:<22} {}", c.feature, s);
+                }
+                println!("\n{}", report.note);
+            }
+            Ok(ExitCode::SUCCESS)
         }
 
         Cmd::Trace {
