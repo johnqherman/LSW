@@ -98,6 +98,24 @@ enum Cmd {
     /// Read and write the environment's isolated registry.
     #[command(subcommand)]
     Registry(RegistryCmd),
+    /// Debug a Windows binary with winedbg (or its gdb proxy).
+    Debug {
+        program: PathBuf,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+        /// Start a gdbserver-compatible proxy instead of the console.
+        #[arg(long)]
+        gdb: bool,
+        /// With --gdb: print connection info only, don't launch host gdb.
+        #[arg(long, requires = "gdb")]
+        no_start: bool,
+    },
+    /// Build and assemble a distributable package.
+    Package {
+        /// Package target.
+        #[arg(long, value_enum, default_value_t = PackageTargetArg::Zip)]
+        target: PackageTargetArg,
+    },
     /// List the environment's Windows/runtime processes.
     Ps,
     /// Terminate an environment process (or all with --all).
@@ -160,6 +178,14 @@ enum EnvCmd {
     List,
     /// Delete an environment and its Wine prefix.
     Remove { name: String },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum PackageTargetArg {
+    #[value(name = "portable-directory")]
+    PortableDirectory,
+    #[value(name = "zip")]
+    Zip,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -510,6 +536,44 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     lsw_core::registryops::reset(&env)?;
                     println!("registry reset to prefix defaults for '{}'", env.name);
                 }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Debug {
+            program,
+            args,
+            gdb,
+            no_start,
+        } => {
+            let (_p, env) = active_env(&dirs)?;
+            let status = lsw_core::debugops::debug(
+                &env,
+                program,
+                args,
+                &lsw_core::debugops::DebugOptions {
+                    gdb: *gdb,
+                    no_start: *no_start,
+                },
+            )?;
+            Ok(exit_from_status(status))
+        }
+
+        Cmd::Package { target } => {
+            let (p, env) = active_env(&dirs)?;
+            let target = match target {
+                PackageTargetArg::PortableDirectory => {
+                    lsw_core::packageops::PackageTarget::PortableDirectory
+                }
+                PackageTargetArg::Zip => lsw_core::packageops::PackageTarget::Zip,
+            };
+            let report = lsw_core::packageops::package(&p, &env, target)?;
+            println!("Packaged: {}", report.directory.display());
+            for f in &report.files {
+                println!("  {f}");
+            }
+            if let Some(zip) = &report.zip {
+                println!("Archive:  {}", zip.display());
             }
             Ok(ExitCode::SUCCESS)
         }
