@@ -55,6 +55,30 @@ fn sandbox_spec(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Display {
+    #[default]
+    Auto,
+    Inherit,
+    Headless,
+}
+
+fn display_mode(control: Display, is_gui: Option<bool>) -> lsw_runtime::DisplayMode {
+    use lsw_runtime::DisplayMode;
+    match control {
+        Display::Inherit => DisplayMode::Inherit,
+        Display::Headless => DisplayMode::Virtual,
+        Display::Auto => {
+            let has_display = std::env::var_os("DISPLAY").is_some_and(|d| !d.is_empty());
+            if !has_display && is_gui == Some(true) {
+                DisplayMode::Virtual
+            } else {
+                DisplayMode::Inherit
+            }
+        }
+    }
+}
+
 pub fn run(
     env: &Environment,
     project: Option<&Project>,
@@ -62,8 +86,11 @@ pub fn run(
     args: &[String],
     domain: Domain,
     sandbox: Sandbox,
+    display: Display,
 ) -> Result<RunReport> {
     let resolved = resolve_program(program, domain)?;
+
+    let mut is_gui: Option<bool> = None;
 
     let (chosen, launch) = match resolved {
         ResolvedProgram::RuntimeResolved(p) => match domain {
@@ -78,7 +105,10 @@ pub fn run(
         ResolvedProgram::HostPath(p) => {
             let chosen = match domain {
                 Domain::Auto => match lsw_pe::detect(&p)? {
-                    BinaryKind::Pe(_) => Domain::Windows,
+                    BinaryKind::Pe(info) => {
+                        is_gui = Some(info.subsystem == lsw_pe::Subsystem::Gui);
+                        Domain::Windows
+                    }
                     BinaryKind::Elf | BinaryKind::Script => Domain::Host,
                     BinaryKind::Unknown => {
                         return Err(Error::NotExecutable {
@@ -88,6 +118,12 @@ pub fn run(
                         });
                     }
                 },
+                Domain::Windows => {
+                    if let Ok(BinaryKind::Pe(info)) = lsw_pe::detect(&p) {
+                        is_gui = Some(info.subsystem == lsw_pe::Subsystem::Gui);
+                    }
+                    Domain::Windows
+                }
                 d => d,
             };
             (chosen, p)
@@ -106,6 +142,7 @@ pub fn run(
                 cwd: windows_cwd(env, project),
                 env: windows_env(env),
                 sandbox: sandbox_spec(env, project, sandbox),
+                display: display_mode(display, is_gui),
             })?
         }
         Domain::Host | Domain::Auto => {
@@ -189,6 +226,7 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
             cwd: windows_cwd(env, project),
             env: windows_env(env),
             sandbox: None,
+            display: lsw_runtime::DisplayMode::Inherit,
         })?);
     }
 

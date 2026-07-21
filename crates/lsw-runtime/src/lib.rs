@@ -34,6 +34,12 @@ pub enum RuntimeError {
     SandboxUnavailable,
 
     #[error(
+        "LSW1506: a virtual display was requested but xvfb-run is not installed; \
+         install xvfb (the 'xorg-server-xvfb' or 'xvfb' package) or run with a real $DISPLAY"
+    )]
+    VirtualDisplayUnavailable,
+
+    #[error(
         "LSW1504: runtime execution failed: {detail}; \
          re-run with WINEDEBUG unset (pass it in the request env) for more diagnostics"
     )]
@@ -48,6 +54,14 @@ pub struct ExecutionRequest {
     pub cwd: Option<PathBuf>,
     pub env: Vec<(String, String)>,
     pub sandbox: Option<SandboxSpec>,
+    pub display: DisplayMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DisplayMode {
+    #[default]
+    Inherit,
+    Virtual,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -112,9 +126,17 @@ fn dirs_home() -> Option<PathBuf> {
 }
 
 pub fn find_bwrap() -> Option<PathBuf> {
+    find_on_path("bwrap")
+}
+
+pub fn find_xvfb_run() -> Option<PathBuf> {
+    find_on_path("xvfb-run")
+}
+
+fn find_on_path(name: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
-        .map(|d| d.join("bwrap"))
+        .map(|d| d.join(name))
         .find(|c| c.is_file())
 }
 
@@ -315,15 +337,40 @@ impl RuntimeProvider for WineRuntime {
 
     fn execute(&self, req: &ExecutionRequest) -> Result<ExitStatus, RuntimeError> {
         let executable = Self::wine_executable()?;
-        let mut command = match &req.sandbox {
-            None => Command::new(&executable),
-            Some(spec) => {
-                let bwrap = find_bwrap().ok_or(RuntimeError::SandboxUnavailable)?;
-                let mut c = Command::new(bwrap);
-                c.args(bwrap_args(spec)).arg(&executable);
+
+        let virtual_display = req.display == DisplayMode::Virtual;
+        let xvfb = if virtual_display {
+            Some(find_xvfb_run().ok_or(RuntimeError::VirtualDisplayUnavailable)?)
+        } else {
+            None
+        };
+
+        let mut command = match &xvfb {
+            Some(xvfb_run) => {
+                let mut c = Command::new(xvfb_run);
+                c.args(["-a", "--"]);
                 c
             }
+            None => Command::new(&executable),
         };
+
+        match &req.sandbox {
+            None => {
+                if xvfb.is_some() {
+                    command.arg(&executable);
+                }
+            }
+            Some(spec) => {
+                let bwrap = find_bwrap().ok_or(RuntimeError::SandboxUnavailable)?;
+                command.arg(bwrap);
+                command.args(bwrap_args(spec));
+                if virtual_display {
+                    command.args(["--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix"]);
+                }
+                command.arg(&executable);
+            }
+        }
+
         scrub_host_wine_vars(&mut command);
         command
             .arg(&req.program)
@@ -332,7 +379,7 @@ impl RuntimeProvider for WineRuntime {
         if let Some(cwd) = &req.cwd {
             command.current_dir(cwd);
         }
-        tracing::debug!(program = %req.program.display(), prefix = %req.prefix.display(), sandboxed = req.sandbox.is_some(), "executing via wine");
+        tracing::debug!(program = %req.program.display(), prefix = %req.prefix.display(), sandboxed = req.sandbox.is_some(), virtual_display, "executing via wine");
         command
             .status()
             .map_err(|source| RuntimeError::SpawnFailed {
@@ -576,6 +623,7 @@ mod tests {
                 cwd: Some(dir.path().to_path_buf()),
                 env: Vec::new(),
                 sandbox: None,
+                display: lsw_runtime::DisplayMode::Inherit,
             })
             .unwrap();
         assert!(status.success(), "cmd.exe /c exit 0 failed: {status}");

@@ -64,8 +64,19 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
     let rendered = argv.join(" ");
     let (program, args) = argv.split_first().expect("test_command never empty");
 
-    let mut command = Command::new(program);
-    command.args(args).current_dir(&project.root);
+    let no_display = std::env::var_os("DISPLAY").is_none_or(|d| d.is_empty());
+    let use_xvfb = opts.headless && no_display && lsw_runtime::find_xvfb_run().is_some();
+
+    let (spawn, spawn_args): (&str, Vec<String>) = if use_xvfb {
+        let mut v = vec!["-a".to_owned(), "--".to_owned(), program.clone()];
+        v.extend(args.iter().cloned());
+        ("xvfb-run", v)
+    } else {
+        (program.as_str(), args.to_vec())
+    };
+
+    let mut command = Command::new(spawn);
+    command.args(&spawn_args).current_dir(&project.root);
     for (k, v) in lsw_runtime::base_env(&env.layout.prefix()) {
         command.env(k, v);
     }
@@ -76,8 +87,8 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
     let output = command.output().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             Error::ToolMissing {
-                tool: program.clone(),
-                fix: format!("install {program} or set [test].command in lsw.toml"),
+                tool: spawn.to_owned(),
+                fix: format!("install {spawn} or set [test].command in lsw.toml"),
             }
         } else {
             Error::io(project.root.clone(), e)
