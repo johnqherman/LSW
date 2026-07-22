@@ -28,6 +28,7 @@ anyhow = "1"
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
+clap_mangen = "0.2"
 dirs = "6"
 libc = "0.2"
 notify = "6"
