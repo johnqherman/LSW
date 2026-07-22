@@ -474,6 +474,28 @@ impl Dirs {
         self.data.join("sysroots")
     }
 
+    pub fn runtimes(&self) -> PathBuf {
+        self.data.join("runtimes")
+    }
+
+    pub fn toolchains(&self) -> PathBuf {
+        self.data.join("toolchains")
+    }
+
+    pub fn packages(&self) -> PathBuf {
+        self.data.join("packages")
+    }
+
+    pub fn managed_dirs(&self) -> [PathBuf; 5] {
+        [
+            self.environments(),
+            self.sysroots(),
+            self.runtimes(),
+            self.toolchains(),
+            self.packages(),
+        ]
+    }
+
     pub fn sysroot(&self, name: &str) -> PathBuf {
         self.sysroots().join(name)
     }
@@ -679,6 +701,20 @@ mod tests {
         );
         assert_eq!(l.src().file_name().unwrap(), "src");
         assert_eq!(l.temp().file_name().unwrap(), "Temp");
+    }
+
+    #[test]
+    fn managed_dirs_cover_the_data_layout() {
+        let dirs = Dirs {
+            data: PathBuf::from("/data/lsw"),
+            config: PathBuf::from("/cfg"),
+            cache: PathBuf::from("/cache"),
+        };
+        assert_eq!(dirs.runtimes(), PathBuf::from("/data/lsw/runtimes"));
+        assert_eq!(dirs.toolchains(), PathBuf::from("/data/lsw/toolchains"));
+        assert_eq!(dirs.packages(), PathBuf::from("/data/lsw/packages"));
+        assert!(dirs.managed_dirs().contains(&dirs.sysroots()));
+        assert_eq!(dirs.managed_dirs().len(), 5);
     }
 
     #[test]
