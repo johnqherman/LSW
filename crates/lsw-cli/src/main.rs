@@ -604,12 +604,15 @@ fn run_install(prefix: &std::path::Path, no_bin: bool) -> lsw_core::Result<()> {
         let dst = p.bin.join("lsw");
         install_executable(&exe, &dst)?;
         println!("installed {}", dst.display());
-        if let Some(lswd) = exe.parent().map(|d| d.join("lswd"))
-            && lswd.is_file()
-        {
-            let dst = p.bin.join("lswd");
-            install_executable(&lswd, &dst)?;
-            println!("installed {}", dst.display());
+        match exe.parent().map(|d| d.join("lswd")) {
+            Some(lswd) if lswd.is_file() => {
+                let dst = p.bin.join("lswd");
+                install_executable(&lswd, &dst)?;
+                println!("installed {}", dst.display());
+            }
+            _ => println!(
+                "note: lswd not found next to lsw; build both with 'cargo build --release -p lsw'"
+            ),
         }
     }
 
