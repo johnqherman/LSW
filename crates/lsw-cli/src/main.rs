@@ -147,6 +147,8 @@ enum Cmd {
     },
     /// Inspect a PE binary: format, architecture, subsystem, imports.
     Inspect { file: PathBuf },
+    /// Decode a Windows crash dump: exception, faulting module, address.
+    Crash { file: PathBuf },
     /// Audit a PE's security hardening (ASLR, DEP, CFG, SafeSEH, signing).
     Audit { file: PathBuf },
     /// List the exported symbols of a PE (mirror of imports).
@@ -519,9 +521,9 @@ fn main() -> ExitCode {
     let log_filter = if cli.trace {
         "trace"
     } else if cli.verbose {
-        "debug"
+        "debug,minidump::context=error"
     } else {
-        "warn"
+        "warn,minidump::context=error"
     };
     tracing_subscriber::fmt()
         .with_env_filter(log_filter)
@@ -914,6 +916,17 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     println!("  {:<24} exit {:?}{reason}", r.artifact, r.exit_code);
                     if let Some(dump) = &r.dump {
                         println!("      crash dump: {dump}");
+                        if let Ok(s) = lsw_core::dumpops::analyze(std::path::Path::new(dump)) {
+                            match (&s.faulting_module, s.faulting_offset) {
+                                (Some(m), Some(off)) => println!(
+                                    "      {} at {m}+{off:#x} (address {:#x})",
+                                    s.reason, s.crash_address
+                                ),
+                                _ => {
+                                    println!("      {} (address {:#x})", s.reason, s.crash_address)
+                                }
+                            }
+                        }
                     }
                 }
                 println!("Status: {status}");
@@ -1158,6 +1171,42 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     };
                     println!("  {:<24} {}", i.dll, availability);
                 }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Crash { file } => {
+            let s = lsw_core::dumpops::analyze(file)?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "reason": s.reason,
+                        "crash_address": s.crash_address,
+                        "instruction_pointer": s.instruction_pointer,
+                        "faulting_module": s.faulting_module,
+                        "faulting_offset": s.faulting_offset,
+                        "crashing_thread": s.crashing_thread,
+                        "os": s.os,
+                        "cpu": s.cpu,
+                        "module_count": s.module_count,
+                    })
+                );
+            } else {
+                println!("Exception:   {}", s.reason);
+                println!("Address:     {:#x}", s.crash_address);
+                match (&s.faulting_module, s.faulting_offset) {
+                    (Some(m), Some(off)) => println!("Faulting:    {m}+{off:#x}"),
+                    _ => println!("Faulting:    unknown (no module for instruction pointer)"),
+                }
+                if let Some(ip) = s.instruction_pointer {
+                    println!("Instruction: {ip:#x}");
+                }
+                if let Some(tid) = s.crashing_thread {
+                    println!("Thread:      {tid}");
+                }
+                println!("Platform:    {} {}", s.os, s.cpu);
+                println!("Modules:     {}", s.module_count);
             }
             Ok(ExitCode::SUCCESS)
         }

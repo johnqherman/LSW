@@ -36,6 +36,7 @@ clap_complete = "4"
 clap_mangen = "0.2"
 dirs = "6"
 libc = "0.2"
+minidump = "0.26"
 notify = "6"
 object = { version = "0.37", default-features = false, features = ["read", "std"] }
 serde = { version = "1", features = ["derive"] }

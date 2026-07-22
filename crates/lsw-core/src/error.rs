@@ -180,6 +180,9 @@ pub enum Error {
          make your [build] command honor CC/CXX/CFLAGS/CXXFLAGS/LDFLAGS", artifact.display()
     )]
     ArtifactNotPe { artifact: PathBuf, found: String },
+
+    #[error("LSW2031: cannot read crash dump {}: {detail}", path.display())]
+    DumpParse { path: PathBuf, detail: String },
 }
 
 impl Error {
