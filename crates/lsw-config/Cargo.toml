@@ -3,6 +3,12 @@ name = "lsw-config"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Configuration types and filesystem layout for LSW."
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 dirs.workspace = true
