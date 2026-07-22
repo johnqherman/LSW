@@ -436,12 +436,12 @@ fn parse_backtrace(host: String, stdout: &str) -> NativeBacktrace {
     let mut in_stack = false;
     for line in stdout.lines() {
         let trimmed = line.trim();
-        if let Some(idx) = trimmed.find(" - code ") {
-            if !trimmed.contains("80000003") {
-                let text = trimmed[..idx].trim_end();
-                let text = text.rsplit_once("): ").map(|(_, t)| t).unwrap_or(text);
-                exception = Some(text.to_owned());
-            }
+        if let Some(idx) = trimmed.find(" - code ")
+            && !trimmed.contains("80000003")
+        {
+            let text = trimmed[..idx].trim_end();
+            let text = text.rsplit_once("): ").map(|(_, t)| t).unwrap_or(text);
+            exception = Some(text.to_owned());
         }
         if trimmed.contains("Child") && trimmed.contains("RetAddr") {
             in_stack = true;
@@ -561,11 +561,11 @@ fn collect_dump(
         if attempt > 0 {
             std::thread::sleep(std::time::Duration::from_secs(2));
         }
-        if let Some(found) = newest_dump(host, identity, dump_remote, exe) {
-            if before != Some(found.as_str()) {
-                name = Some(found);
-                break;
-            }
+        if let Some(found) = newest_dump(host, identity, dump_remote, exe)
+            && before != Some(found.as_str())
+        {
+            name = Some(found);
+            break;
         }
     }
     let name = name?;
