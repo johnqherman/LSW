@@ -1,0 +1,69 @@
+{
+  "name": "lsw",
+  "displayName": "LSW - Linux Subsystem for Windows Development",
+  "description": "Build, run, test, and debug Windows applications from Linux through the lsw CLI.",
+  "version": "0.1.0",
+  "publisher": "lsw",
+  "license": "Apache-2.0 OR MIT",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Other", "Debuggers"],
+  "activationEvents": ["workspaceContains:lsw.toml", "onDebug"],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node16",
+    "watch": "npm run build -- --sourcemap --watch",
+    "vscode:prepublish": "npm run typecheck && npm run build -- --minify"
+  },
+  "contributes": {
+    "commands": [
+      { "command": "lsw.build", "title": "LSW: Build" },
+      { "command": "lsw.run", "title": "LSW: Run" },
+      { "command": "lsw.test", "title": "LSW: Test" },
+      { "command": "lsw.verify", "title": "LSW: Verify on native Windows" },
+      { "command": "lsw.configureIntelliSense", "title": "LSW: Configure C/C++ IntelliSense" }
+    ],
+    "debuggers": [
+      {
+        "type": "lsw",
+        "label": "LSW (native Windows PE)",
+        "languages": ["c", "cpp", "rust"],
+        "configurationAttributes": {
+          "launch": {
+            "required": ["program"],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to the Windows PE to debug via lsw dap."
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "lsw",
+            "request": "launch",
+            "name": "LSW: Debug PE",
+            "program": "${workspaceFolder}/build/app.exe"
+          }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "LSW",
+      "properties": {
+        "lsw.path": {
+          "type": "string",
+          "default": "lsw",
+          "description": "Path to the lsw executable."
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.75.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.4.0"
+  }
+}
