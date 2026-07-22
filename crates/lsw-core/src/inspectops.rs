@@ -9,6 +9,8 @@ use crate::error::{Error, Result};
 #[derive(Debug)]
 pub struct InspectReport {
     pub info: PeInfo,
+    pub details: lsw_pe::PeDetails,
+    pub hardening: lsw_pe::Hardening,
     pub imports: Vec<ImportStatus>,
 }
 
@@ -37,7 +39,14 @@ pub fn inspect(path: &Path, env: Option<&Environment>) -> Result<InspectReport> 
         })
         .collect();
 
-    Ok(InspectReport { info, imports })
+    let details = lsw_pe::details(path)?;
+    let hardening = lsw_pe::hardening(path)?;
+    Ok(InspectReport {
+        info,
+        details,
+        hardening,
+        imports,
+    })
 }
 
 fn dll_available(env: &Environment, dll: &str) -> bool {

@@ -816,19 +816,52 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     .iter()
                     .map(|i| serde_json::json!({ "dll": i.dll, "available": i.available }))
                     .collect();
+                let sections: Vec<_> = report
+                    .details
+                    .sections
+                    .iter()
+                    .map(|s| {
+                        serde_json::json!({
+                            "name": s.name,
+                            "virtual_size": s.virtual_size,
+                            "raw_size": s.raw_size,
+                        })
+                    })
+                    .collect();
                 println!(
                     "{}",
                     serde_json::json!({
                         "format": format!("{:?}", report.info.format),
                         "machine": format!("{:?}", report.info.machine),
                         "subsystem": format!("{:?}", report.info.subsystem),
+                        "entry_point": report.details.entry_point,
+                        "image_base": report.details.image_base,
+                        "sections": sections,
                         "imports": imports,
                     })
                 );
             } else {
-                println!("Format:    {:?}", report.info.format);
-                println!("Machine:   {:?}", report.info.machine);
-                println!("Subsystem: {:?}", report.info.subsystem);
+                println!("Format:      {:?}", report.info.format);
+                println!("Machine:     {:?}", report.info.machine);
+                println!("Subsystem:   {:?}", report.info.subsystem);
+                println!("Entry point: 0x{:08x}", report.details.entry_point);
+                println!("Image base:  0x{:x}", report.details.image_base);
+                let h = &report.hardening;
+                let flag = |b: bool| if b { "yes" } else { "no" };
+                println!(
+                    "Hardening:   ASLR={} DEP={} CFG={} signed={}",
+                    flag(h.aslr),
+                    flag(h.dep),
+                    flag(h.cfg),
+                    flag(h.signed)
+                );
+                println!("Sections:");
+                for s in &report.details.sections {
+                    println!(
+                        "  {:<10} vsize={:<10} raw={}",
+                        s.name, s.virtual_size, s.raw_size
+                    );
+                }
                 println!("Imports:");
                 for i in &report.imports {
                     let availability = match i.available {
