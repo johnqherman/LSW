@@ -208,6 +208,13 @@ pub enum Error {
 
     #[error("LSW2037: {arch} has no mingw-w64 package repository")]
     DepArchUnsupported { arch: String },
+
+    #[error(
+        "LSW2038: cross-architecture execution needs a {arch} Wine build\n\
+         Set {var} to a {arch} wine executable (run under qemu user-mode emulation).\n\
+         Set QEMU_LD_PREFIX to that Wine's sysroot if its libraries are not on the default path."
+    )]
+    EmulationWineMissing { arch: String, var: String },
 }
 
 impl Error {

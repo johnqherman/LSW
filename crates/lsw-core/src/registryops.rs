@@ -23,6 +23,7 @@ fn run_registry_tool(env: &Environment, program: &str, args: Vec<String>) -> Res
         env: Vec::new(),
         sandbox: None,
         display: lsw_runtime::DisplayMode::Inherit,
+        emulate: crate::emulateops::resolve(env.manifest.target_arch)?,
     })?;
     if !status.success() {
         return Err(Error::RegistryOperationFailed {
