@@ -14,7 +14,9 @@ native Windows.
   the runtime.
 
 `lsw compat --db` records observations into a persistent compatibility database
-queryable with `lsw compat-query <dll|module!func>`.
+queryable with `lsw compat-query <dll|module!func>`. `lsw compat --native` also
+runs the binary on the configured `[verify]` Windows host and prints a real
+Windows verdict next to the local (Wine) measurement.
 
 ## Native verification
 
@@ -22,4 +24,6 @@ queryable with `lsw compat-query <dll|module!func>`.
 Windows host over SSH (configured in `[verify]`), yielding an honest
 `WINDOWS_VERIFIED` / `WINDOWS_UNAVAILABLE` status that is kept distinct from the
 local Wine result. Without a configured host the native result stays UNKNOWN;
-LSW never reports a Wine pass as a Windows pass.
+LSW never reports a Wine pass as a Windows pass. Failing artifacts report their
+Windows exit code, and common crash codes are decoded (access violation, a
+missing DLL, wrong architecture, and so on).
