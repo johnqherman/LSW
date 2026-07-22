@@ -210,6 +210,8 @@ enum Cmd {
     /// IDE integration helpers.
     #[command(subcommand)]
     Ide(IdeCmd),
+    /// Rebuild automatically when project source files change.
+    Watch,
     /// Diagnose host, runtime, toolchain, and project health.
     Doctor,
     /// Generate shell completion scripts (bash, zsh, fish, powershell, elvish).
@@ -1334,6 +1336,12 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 "{}",
                 serde_json::to_string_pretty(&description).expect("serializes")
             );
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Watch => {
+            let (p, env) = active_env(&dirs)?;
+            lsw_core::watchops::watch(&p, &env)?;
             Ok(ExitCode::SUCCESS)
         }
 
