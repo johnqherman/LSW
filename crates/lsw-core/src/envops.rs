@@ -199,6 +199,42 @@ pub fn remove(dirs: &Dirs, name: &str) -> Result<()> {
     fs::remove_dir_all(&root).map_err(|e| Error::io(root, e))
 }
 
+pub fn clone_env(dirs: &Dirs, src: &str, dst: &str, force: bool) -> Result<Environment> {
+    validate_name("environment", src)?;
+    validate_name("environment", dst)?;
+    Environment::open(dirs, src)?;
+    let src_root = dirs.environment(src);
+    let dst_root = dirs.environment(dst);
+    if dst_root.exists() {
+        if force {
+            fs::remove_dir_all(&dst_root).map_err(|e| Error::io(dst_root.clone(), e))?;
+        } else {
+            return Err(Error::EnvironmentExists {
+                name: dst.to_owned(),
+            });
+        }
+    }
+    fs::create_dir_all(&dst_root).map_err(|e| Error::io(dst_root.clone(), e))?;
+    let status = std::process::Command::new("cp")
+        .arg("--reflink=auto")
+        .arg("-a")
+        .arg(format!("{}/.", src_root.display()))
+        .arg(&dst_root)
+        .status()
+        .map_err(|e| Error::io(PathBuf::from("cp"), e))?;
+    if !status.success() {
+        return Err(Error::InitFailed {
+            path: dst_root.clone(),
+            detail: format!("copying environment '{src}' failed"),
+        });
+    }
+    let layout = EnvironmentLayout::new(dst_root);
+    let mut manifest = EnvironmentManifest::load(&layout.manifest())?;
+    manifest.name = dst.to_owned();
+    manifest.save(&layout.manifest())?;
+    Environment::open(dirs, dst)
+}
+
 pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateReport> {
     let lock = Lockfile::load(&project.lockfile_path())?;
     let report = create(
@@ -385,6 +421,44 @@ fn fingerprint_sysroot(sysroot: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clone_env_copies_and_renames() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = Dirs {
+            data: tmp.path().to_path_buf(),
+            config: tmp.path().join("cfg"),
+            cache: tmp.path().join("cache"),
+        };
+        let layout = EnvironmentLayout::new(dirs.environment("base"));
+        fs::create_dir_all(layout.prefix()).unwrap();
+        let manifest = EnvironmentManifest {
+            name: "base".into(),
+            format: ENVIRONMENT_FORMAT_VERSION,
+            target_arch: TargetArch::X86_64,
+            toolchain: lsw_config::ResolvedToolchain {
+                provider: "llvm-mingw".into(),
+                version: "1".into(),
+                cc: "/cc".into(),
+                cxx: "/cxx".into(),
+                sysroot: "/s".into(),
+                c_flags: vec![],
+                cxx_flags: vec![],
+                link_flags: vec![],
+            },
+            runtime: lsw_config::ResolvedRuntime {
+                provider: "wine".into(),
+                version: "9".into(),
+                executable: "/wine".into(),
+            },
+        };
+        manifest.save(&layout.manifest()).unwrap();
+
+        let cloned = clone_env(&dirs, "base", "copy", false).unwrap();
+        assert_eq!(cloned.name, "copy");
+        assert_eq!(cloned.manifest.name, "copy");
+        assert!(dirs.environment("copy").join("prefix").is_dir());
+    }
 
     #[test]
     fn harden_profiles_replaces_host_escaping_symlinks_only() {
