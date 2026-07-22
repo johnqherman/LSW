@@ -93,7 +93,7 @@ pub fn run_on_host(project: &Project, artifacts: &[PathBuf]) -> Result<VerifyRep
     let transport = cfg.transport.as_deref().unwrap_or("ssh");
     match transport {
         "ssh" => {}
-        "winrm" => return crate::winrmops::run_on_host(project, artifacts),
+        "winrm" | "https" => return crate::winrmops::run_on_host(project, artifacts),
         other => {
             return Err(Error::UnsupportedTransport {
                 transport: other.to_owned(),
