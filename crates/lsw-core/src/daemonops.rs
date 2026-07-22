@@ -25,20 +25,55 @@ pub fn socket_path(dirs: &Dirs) -> PathBuf {
     }
 }
 
+const JSONRPC_VERSION: &str = "2.0";
+
 #[derive(Debug, Deserialize)]
 struct Request {
     #[serde(default)]
     id: u64,
     method: String,
+    #[serde(default)]
+    #[allow(dead_code)]
+    params: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+struct RpcError {
+    code: i32,
+    message: String,
 }
 
 #[derive(Debug, Serialize)]
 struct Response {
+    jsonrpc: &'static str,
     id: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     result: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
+    error: Option<RpcError>,
+}
+
+impl Response {
+    fn ok(id: u64, result: serde_json::Value) -> Self {
+        Self {
+            jsonrpc: JSONRPC_VERSION,
+            id,
+            result: Some(result),
+            error: None,
+        }
+    }
+
+    fn err(id: u64, code: i32, message: impl Into<String>) -> Self {
+        Self {
+            jsonrpc: JSONRPC_VERSION,
+            id,
+            result: None,
+            error: Some(RpcError {
+                code,
+                message: message.into(),
+            }),
+        }
+    }
 }
 
 pub fn serve(dirs: &Dirs) -> Result<()> {
@@ -125,56 +160,31 @@ fn dispatch(line: &str, dirs: &Dirs, running: &Arc<AtomicBool>) -> Response {
     let request: Request = match serde_json::from_str(line) {
         Ok(r) => r,
         Err(e) => {
-            return Response {
-                id: 0,
-                result: None,
-                error: Some(format!("malformed request: {e}")),
-            };
+            return Response::err(0, -32700, format!("parse error: {e}"));
         }
     };
     let id = request.id;
     match request.method.as_str() {
-        "version" => Response {
+        "version" => Response::ok(
             id,
-            result: Some(serde_json::json!({
+            serde_json::json!({
                 "protocol": PROTOCOL_VERSION,
                 "version": env!("CARGO_PKG_VERSION"),
-            })),
-            error: None,
-        },
-        "ping" => Response {
-            id,
-            result: Some(serde_json::json!({ "pong": true })),
-            error: None,
-        },
+            }),
+        ),
+        "ping" => Response::ok(id, serde_json::json!({ "pong": true })),
         "env.list" => match envops::list(dirs) {
             Ok(envs) => {
                 let names: Vec<String> = envs.into_iter().map(|e| e.name).collect();
-                Response {
-                    id,
-                    result: Some(serde_json::json!({ "environments": names })),
-                    error: None,
-                }
+                Response::ok(id, serde_json::json!({ "environments": names }))
             }
-            Err(e) => Response {
-                id,
-                result: None,
-                error: Some(e.to_string()),
-            },
+            Err(e) => Response::err(id, -32603, e.to_string()),
         },
         "shutdown" => {
             running.store(false, Ordering::SeqCst);
-            Response {
-                id,
-                result: Some(serde_json::json!({ "stopping": true })),
-                error: None,
-            }
+            Response::ok(id, serde_json::json!({ "stopping": true }))
         }
-        other => Response {
-            id,
-            result: None,
-            error: Some(format!("unknown method '{other}'")),
-        },
+        other => Response::err(id, -32601, format!("unknown method '{other}'")),
     }
 }
 
@@ -201,8 +211,10 @@ impl DaemonClient {
     pub fn call(&mut self, method: &str) -> Result<serde_json::Value> {
         let id = self.next_id;
         self.next_id += 1;
-        let mut line = serde_json::to_string(&serde_json::json!({ "id": id, "method": method }))
-            .expect("request serializes");
+        let mut line = serde_json::to_string(
+            &serde_json::json!({ "jsonrpc": JSONRPC_VERSION, "id": id, "method": method }),
+        )
+        .expect("request serializes");
         line.push('\n');
         self.stream
             .write_all(line.as_bytes())
@@ -222,10 +234,14 @@ impl DaemonClient {
                 path: self.path.clone(),
                 detail: format!("malformed response: {e}"),
             })?;
-        if let Some(err) = value.get("error").and_then(|e| e.as_str()) {
+        if let Some(err) = value.get("error") {
+            let message = err
+                .get("message")
+                .and_then(|m| m.as_str())
+                .unwrap_or("daemon error");
             return Err(Error::DaemonUnavailable {
                 path: self.path.clone(),
-                detail: err.to_owned(),
+                detail: message.to_owned(),
             });
         }
         Ok(value
@@ -252,6 +268,32 @@ mod tests {
         let dirs = temp_dirs(std::path::Path::new("/base"));
         let p = socket_path(&dirs);
         assert!(p.ends_with("lswd.sock"));
+    }
+
+    #[test]
+    fn dispatch_emits_jsonrpc_2_0_envelope_and_structured_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = temp_dirs(tmp.path());
+        std::fs::create_dir_all(dirs.environments()).unwrap();
+        let running = Arc::new(AtomicBool::new(true));
+
+        let ok = dispatch(
+            r#"{"jsonrpc":"2.0","id":7,"method":"ping"}"#,
+            &dirs,
+            &running,
+        );
+        let v = serde_json::to_value(&ok).unwrap();
+        assert_eq!(v["jsonrpc"], "2.0");
+        assert_eq!(v["id"], 7);
+        assert_eq!(v["result"]["pong"], true);
+
+        let unknown = dispatch(r#"{"id":1,"method":"nope"}"#, &dirs, &running);
+        let e = serde_json::to_value(&unknown).unwrap();
+        assert_eq!(e["error"]["code"], -32601);
+        assert!(e["error"]["message"].as_str().unwrap().contains("nope"));
+
+        let bad = dispatch("not json", &dirs, &running);
+        assert_eq!(serde_json::to_value(&bad).unwrap()["error"]["code"], -32700);
     }
 
     #[test]
