@@ -196,6 +196,23 @@ pub fn remove(dirs: &Dirs, name: &str) -> Result<()> {
     fs::remove_dir_all(&root).map_err(|e| Error::io(root, e))
 }
 
+pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateReport> {
+    let lock = Lockfile::load(&project.lockfile_path())?;
+    let report = create(
+        dirs,
+        &EnvCreateOptions {
+            name: name.to_owned(),
+            arch: lock.target_arch,
+            toolchain: None,
+            sdk: None,
+            force: true,
+            expose_home: false,
+        },
+    )?;
+    crate::buildops::check_lock(project, &report.environment)?;
+    Ok(report)
+}
+
 pub fn use_environment(dirs: &Dirs, project: &mut Project, name: &str) -> Result<()> {
     Environment::open(dirs, name)?;
     project.manifest.environment.name = Some(name.to_owned());

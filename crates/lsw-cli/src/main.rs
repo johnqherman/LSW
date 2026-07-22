@@ -303,6 +303,8 @@ enum EnvCmd {
     },
     /// List environments.
     List,
+    /// Recreate an environment from lsw.lock and verify it matches the pins.
+    Restore { name: String },
     /// Delete an environment and its Wine prefix.
     Remove { name: String },
 }
@@ -477,6 +479,20 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Env(EnvCmd::Remove { name }) => {
             lsw_core::env_remove(&dirs, name)?;
             println!("Removed environment '{name}'");
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Env(EnvCmd::Restore { name }) => {
+            let p = project()?;
+            println!("Restoring environment '{name}' from lsw.lock...");
+            let report = lsw_core::env_restore(&dirs, &p, name)?;
+            let m = &report.environment.manifest;
+            println!("Environment '{name}' restored and verified against lsw.lock");
+            println!("  arch      {}", m.target_arch);
+            println!(
+                "  toolchain {} {}",
+                m.toolchain.provider, m.toolchain.version
+            );
             Ok(ExitCode::SUCCESS)
         }
 
