@@ -3,6 +3,12 @@ name = "lsw"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "LSW: build, run, and inspect Windows applications from Linux (the inverse of WSL)."
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [[bin]]
 name = "lsw"

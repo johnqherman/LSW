@@ -3,6 +3,12 @@ name = "lsw-runtime"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Windows runtime (Wine) provider for LSW."
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 lsw-config.workspace = true
