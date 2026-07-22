@@ -16,7 +16,10 @@ native Windows.
 `lsw compat --db` records observations into a persistent compatibility database
 queryable with `lsw compat-query <dll|module!func>`. `lsw compat --native` also
 runs the binary on the configured `[verify]` Windows host and prints a real
-Windows verdict next to the local (Wine) measurement.
+Windows verdict next to the local (Wine) measurement. With a host configured it
+additionally probes each imported DLL and function on that host (LoadLibrary and
+GetProcAddress), filling a Native column in the capability matrix from real
+measurements rather than assumptions.
 
 ## Native verification
 
