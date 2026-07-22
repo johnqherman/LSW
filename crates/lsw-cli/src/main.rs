@@ -114,6 +114,8 @@ enum Cmd {
     Audit { file: PathBuf },
     /// List the exported symbols of a PE (mirror of imports).
     Exports { file: PathBuf },
+    /// Generate a CycloneDX SBOM for a PE (imports + toolchain provenance).
+    Sbom { file: PathBuf },
     /// Translate paths between Linux and Windows views.
     Path {
         /// Print the Windows form of a Linux path.
@@ -758,6 +760,15 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     println!("{n}");
                 }
             }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Sbom { file } => {
+            let bom = lsw_core::sbomops::sbom(file)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&bom).expect("serializes")
+            );
             Ok(ExitCode::SUCCESS)
         }
 
