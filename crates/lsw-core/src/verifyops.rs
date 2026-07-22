@@ -108,7 +108,18 @@ pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
         validate_windows_name(name)?;
     }
 
-    run_ssh_plan(&host, &plan)
+    let identity = cfg.identity_file.as_deref().map(expand_tilde);
+    run_ssh_plan(&host, &plan, identity.as_deref())
+}
+
+fn expand_tilde(path: &str) -> String {
+    match path.strip_prefix("~/") {
+        Some(rest) => match std::env::var_os("HOME") {
+            Some(home) => format!("{}/{}", home.to_string_lossy(), rest),
+            None => path.to_owned(),
+        },
+        None => path.to_owned(),
+    }
 }
 
 fn validate_windows_dir(dir: &str) -> Result<()> {
@@ -148,9 +159,9 @@ fn validate_windows_name(name: &str) -> Result<()> {
     }
 }
 
-fn run_ssh_plan(host: &str, plan: &AgentPlan) -> Result<VerifyReport> {
+fn run_ssh_plan(host: &str, plan: &AgentPlan, identity: Option<&str>) -> Result<VerifyReport> {
     let mkdir = Command::new("ssh")
-        .args(ssh_opts())
+        .args(ssh_opts(identity))
         .arg(host)
         .arg(format!(
             "cmd /c \"if not exist \"{}\" mkdir \"{}\"\"",
@@ -173,7 +184,7 @@ fn run_ssh_plan(host: &str, plan: &AgentPlan) -> Result<VerifyReport> {
     for (local, remote_name) in &plan.uploads {
         let dest = format!("{host}:{}/{remote_name}", plan.remote_dir);
         let scp = Command::new("scp")
-            .args(ssh_opts())
+            .args(ssh_opts(identity))
             .arg(local)
             .arg(&dest)
             .output()
@@ -202,7 +213,7 @@ fn run_ssh_plan(host: &str, plan: &AgentPlan) -> Result<VerifyReport> {
             prog = program,
         );
         let out = Command::new("ssh")
-            .args(ssh_opts())
+            .args(ssh_opts(identity))
             .arg(host)
             .arg(&remote_cmd)
             .output()
@@ -261,8 +272,20 @@ fn parse_sentinel_code(stdout: &str, sentinel: &str) -> Option<i32> {
         .and_then(|n| n.trim().parse::<i32>().ok())
 }
 
-fn ssh_opts() -> [&'static str; 4] {
-    ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+fn ssh_opts(identity: Option<&str>) -> Vec<String> {
+    let mut opts = vec![
+        "-o".to_owned(),
+        "BatchMode=yes".to_owned(),
+        "-o".to_owned(),
+        "ConnectTimeout=10".to_owned(),
+    ];
+    if let Some(identity) = identity {
+        opts.push("-o".to_owned());
+        opts.push("IdentitiesOnly=yes".to_owned());
+        opts.push("-i".to_owned());
+        opts.push(identity.to_owned());
+    }
+    opts
 }
 
 fn default_remote_dir(project: &Project) -> String {
@@ -283,6 +306,28 @@ mod tests {
             root: root.to_path_buf(),
             manifest: ProjectManifest::new("demo"),
         }
+    }
+
+    #[test]
+    fn ssh_opts_adds_identity_flags_only_when_set() {
+        let base = ssh_opts(None);
+        assert!(base.contains(&"BatchMode=yes".to_owned()));
+        assert!(!base.iter().any(|o| o == "-i"));
+
+        let withkey = ssh_opts(Some("/home/u/.ssh/lsw_verify"));
+        let pos = withkey.iter().position(|o| o == "-i").unwrap();
+        assert_eq!(withkey[pos + 1], "/home/u/.ssh/lsw_verify");
+        assert!(withkey.contains(&"IdentitiesOnly=yes".to_owned()));
+    }
+
+    #[test]
+    fn expand_tilde_uses_home() {
+        unsafe { std::env::set_var("HOME", "/home/tester") };
+        assert_eq!(
+            expand_tilde("~/.ssh/lsw_verify"),
+            "/home/tester/.ssh/lsw_verify"
+        );
+        assert_eq!(expand_tilde("/abs/key"), "/abs/key");
     }
 
     #[test]
