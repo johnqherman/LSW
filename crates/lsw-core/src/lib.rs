@@ -1,3 +1,4 @@
+pub mod auditops;
 pub mod buildops;
 pub mod compatdb;
 pub mod compatops;

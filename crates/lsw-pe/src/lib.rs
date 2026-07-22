@@ -157,6 +157,89 @@ pub fn imports(path: &Path) -> Result<Vec<String>, PeError> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hardening {
+    pub aslr: bool,
+    pub high_entropy_va: bool,
+    pub dep: bool,
+    pub cfg: bool,
+    pub force_integrity: bool,
+    pub seh: bool,
+    pub signed: bool,
+}
+
+pub fn hardening(path: &Path) -> Result<Hardening, PeError> {
+    let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+    if !data.starts_with(MZ_MAGIC) {
+        return Err(PeError::NotPe {
+            path: path.to_path_buf(),
+        });
+    }
+    match optional_header_magic(&*data).map_err(|e| PeError::malformed(path, e))? {
+        pe::IMAGE_NT_OPTIONAL_HDR32_MAGIC => hardening_typed::<ImageNtHeaders32>(path, &data),
+        pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC => hardening_typed::<ImageNtHeaders64>(path, &data),
+        other => Err(PeError::malformed(
+            path,
+            format!("unrecognized optional header magic 0x{other:04x}"),
+        )),
+    }
+}
+
+fn hardening_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Hardening, PeError> {
+    let file = PeFile::<Pe>::parse(data).map_err(|e| PeError::malformed(path, e))?;
+    let dc = file.nt_headers().optional_header().dll_characteristics();
+    let has = |flag: u16| dc & flag != 0;
+    let signed = file
+        .data_directories()
+        .get(pe::IMAGE_DIRECTORY_ENTRY_SECURITY)
+        .map(|d| d.size.get(LE) != 0 && d.virtual_address.get(LE) != 0)
+        .unwrap_or(false);
+    Ok(Hardening {
+        aslr: has(pe::IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE),
+        high_entropy_va: has(pe::IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA),
+        dep: has(pe::IMAGE_DLLCHARACTERISTICS_NX_COMPAT),
+        cfg: has(pe::IMAGE_DLLCHARACTERISTICS_GUARD_CF),
+        force_integrity: has(pe::IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY),
+        seh: !has(pe::IMAGE_DLLCHARACTERISTICS_NO_SEH),
+        signed,
+    })
+}
+
+pub fn exports(path: &Path) -> Result<Vec<String>, PeError> {
+    let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+    if !data.starts_with(MZ_MAGIC) {
+        return Err(PeError::NotPe {
+            path: path.to_path_buf(),
+        });
+    }
+    match optional_header_magic(&*data).map_err(|e| PeError::malformed(path, e))? {
+        pe::IMAGE_NT_OPTIONAL_HDR32_MAGIC => exports_typed::<ImageNtHeaders32>(path, &data),
+        pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC => exports_typed::<ImageNtHeaders64>(path, &data),
+        other => Err(PeError::malformed(
+            path,
+            format!("unrecognized optional header magic 0x{other:04x}"),
+        )),
+    }
+}
+
+fn exports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<String>, PeError> {
+    let file = PeFile::<Pe>::parse(data).map_err(|e| PeError::malformed(path, e))?;
+    let mut out: Vec<String> = Vec::new();
+    let Some(table) = file
+        .export_table()
+        .map_err(|e| PeError::malformed(path, e))?
+    else {
+        return Ok(out);
+    };
+    for export in table.exports().map_err(|e| PeError::malformed(path, e))? {
+        match export.name {
+            Some(name) => out.push(String::from_utf8_lossy(name).into_owned()),
+            None => out.push(format!("#{}", export.ordinal)),
+        }
+    }
+    Ok(out)
+}
+
 pub fn imported_symbols(path: &Path) -> Result<Vec<(String, String)>, PeError> {
     let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
     if !data.starts_with(MZ_MAGIC) {
@@ -412,6 +495,30 @@ mod tests {
         let err = detect(&dir.path().join("absent.exe")).unwrap_err();
         assert!(matches!(err, PeError::Io { .. }), "got {err:?}");
         assert!(err.to_string().starts_with("LSW1301"));
+    }
+
+    #[test]
+    fn hardening_reads_dll_characteristics_of_a_real_pe() {
+        let dir = tempfile::tempdir().unwrap();
+        let Some(exe) = build_fixture_exe(&dir) else {
+            return;
+        };
+        let h = hardening(&exe).unwrap();
+        assert!(h.aslr, "mingw enables DYNAMICBASE by default");
+        assert!(h.dep, "mingw enables NXCOMPAT by default");
+        assert!(!h.signed, "a freshly built exe is unsigned");
+    }
+
+    #[test]
+    fn hardening_rejects_non_pe() {
+        let dir = tempfile::tempdir().unwrap();
+        let me = std::env::current_exe().unwrap_or_else(|_| dir.path().join("x"));
+        let _ = hardening(&me);
+        let txt = write_file(&dir, "n.txt", b"not a pe");
+        assert!(matches!(
+            hardening(&txt).unwrap_err(),
+            PeError::NotPe { .. }
+        ));
     }
 
     #[test]
