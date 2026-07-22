@@ -142,6 +142,36 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
         });
     }
 
+    let sandbox_row = if lsw_runtime::find_bwrap().is_some() {
+        row(
+            "Strict sandbox",
+            "available - run untrusted binaries with lsw run --sandbox strict",
+            Status::Ok,
+        )
+    } else {
+        row(
+            "Strict sandbox",
+            "bubblewrap not installed - only compatibility isolation is available",
+            Status::Warn,
+        )
+    };
+    sections.push(Section {
+        name: "Security".into(),
+        rows: vec![
+            row(
+                "Isolation model",
+                "Wine prefix is a compatibility boundary, not a security boundary",
+                Status::Ok,
+            ),
+            row(
+                "Default host access",
+                "Windows programs can reach the host filesystem via Z: unless sandboxed",
+                Status::Ok,
+            ),
+            sandbox_row,
+        ],
+    });
+
     sections.push(Section {
         name: "Native Windows".into(),
         rows: vec![row(
