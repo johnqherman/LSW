@@ -9,6 +9,7 @@ use crate::traceops::{self, TraceOptions};
 #[derive(Debug, Serialize)]
 pub struct CompatReport {
     pub imported_dlls: usize,
+    pub imported_functions: usize,
     pub loaded_dlls: usize,
     pub supported_locally: usize,
     pub potentially_unsupported: Vec<String>,
@@ -139,9 +140,13 @@ fn compat_inner(
     }
 
     let capabilities = classify(&imported);
+    let imported_functions = lsw_pe::imported_symbols(program)
+        .map(|s| s.len())
+        .unwrap_or(0);
 
     Ok(CompatReport {
         imported_dlls: imported.len(),
+        imported_functions,
         loaded_dlls: loaded.len(),
         supported_locally: supported,
         potentially_unsupported: unsupported,
