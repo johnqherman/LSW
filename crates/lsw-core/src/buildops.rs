@@ -8,11 +8,39 @@ use crate::envops::{self, Environment};
 use crate::error::{Error, Result};
 use crate::project::Project;
 
+fn win32_winnt(api: &str) -> Option<(&'static str, &'static str)> {
+    let v = match api.to_ascii_lowercase().as_str() {
+        "winxp" | "xp" => ("0x0501", "0x05010000"),
+        "vista" | "winvista" => ("0x0600", "0x06000000"),
+        "win7" | "windows7" => ("0x0601", "0x06010000"),
+        "win8" | "windows8" => ("0x0602", "0x06020000"),
+        "win8.1" | "win81" => ("0x0603", "0x06030000"),
+        "win10" | "windows10" => ("0x0A00", "0x0A000000"),
+        "win11" | "windows11" => ("0x0A00", "0x0A00000C"),
+        _ => return None,
+    };
+    Some(v)
+}
+
+fn api_defines(api: &str) -> Vec<String> {
+    match win32_winnt(api) {
+        Some((winnt, ntddi)) => vec![
+            format!("-D_WIN32_WINNT={winnt}"),
+            format!("-DWINVER={winnt}"),
+            format!("-DNTDDI_VERSION={ntddi}"),
+        ],
+        None => Vec::new(),
+    }
+}
+
 fn effective_toolchain(env: &Environment, project: &Project) -> ResolvedToolchain {
     let mut tc = env.manifest.toolchain.clone();
     if project.manifest.toolchain.link == LinkMode::Dynamic {
         tc.link_flags
             .retain(|f| f != "-static" && f != "-lwinpthread");
+    }
+    if let Some(api) = &project.manifest.target.api {
+        tc.c_flags.extend(api_defines(api));
     }
     tc
 }
@@ -418,6 +446,20 @@ mod tests {
             cxx_flags: vec![],
             link_flags,
         }
+    }
+
+    #[test]
+    fn api_defines_map_known_versions_and_ignore_unknown() {
+        assert_eq!(
+            api_defines("win10"),
+            vec![
+                "-D_WIN32_WINNT=0x0A00",
+                "-DWINVER=0x0A00",
+                "-DNTDDI_VERSION=0x0A000000",
+            ]
+        );
+        assert_eq!(api_defines("win7")[0], "-D_WIN32_WINNT=0x0601");
+        assert!(api_defines("nonsense").is_empty());
     }
 
     #[test]
