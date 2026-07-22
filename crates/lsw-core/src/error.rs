@@ -215,6 +215,13 @@ pub enum Error {
          Set QEMU_LD_PREFIX to that Wine's sysroot if its libraries are not on the default path."
     )]
     EmulationWineMissing { arch: String, var: String },
+
+    #[error(
+        "LSW2039: [filesystem] case = \"strict\" but the project has case-insensitive name collisions\n\
+         {detail}\n\
+         These files coexist on Linux but clash on Windows. Rename them, or use case = \"native\"."
+    )]
+    CaseCollision { detail: String },
 }
 
 impl Error {
