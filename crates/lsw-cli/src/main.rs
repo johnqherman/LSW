@@ -294,6 +294,9 @@ enum EnvCmd {
         /// Recreate if it already exists.
         #[arg(long)]
         force: bool,
+        /// Keep the host home directory visible to Windows programs (default hides it).
+        #[arg(long)]
+        expose_home: bool,
     },
     /// List environments.
     List,
@@ -417,6 +420,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             toolchain,
             sdk,
             force,
+            expose_home,
         }) => {
             println!("Creating environment '{name}' (this initializes a Wine prefix)...");
             let report = lsw_core::env_create(
@@ -427,6 +431,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     toolchain: toolchain.clone(),
                     sdk: sdk.clone(),
                     force: *force,
+                    expose_home: *expose_home,
                 },
             )?;
             let m = &report.environment.manifest;
