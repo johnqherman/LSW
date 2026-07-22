@@ -131,6 +131,9 @@ enum Cmd {
     /// Inspect a PE's dependencies.
     #[command(subcommand)]
     Deps(DepsCmd),
+    /// Generate CI configuration.
+    #[command(subcommand)]
+    Ci(CiCmd),
     /// Authenticode-sign a PE with a cached self-signed identity.
     Sign {
         file: PathBuf,
@@ -234,6 +237,20 @@ enum Cmd {
 enum DepsCmd {
     /// Print the transitive DLL dependency tree.
     Tree { file: PathBuf },
+}
+
+#[derive(Subcommand)]
+enum CiCmd {
+    /// Write a GitHub Actions workflow (.github/workflows/lsw.yml).
+    Init {
+        #[arg(value_enum, default_value_t = CiProvider::Github)]
+        provider: CiProvider,
+    },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum CiProvider {
+    Github,
 }
 
 #[derive(Subcommand)]
@@ -843,6 +860,13 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             for s in lsw_core::stringsops::strings(file, *min)? {
                 println!("{s}");
             }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Ci(CiCmd::Init { provider }) => {
+            let CiProvider::Github = provider;
+            let path = lsw_core::ciops::init_github(&cwd())?;
+            println!("wrote {}", path.display());
             Ok(ExitCode::SUCCESS)
         }
 
