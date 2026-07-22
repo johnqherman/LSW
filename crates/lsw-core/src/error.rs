@@ -183,6 +183,9 @@ pub enum Error {
 
     #[error("LSW2031: cannot read crash dump {}: {detail}", path.display())]
     DumpParse { path: PathBuf, detail: String },
+
+    #[error("LSW2032: native import probe failed on '{host}': {detail}")]
+    ProbeFailed { host: String, detail: String },
 }
 
 impl Error {

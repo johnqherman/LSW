@@ -22,6 +22,8 @@ pub struct CompatReport {
 pub struct Capability {
     pub feature: String,
     pub local: Support,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native: Option<Support>,
 }
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
@@ -175,8 +177,39 @@ fn classify(imported: &[String]) -> Vec<Capability> {
             } else {
                 Support::Unused
             },
+            native: None,
         })
         .collect()
+}
+
+pub fn apply_native(report: &mut CompatReport, probe: &crate::verifyops::ImportProbe) {
+    let loaded: std::collections::BTreeMap<String, &crate::verifyops::DllProbe> = probe
+        .dlls
+        .iter()
+        .map(|d| (d.name.to_ascii_lowercase(), d))
+        .collect();
+    for cap in &mut report.capabilities {
+        let Some(feature) = FEATURES.iter().find(|f| f.name == cap.feature) else {
+            continue;
+        };
+        let matched: Vec<&&crate::verifyops::DllProbe> = loaded
+            .iter()
+            .filter(|(name, _)| feature.markers.iter().any(|m| name.contains(m)))
+            .map(|(_, d)| d)
+            .collect();
+        cap.native = Some(if matched.is_empty() {
+            Support::Unused
+        } else if matched
+            .iter()
+            .all(|d| d.loaded && d.missing_functions.is_empty())
+        {
+            Support::Yes
+        } else if matched.iter().any(|d| d.loaded) {
+            Support::Partial
+        } else {
+            Support::No
+        });
+    }
 }
 
 #[cfg(test)]
