@@ -128,6 +128,9 @@ enum Cmd {
         #[arg(long, default_value_t = 4)]
         min: usize,
     },
+    /// Inspect a PE's dependencies.
+    #[command(subcommand)]
+    Deps(DepsCmd),
     /// Authenticode-sign a PE with a cached self-signed identity.
     Sign {
         file: PathBuf,
@@ -225,6 +228,12 @@ enum Cmd {
     Completions { shell: clap_complete::Shell },
     /// Explain an LSW#### error code.
     Explain { code: String },
+}
+
+#[derive(Subcommand)]
+enum DepsCmd {
+    /// Print the transitive DLL dependency tree.
+    Tree { file: PathBuf },
 }
 
 #[derive(Subcommand)]
@@ -462,6 +471,20 @@ fn main() -> ExitCode {
 
 fn cwd() -> PathBuf {
     std::env::current_dir().expect("current directory must exist")
+}
+
+fn print_dep_tree(node: &lsw_core::depsops::DepNode, depth: usize) {
+    let tag = match node.kind {
+        lsw_core::depsops::DepKind::Root => "",
+        lsw_core::depsops::DepKind::System => "  [system]",
+        lsw_core::depsops::DepKind::Resolved => "",
+        lsw_core::depsops::DepKind::Missing => "  [MISSING]",
+        lsw_core::depsops::DepKind::Seen => "  [seen]",
+    };
+    println!("{}{}{}", "  ".repeat(depth), node.name, tag);
+    for child in &node.children {
+        print_dep_tree(child, depth + 1);
+    }
 }
 
 fn project() -> lsw_core::Result<Project> {
@@ -819,6 +842,20 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Strings { file, min } => {
             for s in lsw_core::stringsops::strings(file, *min)? {
                 println!("{s}");
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Deps(DepsCmd::Tree { file }) => {
+            let env = active_env(&dirs).ok().map(|(_, e)| e);
+            let root = lsw_core::depsops::tree(env.as_ref(), file)?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&root).expect("serializes")
+                );
+            } else {
+                print_dep_tree(&root, 0);
             }
             Ok(ExitCode::SUCCESS)
         }
