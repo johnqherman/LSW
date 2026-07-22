@@ -219,9 +219,13 @@ fn resolve_program(program: &Path, domain: Domain) -> Result<ResolvedProgram> {
 
 pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Result<ExitStatus> {
     if windows {
+        let args = project
+            .and_then(|p| crate::envops::mapper(env, p).to_windows(&p.root).ok())
+            .map(|dos| vec!["/k".to_owned(), format!("cd /d {dos}")])
+            .unwrap_or_default();
         return Ok(WineRuntime.execute(&ExecutionRequest {
             program: PathBuf::from("cmd.exe"),
-            args: Vec::new(),
+            args,
             prefix: env.layout.prefix(),
             cwd: windows_cwd(env, project),
             env: windows_env(env),
