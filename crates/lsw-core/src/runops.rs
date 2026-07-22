@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
+use lsw_config::TargetArch;
 use lsw_pe::BinaryKind;
 use lsw_runtime::{ExecutionRequest, RuntimeProvider, WineRuntime};
 
@@ -165,10 +166,43 @@ pub fn run(
     })
 }
 
-fn windows_env(_env: &Environment) -> Vec<(String, String)> {
+pub const WINDOWS_USER: &str = "lsw";
+
+fn processor_architecture(arch: TargetArch) -> &'static str {
+    match arch {
+        TargetArch::X86_64 => "AMD64",
+        TargetArch::X86 => "x86",
+        TargetArch::Aarch64 | TargetArch::Arm64Ec => "ARM64",
+        TargetArch::Armv7 => "ARM",
+    }
+}
+
+fn windows_env(env: &Environment) -> Vec<(String, String)> {
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    let profile = format!("C:\\users\\{WINDOWS_USER}");
     vec![
         ("TEMP".into(), "C:\\Temp".into()),
         ("TMP".into(), "C:\\Temp".into()),
+        ("SystemRoot".into(), "C:\\windows".into()),
+        ("windir".into(), "C:\\windows".into()),
+        ("ComSpec".into(), "C:\\windows\\system32\\cmd.exe".into()),
+        ("SystemDrive".into(), "C:".into()),
+        ("ProgramFiles".into(), "C:\\Program Files".into()),
+        ("ProgramFiles(x86)".into(), "C:\\Program Files (x86)".into()),
+        ("ProgramData".into(), "C:\\ProgramData".into()),
+        ("USERNAME".into(), WINDOWS_USER.into()),
+        ("USERPROFILE".into(), profile.clone()),
+        ("HOMEDRIVE".into(), "C:".into()),
+        ("HOMEPATH".into(), format!("\\users\\{WINDOWS_USER}")),
+        ("APPDATA".into(), format!("{profile}\\AppData\\Roaming")),
+        ("LOCALAPPDATA".into(), format!("{profile}\\AppData\\Local")),
+        (
+            "PROCESSOR_ARCHITECTURE".into(),
+            processor_architecture(env.manifest.target_arch).into(),
+        ),
+        ("NUMBER_OF_PROCESSORS".into(), cpus.to_string()),
     ]
 }
 
@@ -254,6 +288,15 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn processor_architecture_maps_each_arch() {
+        assert_eq!(processor_architecture(TargetArch::X86_64), "AMD64");
+        assert_eq!(processor_architecture(TargetArch::X86), "x86");
+        assert_eq!(processor_architecture(TargetArch::Aarch64), "ARM64");
+        assert_eq!(processor_architecture(TargetArch::Arm64Ec), "ARM64");
+        assert_eq!(processor_architecture(TargetArch::Armv7), "ARM");
+    }
 
     #[test]
     fn missing_path_with_separator_is_rejected() {
