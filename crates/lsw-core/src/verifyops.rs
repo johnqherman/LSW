@@ -116,6 +116,23 @@ pub fn run_on_host(project: &Project, artifacts: &[PathBuf]) -> Result<VerifyRep
     run_ssh_plan(&host, &plan, identity.as_deref())
 }
 
+pub fn crash_reason(exit_code: i32) -> Option<&'static str> {
+    let status = exit_code as u32;
+    let reason = match status {
+        0xC0000005 => "access violation",
+        0xC000001D => "illegal instruction",
+        0xC0000094 => "integer divide by zero",
+        0xC00000FD => "stack overflow",
+        0xC0000409 => "stack buffer overrun (fail-fast)",
+        0xC0000135 => "a required DLL was not found",
+        0xC0000139 => "an entry point was not found in a DLL",
+        0xC0000142 => "DLL initialization failed",
+        0xC000007B => "invalid image format (wrong architecture?)",
+        _ => return None,
+    };
+    Some(reason)
+}
+
 fn expand_tilde(path: &str) -> String {
     match path.strip_prefix("~/") {
         Some(rest) => match std::env::var_os("HOME") {
@@ -310,6 +327,17 @@ mod tests {
             root: root.to_path_buf(),
             manifest: ProjectManifest::new("demo"),
         }
+    }
+
+    #[test]
+    fn crash_reason_decodes_common_ntstatus() {
+        assert_eq!(crash_reason(-1073741819), Some("access violation"));
+        assert_eq!(
+            crash_reason(0xC0000135u32 as i32),
+            Some("a required DLL was not found")
+        );
+        assert_eq!(crash_reason(0), None);
+        assert_eq!(crash_reason(3), None);
     }
 
     #[test]
