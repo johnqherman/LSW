@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use lsw_core::{BuildOptions, Dirs, Domain, EnvCreateOptions, Project, Status, TargetArch};
 
 #[derive(Parser)]
@@ -195,6 +195,10 @@ enum Cmd {
     Ide(IdeCmd),
     /// Diagnose host, runtime, toolchain, and project health.
     Doctor,
+    /// Generate shell completion scripts (bash, zsh, fish, powershell, elvish).
+    Completions { shell: clap_complete::Shell },
+    /// Explain an LSW#### error code.
+    Explain { code: String },
 }
 
 #[derive(Subcommand)]
@@ -1266,6 +1270,26 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 ExitCode::FAILURE
             })
         }
+
+        Cmd::Completions { shell } => {
+            let mut cmd = Cli::command();
+            clap_complete::generate(*shell, &mut cmd, "lsw", &mut std::io::stdout());
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Explain { code } => match lsw_core::explainops::explain(code) {
+            Some(e) => {
+                println!("{}  {}", e.code, e.summary);
+                println!("  fix: {}", e.hint);
+                Ok(ExitCode::SUCCESS)
+            }
+            None => {
+                eprintln!(
+                    "no explanation for '{code}' (try an LSW#### code from an error message)"
+                );
+                Ok(ExitCode::FAILURE)
+            }
+        },
     }
 }
 

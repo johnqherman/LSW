@@ -27,6 +27,7 @@ lsw-pe = { path = "crates/lsw-pe" }
 anyhow = "1"
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 dirs = "6"
 libc = "0.2"
 object = { version = "0.37", default-features = false, features = ["read", "std"] }

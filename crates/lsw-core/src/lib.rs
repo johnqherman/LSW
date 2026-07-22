@@ -8,6 +8,7 @@ pub mod debugops;
 pub mod doctorops;
 pub mod envops;
 pub mod error;
+pub mod explainops;
 pub mod ideops;
 pub mod inspectops;
 pub mod msixops;
