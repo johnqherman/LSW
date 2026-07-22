@@ -1,4 +1,5 @@
 use std::ffi::OsStr;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
@@ -77,10 +78,12 @@ pub enum DisplayMode {
     Virtual,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct SandboxSpec {
     pub rw_binds: Vec<PathBuf>,
     pub network: bool,
+    pub cpu_seconds: Option<u64>,
+    pub memory_bytes: Option<u64>,
 }
 
 pub fn bwrap_args(spec: &SandboxSpec) -> Vec<String> {
@@ -137,6 +140,33 @@ pub fn bwrap_args(spec: &SandboxSpec) -> Vec<String> {
 
 fn dirs_home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
+}
+
+fn apply_rlimits(command: &mut Command, spec: &SandboxSpec) {
+    let cpu = spec.cpu_seconds;
+    let mem = spec.memory_bytes;
+    if cpu.is_none() && mem.is_none() {
+        return;
+    }
+    unsafe {
+        command.pre_exec(move || {
+            if let Some(secs) = cpu {
+                let lim = libc::rlimit {
+                    rlim_cur: secs,
+                    rlim_max: secs,
+                };
+                libc::setrlimit(libc::RLIMIT_CPU, &lim);
+            }
+            if let Some(bytes) = mem {
+                let lim = libc::rlimit {
+                    rlim_cur: bytes,
+                    rlim_max: bytes,
+                };
+                libc::setrlimit(libc::RLIMIT_AS, &lim);
+            }
+            Ok(())
+        });
+    }
 }
 
 fn sandbox_base_env() -> Vec<(String, String)> {
@@ -435,6 +465,9 @@ impl RuntimeProvider for WineRuntime {
                 command.env(key, value);
             }
             command.envs(full_env(&req.prefix, &req.env));
+            if let Some(spec) = &req.sandbox {
+                apply_rlimits(&mut command, spec);
+            }
         } else {
             scrub_host_wine_vars(&mut command);
             command.envs(full_env(&req.prefix, &req.env));
@@ -483,6 +516,7 @@ mod tests {
         let spec = SandboxSpec {
             rw_binds: vec![PathBuf::from("/data/env"), PathBuf::from("/home/u/proj")],
             network: false,
+            ..Default::default()
         };
         let args = bwrap_args(&spec);
         let ro_usr = args.windows(3).any(|w| w == ["--ro-bind", "/usr", "/usr"]);
@@ -511,6 +545,7 @@ mod tests {
         let spec = SandboxSpec {
             rw_binds: vec![],
             network: true,
+            ..Default::default()
         };
         assert!(!bwrap_args(&spec).iter().any(|a| a == "--unshare-net"));
     }

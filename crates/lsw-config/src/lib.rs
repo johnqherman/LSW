@@ -115,6 +115,10 @@ pub struct VerifySection {
 pub struct SandboxSection {
     #[serde(default = "default_sandbox_network")]
     pub network: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_seconds: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_mb: Option<u64>,
 }
 
 fn default_sandbox_network() -> String {
@@ -125,6 +129,8 @@ impl Default for SandboxSection {
     fn default() -> Self {
         Self {
             network: default_sandbox_network(),
+            cpu_seconds: None,
+            memory_mb: None,
         }
     }
 }
