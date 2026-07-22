@@ -272,6 +272,15 @@ enum Cmd {
         #[arg(long)]
         dir: Option<PathBuf>,
     },
+    /// Install the lsw binary, shell completions, and man pages.
+    Install {
+        /// Install prefix (default: $PREFIX, else ~/.local).
+        #[arg(long)]
+        prefix: Option<PathBuf>,
+        /// Install completions and man pages only; skip the binaries.
+        #[arg(long)]
+        no_bin: bool,
+    },
     /// Explain an LSW#### error code.
     Explain { code: String },
 }
@@ -537,6 +546,91 @@ fn main() -> ExitCode {
 
 fn cwd() -> PathBuf {
     std::env::current_dir().expect("current directory must exist")
+}
+
+struct InstallPaths {
+    bin: PathBuf,
+    bash: PathBuf,
+    zsh: PathBuf,
+    fish: PathBuf,
+    man: PathBuf,
+}
+
+fn install_paths(prefix: &std::path::Path) -> InstallPaths {
+    InstallPaths {
+        bin: prefix.join("bin"),
+        bash: prefix.join("share/bash-completion/completions"),
+        zsh: prefix.join("share/zsh/site-functions"),
+        fish: prefix.join("share/fish/vendor_completions.d"),
+        man: prefix.join("share/man/man1"),
+    }
+}
+
+fn default_prefix() -> PathBuf {
+    if let Some(p) = std::env::var_os("PREFIX") {
+        return PathBuf::from(p);
+    }
+    std::env::var_os("HOME")
+        .map(|h| PathBuf::from(h).join(".local"))
+        .unwrap_or_else(|| PathBuf::from("/usr/local"))
+}
+
+fn install_executable(src: &std::path::Path, dst: &std::path::Path) -> lsw_core::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::copy(src, dst).map_err(|e| lsw_core::Error::io(dst.to_path_buf(), e))?;
+    std::fs::set_permissions(dst, std::fs::Permissions::from_mode(0o755))
+        .map_err(|e| lsw_core::Error::io(dst.to_path_buf(), e))
+}
+
+fn write_completion(
+    shell: clap_complete::Shell,
+    cmd: &mut clap::Command,
+    path: &std::path::Path,
+) -> lsw_core::Result<()> {
+    let mut file =
+        std::fs::File::create(path).map_err(|e| lsw_core::Error::io(path.to_path_buf(), e))?;
+    clap_complete::generate(shell, cmd, "lsw", &mut file);
+    Ok(())
+}
+
+fn run_install(prefix: &std::path::Path, no_bin: bool) -> lsw_core::Result<()> {
+    let p = install_paths(prefix);
+    for dir in [&p.bin, &p.bash, &p.zsh, &p.fish, &p.man] {
+        std::fs::create_dir_all(dir).map_err(|e| lsw_core::Error::io(dir.clone(), e))?;
+    }
+
+    if !no_bin {
+        let exe = std::env::current_exe().map_err(|e| lsw_core::Error::io(p.bin.clone(), e))?;
+        let dst = p.bin.join("lsw");
+        install_executable(&exe, &dst)?;
+        println!("installed {}", dst.display());
+        if let Some(lswd) = exe.parent().map(|d| d.join("lswd"))
+            && lswd.is_file()
+        {
+            let dst = p.bin.join("lswd");
+            install_executable(&lswd, &dst)?;
+            println!("installed {}", dst.display());
+        }
+    }
+
+    let mut cmd = Cli::command();
+    write_completion(clap_complete::Shell::Bash, &mut cmd, &p.bash.join("lsw"))?;
+    write_completion(clap_complete::Shell::Zsh, &mut cmd, &p.zsh.join("_lsw"))?;
+    write_completion(
+        clap_complete::Shell::Fish,
+        &mut cmd,
+        &p.fish.join("lsw.fish"),
+    )?;
+    println!("installed completions under {}", p.bash.display());
+
+    write_man_page(&cmd, &p.man, "lsw")?;
+    for sub in cmd.get_subcommands() {
+        write_man_page(sub, &p.man, &format!("lsw-{}", sub.get_name()))?;
+    }
+    println!("installed man pages under {}", p.man.display());
+
+    println!("ensure {} is on your PATH", p.bin.display());
+    Ok(())
 }
 
 fn write_man_page(cmd: &clap::Command, dir: &std::path::Path, name: &str) -> lsw_core::Result<()> {
@@ -1577,6 +1671,12 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
+        Cmd::Install { prefix, no_bin } => {
+            let prefix = prefix.clone().unwrap_or_else(default_prefix);
+            run_install(&prefix, *no_bin)?;
+            Ok(ExitCode::SUCCESS)
+        }
+
         Cmd::Man { dir } => {
             let cmd = Cli::command();
             match dir {
@@ -1639,5 +1739,26 @@ fn exit_from_status(status: std::process::ExitStatus) -> ExitCode {
     match status.code() {
         Some(code) => ExitCode::from(code.clamp(0, 255) as u8),
         None => ExitCode::FAILURE,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn install_paths_follow_xdg_layout() {
+        let p = install_paths(std::path::Path::new("/home/u/.local"));
+        assert_eq!(p.bin, PathBuf::from("/home/u/.local/bin"));
+        assert!(p.bash.ends_with("bash-completion/completions"));
+        assert!(p.zsh.ends_with("zsh/site-functions"));
+        assert_eq!(p.man, PathBuf::from("/home/u/.local/share/man/man1"));
+    }
+
+    #[test]
+    fn default_prefix_honors_prefix_env() {
+        unsafe { std::env::set_var("PREFIX", "/opt/lsw") };
+        assert_eq!(default_prefix(), PathBuf::from("/opt/lsw"));
+        unsafe { std::env::remove_var("PREFIX") };
     }
 }
