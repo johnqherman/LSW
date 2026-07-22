@@ -134,6 +134,9 @@ enum Cmd {
     /// Generate CI configuration.
     #[command(subcommand)]
     Ci(CiCmd),
+    /// Validate lsw.toml settings.
+    #[command(subcommand)]
+    Config(ConfigCmd),
     /// Authenticode-sign a PE with a cached self-signed identity.
     Sign {
         file: PathBuf,
@@ -257,6 +260,12 @@ enum CiCmd {
 #[derive(Clone, Copy, ValueEnum)]
 enum CiProvider {
     Github,
+}
+
+#[derive(Subcommand)]
+enum ConfigCmd {
+    /// Lint the project's lsw.toml for invalid or unrecognized settings.
+    Check,
 }
 
 #[derive(Subcommand)]
@@ -877,6 +886,35 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 println!("{s}");
             }
             Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Config(ConfigCmd::Check) => {
+            let p = project()?;
+            let findings = lsw_core::configops::check(&p.root)?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&findings).expect("serializes")
+                );
+            } else if findings.is_empty() {
+                println!("lsw.toml: no problems found");
+            } else {
+                for f in &findings {
+                    let tag = match f.severity {
+                        lsw_core::configops::Severity::Warn => "warning",
+                        lsw_core::configops::Severity::Error => "error",
+                    };
+                    println!("{tag}: {}", f.message);
+                }
+            }
+            let has_error = findings
+                .iter()
+                .any(|f| f.severity == lsw_core::configops::Severity::Error);
+            Ok(if has_error {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            })
         }
 
         Cmd::Ci(CiCmd::Init { provider }) => {
