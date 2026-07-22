@@ -123,14 +123,27 @@ A binary produced by `lsw build` is a genuine Windows PE executable; running
 it under LSW exercises the local compatibility runtime (Wine). LSW never
 equates local runtime success with native Windows success.
 
-## Known limitations
+## Linking: static (default) or dynamic
 
-- The project is reachable at `C:\src\<name>` inside every environment
-  (forward mapping via a prefix symlink), but Wine derives a process's
-  *working directory* from the kernel-resolved Unix path, so `cd` inside a
-  Windows shell shows the host path under `Z:\` rather than `C:\src\<name>`.
-- Artifacts are linked with static runtimes (`-static`); they depend only on
-  DLLs shipped with Windows 10+ (KERNEL32 + UCRT api sets).
+By default LSW links the C/C++ runtime statically, so artifacts are
+self-contained (they need only DLLs shipped with Windows 10+ - KERNEL32 + the
+UCRT api-sets). Set `link = "dynamic"` under `[toolchain]` in `lsw.toml` to link
+the shared mingw runtime instead; LSW then automatically deploys the runtime
+DLLs the binary imports (e.g. `libstdc++-6.dll`, `libgcc_s_seh-1.dll`,
+`libwinpthread-1.dll`, transitively) next to the artifact, so `lsw run` and
+`lsw package` work without the build host.
+
+```toml
+[toolchain]
+link = "dynamic"
+```
+
+## Notes
+
+- `lsw shell --windows` opens `cmd` at the project's `C:\src\<name>` directory
+  (via `cd /d`, which Wine keeps as `%CD%`). Non-interactive `lsw run` still
+  inherits the host working directory, which Wine surfaces under `Z:\`; pass an
+  explicit Windows working directory to a program if it matters.
 
 ## License
 
