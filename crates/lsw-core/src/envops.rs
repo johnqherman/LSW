@@ -93,6 +93,7 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
     for dir in [layout.src(), layout.temp()] {
         fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
     }
+    provision_profile(&layout)?;
 
     let (resolved_toolchain, probe) = match &opts.sdk {
         Some(sdk_name) => {
@@ -206,6 +207,28 @@ pub fn resolve_active(dirs: &Dirs, project: &Project) -> Result<Environment> {
             .ok_or(Error::NoActiveEnvironment)?,
     };
     Environment::open(dirs, &name)
+}
+
+pub fn profile_dir(layout: &EnvironmentLayout) -> PathBuf {
+    layout
+        .drive_c()
+        .join("users")
+        .join(crate::runops::WINDOWS_USER)
+}
+
+fn provision_profile(layout: &EnvironmentLayout) -> Result<()> {
+    let profile = profile_dir(layout);
+    for sub in [
+        "Desktop",
+        "Documents",
+        "AppData/Roaming",
+        "AppData/Local",
+        "AppData/LocalLow",
+    ] {
+        let dir = profile.join(sub);
+        fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
+    }
+    Ok(())
 }
 
 pub fn link_project(env: &Environment, project: &Project) -> Result<PathBuf> {
