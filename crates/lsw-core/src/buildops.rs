@@ -1,12 +1,21 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use lsw_config::Lockfile;
+use lsw_config::{LinkMode, Lockfile, ResolvedToolchain};
 
 use crate::envops::{self, Environment};
 use crate::error::{Error, Result};
 use crate::project::Project;
+
+fn effective_toolchain(env: &Environment, project: &Project) -> ResolvedToolchain {
+    let mut tc = env.manifest.toolchain.clone();
+    if project.manifest.toolchain.link == LinkMode::Dynamic {
+        tc.link_flags
+            .retain(|f| f != "-static" && f != "-lwinpthread");
+    }
+    tc
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuildSystem {
@@ -50,12 +59,13 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
         }
     };
 
+    let tc = effective_toolchain(env, project);
     let mut commands = Vec::new();
     let mut artifact_dir = project.root.join("build");
     match system {
         BuildSystem::Explicit => {
             let spec = explicit.ok_or(Error::NoBuildSystem)?;
-            run_step(project, env, &spec.command, &mut commands)?;
+            run_step(project, env, &tc, &spec.command, &mut commands)?;
         }
         BuildSystem::Cargo => {
             let triple = env.manifest.target_arch.rust_gnu_triple().ok_or_else(|| {
@@ -67,6 +77,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             run_step(
                 project,
                 env,
+                &tc,
                 &[
                     "cargo".to_owned(),
                     "build".to_owned(),
@@ -81,7 +92,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             let toolchain_file = env.layout.cmake_toolchain_file();
             lsw_toolchain::write_cmake_toolchain_file(
                 &toolchain_file,
-                &env.manifest.toolchain,
+                &tc,
                 env.manifest.target_arch,
             )
             .map_err(|e| Error::io(toolchain_file.clone(), e))?;
@@ -108,18 +119,26 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 configure.push("-G".to_owned());
                 configure.push(g.to_owned());
             }
-            run_step(project, env, &configure, &mut commands)?;
+            run_step(project, env, &tc, &configure, &mut commands)?;
             run_step(
                 project,
                 env,
+                &tc,
                 &["cmake".to_owned(), "--build".to_owned(), "build".to_owned()],
                 &mut commands,
             )?;
         }
     }
 
-    let artifacts = find_artifacts(&artifact_dir, &project.root);
+    let mut artifacts = find_artifacts(&artifact_dir, &project.root);
     verify_artifacts_are_pe(project, &artifacts)?;
+
+    let deployed = deploy_runtime_dlls(&tc, &artifacts, &project.root)?;
+    if !deployed.is_empty() {
+        artifacts.extend(deployed);
+        artifacts.sort();
+        artifacts.dedup();
+    }
 
     Ok(BuildReport {
         system,
@@ -177,6 +196,7 @@ pub(crate) fn check_lock(project: &Project, env: &Environment) -> Result<()> {
 fn run_step(
     project: &Project,
     env: &Environment,
+    tc: &ResolvedToolchain,
     argv: &[String],
     commands: &mut Vec<String>,
 ) -> Result<()> {
@@ -184,7 +204,6 @@ fn run_step(
     let rendered = argv.join(" ");
     commands.push(rendered.clone());
 
-    let tc = &env.manifest.toolchain;
     let c_flags = tc.c_flags.join(" ");
     let cxx_flags = tc
         .c_flags
@@ -309,6 +328,63 @@ pub(crate) fn which(program: &str) -> Option<PathBuf> {
         .find(|c| c.is_file())
 }
 
+fn deploy_runtime_dlls(
+    tc: &ResolvedToolchain,
+    artifacts: &[PathBuf],
+    project_root: &Path,
+) -> Result<Vec<PathBuf>> {
+    let sysroot_bin = tc.sysroot.join("bin");
+    if !sysroot_bin.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut available: std::collections::BTreeMap<String, PathBuf> =
+        std::collections::BTreeMap::new();
+    for entry in fs::read_dir(&sysroot_bin)
+        .map_err(|e| Error::io(sysroot_bin.clone(), e))?
+        .flatten()
+    {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.to_ascii_lowercase().ends_with(".dll") {
+            available.insert(name.to_ascii_lowercase(), entry.path());
+        }
+    }
+    if available.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut deployed = Vec::new();
+    let mut done: std::collections::BTreeSet<PathBuf> = std::collections::BTreeSet::new();
+    for artifact in artifacts {
+        let abs = project_root.join(artifact);
+        let Some(dir) = abs.parent().map(Path::to_path_buf) else {
+            continue;
+        };
+        let mut work = vec![abs.clone()];
+        while let Some(pe) = work.pop() {
+            let Ok(imports) = lsw_pe::imports(&pe) else {
+                continue;
+            };
+            for import in imports {
+                let Some(src) = available.get(&import.to_ascii_lowercase()) else {
+                    continue;
+                };
+                let target = dir.join(src.file_name().expect("dll has a file name"));
+                if !done.insert(target.clone()) {
+                    continue;
+                }
+                if !target.exists() {
+                    fs::copy(src, &target).map_err(|e| Error::io(target.clone(), e))?;
+                }
+                if let Ok(rel) = target.strip_prefix(project_root) {
+                    deployed.push(rel.to_path_buf());
+                }
+                work.push(target);
+            }
+        }
+    }
+    Ok(deployed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,5 +405,102 @@ mod tests {
         fs::write(build.join("notes.txt"), b"x").unwrap();
         let found = find_artifacts(&build, tmp.path());
         assert_eq!(found, vec![PathBuf::from("build/app.exe")]);
+    }
+
+    fn tc_with(link_flags: Vec<String>, sysroot: PathBuf) -> ResolvedToolchain {
+        ResolvedToolchain {
+            provider: "mingw-gcc".into(),
+            version: "test".into(),
+            cc: PathBuf::from("/usr/bin/x86_64-w64-mingw32-gcc"),
+            cxx: PathBuf::from("/usr/bin/x86_64-w64-mingw32-g++"),
+            sysroot,
+            c_flags: vec![],
+            cxx_flags: vec![],
+            link_flags,
+        }
+    }
+
+    #[test]
+    fn dynamic_link_strips_static_flags() {
+        use lsw_config::{ProjectManifest, ProjectSection};
+        let tmp = tempfile::tempdir().unwrap();
+        let env = crate::envops::Environment {
+            name: "e".into(),
+            layout: lsw_config::EnvironmentLayout::new(tmp.path().join("env")),
+            manifest: lsw_config::EnvironmentManifest {
+                name: "e".into(),
+                format: lsw_config::ENVIRONMENT_FORMAT_VERSION,
+                target_arch: lsw_config::TargetArch::X86_64,
+                toolchain: tc_with(
+                    vec![
+                        "-static".into(),
+                        "-lwinpthread".into(),
+                        "-fuse-ld=lld".into(),
+                    ],
+                    PathBuf::from("/usr/x86_64-w64-mingw32"),
+                ),
+                runtime: lsw_config::ResolvedRuntime {
+                    provider: "wine".into(),
+                    version: "11".into(),
+                    executable: PathBuf::from("/usr/bin/wine"),
+                },
+            },
+        };
+        let mut manifest = ProjectManifest {
+            project: ProjectSection { name: "p".into() },
+            ..Default::default()
+        };
+        let project = Project {
+            root: tmp.path().to_path_buf(),
+            manifest: {
+                manifest.toolchain.link = LinkMode::Dynamic;
+                manifest
+            },
+        };
+        let eff = effective_toolchain(&env, &project);
+        assert!(!eff.link_flags.iter().any(|f| f == "-static"));
+        assert!(!eff.link_flags.iter().any(|f| f == "-lwinpthread"));
+        assert!(eff.link_flags.iter().any(|f| f == "-fuse-ld=lld"));
+    }
+
+    #[test]
+    fn deploy_copies_imported_dlls_only_case_insensitive() {
+        let cc = "x86_64-w64-mingw32-gcc";
+        if which(cc).is_none() {
+            eprintln!("skipping: {cc} not installed");
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let sysroot = tmp.path().join("sysroot");
+        fs::create_dir_all(sysroot.join("bin")).unwrap();
+        fs::write(sysroot.join("bin/kernel32.dll"), b"MZ not-a-real-pe").unwrap();
+        fs::write(
+            sysroot.join("bin/libnotimported-1.dll"),
+            b"MZ not-a-real-pe",
+        )
+        .unwrap();
+
+        let build = tmp.path().join("build");
+        fs::create_dir_all(&build).unwrap();
+        let src = tmp.path().join("t.c");
+        fs::write(&src, "int main(void){return 0;}\n").unwrap();
+        let ok = Command::new(cc)
+            .arg(&src)
+            .arg("-o")
+            .arg(build.join("t.exe"))
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !ok {
+            eprintln!("skipping: cross compile failed");
+            return;
+        }
+
+        let tc = tc_with(vec![], sysroot);
+        let deployed =
+            deploy_runtime_dlls(&tc, &[PathBuf::from("build/t.exe")], tmp.path()).unwrap();
+        assert!(build.join("kernel32.dll").is_file());
+        assert!(!build.join("libnotimported-1.dll").is_file());
+        assert!(deployed.contains(&PathBuf::from("build/kernel32.dll")));
     }
 }
