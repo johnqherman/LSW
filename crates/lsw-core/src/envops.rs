@@ -60,6 +60,7 @@ pub struct EnvCreateOptions {
     pub toolchain: Option<String>,
     pub sdk: Option<String>,
     pub force: bool,
+    pub expose_home: bool,
 }
 
 #[derive(Debug)]
@@ -94,6 +95,9 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
     }
     provision_profile(&layout)?;
+    if !opts.expose_home {
+        harden_profiles(&layout)?;
+    }
 
     let (resolved_toolchain, probe) = match &opts.sdk {
         Some(sdk_name) => {
@@ -216,6 +220,43 @@ pub fn profile_dir(layout: &EnvironmentLayout) -> PathBuf {
         .join(crate::runops::WINDOWS_USER)
 }
 
+pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
+    let drive_c = layout.drive_c();
+    let users = drive_c.join("users");
+    let mut trimmed = 0;
+    let entries = match fs::read_dir(&users) {
+        Ok(e) => e,
+        Err(_) => return Ok(0),
+    };
+    for user in entries.flatten() {
+        let udir = user.path();
+        if !udir.is_dir() {
+            continue;
+        }
+        let inner = match fs::read_dir(&udir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in inner.flatten() {
+            let link = entry.path();
+            let Ok(target) = fs::read_link(&link) else {
+                continue;
+            };
+            let resolved = if target.is_absolute() {
+                target
+            } else {
+                udir.join(target)
+            };
+            if !resolved.starts_with(&drive_c) {
+                fs::remove_file(&link).map_err(|e| Error::io(link.clone(), e))?;
+                fs::create_dir_all(&link).map_err(|e| Error::io(link.clone(), e))?;
+                trimmed += 1;
+            }
+        }
+    }
+    Ok(trimmed)
+}
+
 fn provision_profile(layout: &EnvironmentLayout) -> Result<()> {
     let profile = profile_dir(layout);
     for sub in [
@@ -324,6 +365,26 @@ fn fingerprint_sysroot(sysroot: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn harden_profiles_replaces_host_escaping_symlinks_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = EnvironmentLayout::new(tmp.path().join("env"));
+        let bob = layout.drive_c().join("users").join("bob");
+        fs::create_dir_all(&bob).unwrap();
+        let outside = tmp.path().join("host_home");
+        fs::create_dir_all(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, bob.join("Documents")).unwrap();
+        std::os::unix::fs::symlink("AppData", bob.join("SelfLink")).unwrap();
+        fs::create_dir_all(bob.join("Real")).unwrap();
+
+        let trimmed = harden_profiles(&layout).unwrap();
+        assert_eq!(trimmed, 1);
+        assert!(bob.join("Documents").is_dir());
+        assert!(fs::read_link(bob.join("Documents")).is_err());
+        assert!(fs::read_link(bob.join("SelfLink")).is_ok());
+        assert!(bob.join("Real").is_dir());
+    }
 
     #[test]
     fn open_missing_environment_errors() {
