@@ -305,6 +305,14 @@ enum EnvCmd {
     List,
     /// Recreate an environment from lsw.lock and verify it matches the pins.
     Restore { name: String },
+    /// Clone an environment (reflink copy where the filesystem supports it).
+    Clone {
+        src: String,
+        dst: String,
+        /// Overwrite the destination if it exists.
+        #[arg(long)]
+        force: bool,
+    },
     /// Delete an environment and its Wine prefix.
     Remove { name: String },
 }
@@ -479,6 +487,12 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Env(EnvCmd::Remove { name }) => {
             lsw_core::env_remove(&dirs, name)?;
             println!("Removed environment '{name}'");
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Env(EnvCmd::Clone { src, dst, force }) => {
+            let env = lsw_core::clone_env(&dirs, src, dst, *force)?;
+            println!("Cloned environment '{src}' to '{}'", env.name);
             Ok(ExitCode::SUCCESS)
         }
 
