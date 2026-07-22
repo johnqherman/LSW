@@ -19,6 +19,7 @@ pub mod psops;
 pub mod registryops;
 pub mod runops;
 pub mod rustops;
+pub mod sbomops;
 pub mod sdkops;
 pub mod serviceops;
 pub mod testops;
