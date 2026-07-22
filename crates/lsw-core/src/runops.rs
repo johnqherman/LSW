@@ -91,6 +91,30 @@ pub fn run(
 ) -> Result<RunReport> {
     let resolved = resolve_program(program, domain)?;
 
+    if domain != Domain::Host
+        && let ResolvedProgram::HostPath(p) = &resolved
+        && is_msi(p)
+    {
+        if let Some(pr) = project {
+            buildops::check_lock(pr, env)?;
+        }
+        let mut msi_args = vec!["/i".to_owned(), z_drive_path(p)];
+        msi_args.extend(args.iter().cloned());
+        let status = WineRuntime.execute(&ExecutionRequest {
+            program: PathBuf::from("msiexec"),
+            args: msi_args,
+            prefix: env.layout.prefix(),
+            cwd: windows_cwd(env, project),
+            env: windows_env(env, project),
+            sandbox: None,
+            display: lsw_runtime::DisplayMode::Inherit,
+        })?;
+        return Ok(RunReport {
+            domain: Domain::Windows,
+            status,
+        });
+    }
+
     let mut is_gui: Option<bool> = None;
 
     let (chosen, launch) = match resolved {
@@ -167,6 +191,15 @@ pub fn run(
 }
 
 pub const WINDOWS_USER: &str = "lsw";
+
+fn is_msi(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("msi"))
+}
+
+fn z_drive_path(path: &Path) -> String {
+    format!("Z:{}", path.to_string_lossy().replace('/', "\\"))
+}
 
 fn processor_architecture(arch: TargetArch) -> &'static str {
     match arch {
@@ -310,6 +343,17 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn msi_detection_and_z_drive_mapping() {
+        assert!(is_msi(Path::new("/tmp/Setup.MSI")));
+        assert!(is_msi(Path::new("/a/b/installer.msi")));
+        assert!(!is_msi(Path::new("/a/b/app.exe")));
+        assert_eq!(
+            z_drive_path(Path::new("/home/u/x.msi")),
+            "Z:\\home\\u\\x.msi"
+        );
+    }
 
     #[test]
     fn env_overrides_applies_vars_and_resolves_present_secrets_only() {
