@@ -145,6 +145,8 @@ pub struct VerifySection {
     pub remote_dir: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identity_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dump_dir: Option<String>,
 }
 
 impl VerifySection {
@@ -153,6 +155,7 @@ impl VerifySection {
             && self.host.is_none()
             && self.remote_dir.is_none()
             && self.identity_file.is_none()
+            && self.dump_dir.is_none()
     }
 }
 

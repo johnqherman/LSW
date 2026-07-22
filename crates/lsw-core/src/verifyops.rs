@@ -22,6 +22,8 @@ pub struct AgentResult {
     pub exit_code: Option<i32>,
     pub stdout: String,
     pub stderr: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dump: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -113,7 +115,14 @@ pub fn run_on_host(project: &Project, artifacts: &[PathBuf]) -> Result<VerifyRep
     }
 
     let identity = cfg.identity_file.as_deref().map(expand_tilde);
-    run_ssh_plan(&host, &plan, identity.as_deref())
+    let dump_local = project.root.join("verify-dumps");
+    run_ssh_plan(
+        &host,
+        &plan,
+        identity.as_deref(),
+        cfg.dump_dir.as_deref(),
+        &dump_local,
+    )
 }
 
 pub fn crash_reason(exit_code: i32) -> Option<&'static str> {
@@ -180,7 +189,44 @@ fn validate_windows_name(name: &str) -> Result<()> {
     }
 }
 
-fn run_ssh_plan(host: &str, plan: &AgentPlan, identity: Option<&str>) -> Result<VerifyReport> {
+fn collect_dump(
+    host: &str,
+    identity: Option<&str>,
+    dump_remote: &str,
+    exe: &str,
+    dump_local: &std::path::Path,
+) -> Option<String> {
+    let list = Command::new("ssh")
+        .args(ssh_opts(identity))
+        .arg(host)
+        .arg(format!(
+            "cmd /c \"ping -n 3 127.0.0.1 >nul & dir /b /o-d \"{dump_remote}\\{exe}.*.dmp\"\""
+        ))
+        .output()
+        .ok()?;
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    let name = stdout.lines().find_map(|l| {
+        let t = l.trim();
+        (!t.is_empty() && t.to_ascii_lowercase().ends_with(".dmp")).then(|| t.to_owned())
+    })?;
+    std::fs::create_dir_all(dump_local).ok()?;
+    let dest = dump_local.join(&name);
+    let scp = Command::new("scp")
+        .args(ssh_opts(identity))
+        .arg(format!("{host}:{dump_remote}\\{name}"))
+        .arg(&dest)
+        .output()
+        .ok()?;
+    scp.status.success().then(|| dest.display().to_string())
+}
+
+fn run_ssh_plan(
+    host: &str,
+    plan: &AgentPlan,
+    identity: Option<&str>,
+    dump_remote: Option<&str>,
+    dump_local: &std::path::Path,
+) -> Result<VerifyReport> {
     let mkdir = Command::new("ssh")
         .args(ssh_opts(identity))
         .arg(host)
@@ -257,11 +303,18 @@ fn run_ssh_plan(host: &str, plan: &AgentPlan, identity: Option<&str>) -> Result<
         if remote_code != Some(0) {
             all_passed = false;
         }
+        let dump = match (dump_remote, remote_code) {
+            (Some(dir), Some(code)) if crash_reason(code).is_some() => {
+                collect_dump(host, identity, dir, program, dump_local)
+            }
+            _ => None,
+        };
         results.push(AgentResult {
             artifact: program.clone(),
             exit_code: remote_code,
             stdout,
             stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+            dump,
         });
     }
 
