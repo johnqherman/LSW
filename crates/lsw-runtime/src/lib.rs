@@ -44,6 +44,19 @@ pub enum RuntimeError {
          re-run with WINEDEBUG unset (pass it in the request env) for more diagnostics"
     )]
     ExecutionFailed { detail: String },
+
+    #[error("LSW1507: process {pid} is not running in this environment")]
+    ProcessNotInEnvironment { pid: u32 },
+}
+
+pub fn process_in_prefix(pid: u32, prefix: &Path) -> bool {
+    let Ok(environ) = std::fs::read(format!("/proc/{pid}/environ")) else {
+        return false;
+    };
+    let needle = format!("WINEPREFIX={}", prefix.display());
+    environ
+        .split(|b| *b == 0)
+        .any(|entry| entry == needle.as_bytes())
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -187,6 +200,8 @@ pub trait RuntimeProvider {
     fn prepare(&self, prefix: &Path) -> Result<(), RuntimeError>;
 
     fn execute(&self, req: &ExecutionRequest) -> Result<ExitStatus, RuntimeError>;
+
+    fn kill(&self, prefix: &Path, pid: u32) -> Result<(), RuntimeError>;
 
     fn diagnostics(&self, prefix: &Path) -> RuntimeDiagnostics;
 }
@@ -436,6 +451,17 @@ impl RuntimeProvider for WineRuntime {
             })
     }
 
+    fn kill(&self, prefix: &Path, pid: u32) -> Result<(), RuntimeError> {
+        if !process_in_prefix(pid, prefix) {
+            return Err(RuntimeError::ProcessNotInEnvironment { pid });
+        }
+        let rc = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+        if rc != 0 {
+            return Err(RuntimeError::ProcessNotInEnvironment { pid });
+        }
+        Ok(())
+    }
+
     fn diagnostics(&self, prefix: &Path) -> RuntimeDiagnostics {
         let resolved = self.resolve().ok();
         RuntimeDiagnostics {
@@ -609,6 +635,15 @@ mod tests {
             .find(|(k, _)| k == "WINEDEBUG")
             .map(|(_, v)| v.as_str());
         assert_eq!(last_winedebug, Some("+loaddll"));
+    }
+
+    #[test]
+    fn kill_rejects_process_outside_prefix() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = WineRuntime
+            .kill(dir.path(), std::process::id())
+            .unwrap_err();
+        assert!(err.to_string().starts_with("LSW1507"));
     }
 
     #[test]

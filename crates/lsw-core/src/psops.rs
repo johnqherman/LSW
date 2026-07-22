@@ -3,6 +3,8 @@ use std::path::Path;
 
 use serde::Serialize;
 
+use lsw_runtime::RuntimeProvider;
+
 use crate::envops::Environment;
 use crate::error::{Error, Result};
 
@@ -55,26 +57,12 @@ fn process_uses_prefix(pid: u32, prefix: &Path) -> bool {
 
 pub fn kill(env: &Environment, pid: u32) -> Result<()> {
     let prefix = env.layout.prefix();
-    if !process_uses_prefix(pid, &prefix) {
-        return Err(Error::ProcessNotInEnvironment {
+    lsw_runtime::WineRuntime
+        .kill(&prefix, pid)
+        .map_err(|_| Error::ProcessNotInEnvironment {
             pid,
             environment: env.name.clone(),
-        });
-    }
-    if !process_uses_prefix(pid, &prefix) {
-        return Err(Error::ProcessNotInEnvironment {
-            pid,
-            environment: env.name.clone(),
-        });
-    }
-    let rc = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
-    if rc != 0 {
-        return Err(Error::ProcessNotInEnvironment {
-            pid,
-            environment: env.name.clone(),
-        });
-    }
-    Ok(())
+        })
 }
 
 pub fn kill_all(env: &Environment) -> Result<()> {
