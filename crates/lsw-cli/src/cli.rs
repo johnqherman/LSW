@@ -221,6 +221,9 @@ pub(crate) enum Cmd {
     /// First-class Rust support.
     #[command(subcommand)]
     Rust(RustCmd),
+    /// C#/.NET support (console, self-contained; managed, not native).
+    #[command(subcommand)]
+    Dotnet(DotnetCmd),
     /// Talk to the optional lswd daemon.
     #[command(subcommand)]
     Daemon(DaemonCmd),
@@ -312,6 +315,14 @@ pub(crate) enum RustCmd {
     /// Scaffold a Rust project wired for Windows targeting.
     Init { name: Option<String> },
     /// Report Rust->Windows toolchain readiness for the active environment.
+    Doctor,
+}
+
+#[derive(Subcommand)]
+pub(crate) enum DotnetCmd {
+    /// Scaffold a C# console project wired for Windows targeting.
+    Init { name: Option<String> },
+    /// Report C#/.NET->Windows toolchain readiness for the active environment.
     Doctor,
 }
 

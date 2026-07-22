@@ -113,9 +113,27 @@ build system automatically. You can also set an explicit `[build]` command in
 `lsw.toml`. LSW gives generated cross-toolchain files to CMake and Meson. LSW
 gives the cross `CC`, `CXX`, `CFLAGS`, and `LDFLAGS` to all build systems.
 
-LSW also finds **Zig** (`build.zig`) and **.NET** (`.csproj`/`.sln`) projects
-automatically. `lsw build` runs `zig build` and `dotnet publish` for the
-Windows target of the environment.
+LSW also finds **Zig** (`build.zig`) and **.NET** (`.csproj`/`.sln`/`.fsproj`)
+projects automatically. `lsw build` runs `zig build` and `dotnet publish -r
+<rid> --self-contained` for the Windows target of the environment.
+
+LSW supports **C#** (`.csproj` found automatically). The scope is console apps
+and self-contained apps:
+
+```
+lsw dotnet init hello-cs && cd hello-cs # scaffold a C# console project
+lsw env create win && lsw build         # dotnet publish -r <rid> --self-contained
+lsw run bin/.../hello-cs.exe            # runs under Wine
+lsw dotnet doctor                       # report C#->Windows toolchain readiness
+```
+
+Builds are self-contained by default. Thus the artifact runs under Wine
+without a .NET runtime in the prefix (LSW ships no runtime). C# is managed
+code. It is not compiled to native code as the other languages are (cross-OS
+NativeAOT is not supported). The native apphost launcher contains the runtime.
+Wine gives bad support to the GUI stacks (WPF and WinForms). The supported
+path is console and service apps. Use `lsw verify --native-windows` to get a
+real Windows verdict.
 
 **Rust** is a first-class language (`Cargo.toml` found automatically):
 

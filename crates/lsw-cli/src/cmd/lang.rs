@@ -2,7 +2,7 @@ use std::process::ExitCode;
 
 use lsw_core::Dirs;
 
-use crate::cli::{Format, RustCmd, SdkCmd};
+use crate::cli::{DotnetCmd, Format, RustCmd, SdkCmd};
 use crate::{active_env, cwd};
 
 pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
@@ -36,6 +36,44 @@ pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
                 println!("  Linker            {}", mark(report.linker));
                 println!("  CRT               {}", mark(report.crt));
                 println!("  Windows imports   {}", mark(report.windows_imports));
+                println!("  Runtime execution {}", mark(report.runtime_execution));
+                println!("  Native validation {}", mark(report.native_validation));
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+    }
+}
+
+pub(crate) fn dotnet(op: &DotnetCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
+    match op {
+        DotnetCmd::Init { name } => {
+            let report = lsw_core::dotnetops::init(&cwd(), name.as_deref())?;
+            println!("Initialized LSW C# project at {}", report.root.display());
+            for f in &report.created {
+                println!("  created {}", f.display());
+            }
+            println!("Next: lsw env create <name> && lsw build");
+            Ok(ExitCode::SUCCESS)
+        }
+
+        DotnetCmd::Doctor => {
+            let (_p, env) = active_env(dirs)?;
+            let report = lsw_core::dotnetops::doctor(&env)?;
+            if format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("serializes")
+                );
+            } else {
+                let mark = |c: lsw_core::dotnetops::Check| match c {
+                    lsw_core::dotnetops::Check::Ok => "OK",
+                    lsw_core::dotnetops::Check::NotConfigured => "NOT CONFIGURED",
+                    lsw_core::dotnetops::Check::Missing => "MISSING",
+                };
+                println!("LSW C# Doctor  (RID {})\n", report.target);
+                println!("  .NET SDK          {}", mark(report.sdk));
+                println!("  Runtime ID        {}", mark(report.runtime_identifier));
+                println!("  Self-contained    {}", mark(report.self_contained));
                 println!("  Runtime execution {}", mark(report.runtime_execution));
                 println!("  Native validation {}", mark(report.native_validation));
             }
