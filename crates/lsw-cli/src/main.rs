@@ -1432,7 +1432,10 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 if let Some(probe) = lsw_core::verifyops::probe_imports(&p, program)? {
                     lsw_core::compatops::apply_native(&mut report, &probe);
                 }
-                Some(lsw_core::verifyops::run_on_host(&p, &[program.clone()])?)
+                Some(lsw_core::verifyops::run_on_host(
+                    &p,
+                    std::slice::from_ref(program),
+                )?)
             } else {
                 None
             };
