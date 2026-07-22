@@ -12,6 +12,16 @@ with isolated per-environment Wine prefixes, declarative `lsw.toml` project
 configuration, `lsw.lock` reproducibility pinning, and deterministic
 Linux<->Windows path mapping. C, C++, and Rust are first-class languages.
 
+## Install
+
+```
+cargo install lsw && lsw install
+```
+
+`cargo install lsw` puts the `lsw` and `lswd` binaries on your `PATH`;
+`lsw install` adds shell completions (bash/zsh/fish) and man pages. Just
+`cargo install lsw` alone is enough if you skip the shell integration.
+
 ## Quickstart
 
 ```
