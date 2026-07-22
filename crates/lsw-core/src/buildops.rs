@@ -76,7 +76,21 @@ pub enum BuildSystem {
     Make,
     Ninja,
     Meson,
+    Zig,
+    Dotnet,
     Explicit,
+}
+
+fn has_dotnet_project(root: &Path) -> bool {
+    std::fs::read_dir(root)
+        .map(|entries| {
+            entries.flatten().any(|e| {
+                let name = e.file_name();
+                let name = name.to_string_lossy();
+                name.ends_with(".csproj") || name.ends_with(".sln") || name.ends_with(".fsproj")
+            })
+        })
+        .unwrap_or(false)
 }
 
 fn detect_build_system(root: &Path) -> Option<BuildSystem> {
@@ -84,8 +98,12 @@ fn detect_build_system(root: &Path) -> Option<BuildSystem> {
         Some(BuildSystem::Cmake)
     } else if root.join("meson.build").is_file() {
         Some(BuildSystem::Meson)
+    } else if root.join("build.zig").is_file() {
+        Some(BuildSystem::Zig)
     } else if root.join("Cargo.toml").is_file() {
         Some(BuildSystem::Cargo)
+    } else if has_dotnet_project(root) {
+        Some(BuildSystem::Dotnet)
     } else if root.join("build.ninja").is_file() {
         Some(BuildSystem::Ninja)
     } else if root.join("Makefile").is_file() || root.join("makefile").is_file() {
@@ -102,7 +120,28 @@ fn build_system_from_name(name: &str) -> Option<BuildSystem> {
         "make" => Some(BuildSystem::Make),
         "ninja" => Some(BuildSystem::Ninja),
         "meson" => Some(BuildSystem::Meson),
+        "zig" => Some(BuildSystem::Zig),
+        "dotnet" => Some(BuildSystem::Dotnet),
         _ => None,
+    }
+}
+
+fn zig_target(arch: TargetArch) -> Option<&'static str> {
+    match arch {
+        TargetArch::X86_64 => Some("x86_64-windows-gnu"),
+        TargetArch::X86 => Some("x86-windows-gnu"),
+        TargetArch::Aarch64 => Some("aarch64-windows-gnu"),
+        TargetArch::Armv7 => Some("arm-windows-gnu"),
+        TargetArch::Arm64Ec => None,
+    }
+}
+
+fn dotnet_rid(arch: TargetArch) -> Option<&'static str> {
+    match arch {
+        TargetArch::X86_64 => Some("win-x64"),
+        TargetArch::X86 => Some("win-x86"),
+        TargetArch::Aarch64 | TargetArch::Arm64Ec => Some("win-arm64"),
+        TargetArch::Armv7 => None,
     }
 }
 
@@ -216,6 +255,49 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
         BuildSystem::Ninja => {
             run_step(project, env, &tc, &["ninja".to_owned()], &mut commands)?;
             artifact_dir = project.root.clone();
+        }
+        BuildSystem::Zig => {
+            let target = zig_target(env.manifest.target_arch).ok_or_else(|| {
+                Error::RustTargetUnavailable {
+                    arch: env.manifest.target_arch.to_string(),
+                }
+            })?;
+            run_step(
+                project,
+                env,
+                &tc,
+                &[
+                    "zig".to_owned(),
+                    "build".to_owned(),
+                    format!("-Dtarget={target}"),
+                ],
+                &mut commands,
+            )?;
+            artifact_dir = project.root.join("zig-out");
+        }
+        BuildSystem::Dotnet => {
+            let rid = dotnet_rid(env.manifest.target_arch).ok_or_else(|| {
+                Error::RustTargetUnavailable {
+                    arch: env.manifest.target_arch.to_string(),
+                }
+            })?;
+            run_step(
+                project,
+                env,
+                &tc,
+                &[
+                    "dotnet".to_owned(),
+                    "publish".to_owned(),
+                    "-c".to_owned(),
+                    "Debug".to_owned(),
+                    "-r".to_owned(),
+                    rid.to_owned(),
+                    "--self-contained".to_owned(),
+                    "false".to_owned(),
+                ],
+                &mut commands,
+            )?;
+            artifact_dir = project.root.join("bin");
         }
         BuildSystem::Meson => {
             let cross_file = env.layout.root.join("meson-cross.ini");

@@ -82,7 +82,7 @@ enum Cmd {
     Use { name: String },
     /// Build Windows artifacts using native Linux tools.
     Build {
-        /// Force a build system (cmake, cargo, make, ninja, meson).
+        /// Force a build system (cmake, cargo, make, ninja, meson, zig, dotnet).
         #[arg(long)]
         system: Option<String>,
         /// Refresh lsw.lock instead of failing on drift.
