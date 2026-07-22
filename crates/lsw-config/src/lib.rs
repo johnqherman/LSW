@@ -36,6 +36,14 @@ pub enum ConfigError {
     ProjectNotFound { start: PathBuf },
     #[error("LSW1006: cannot determine home directory")]
     NoHome,
+    #[error(
+        "LSW1007: {} was created by a newer LSW (format {found}, this build supports {supported}); upgrade LSW or recreate the environment", path.display()
+    )]
+    UnsupportedFormat {
+        path: PathBuf,
+        found: u32,
+        supported: u32,
+    },
 }
 
 impl ConfigError {
@@ -401,7 +409,15 @@ pub struct ResolvedRuntime {
 
 impl EnvironmentManifest {
     pub fn load(path: &Path) -> Result<Self> {
-        read_toml(path)
+        let manifest: Self = read_toml(path)?;
+        if manifest.format > ENVIRONMENT_FORMAT_VERSION {
+            return Err(ConfigError::UnsupportedFormat {
+                path: path.to_path_buf(),
+                found: manifest.format,
+                supported: ENVIRONMENT_FORMAT_VERSION,
+            });
+        }
+        Ok(manifest)
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
@@ -605,6 +621,21 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let err = ProjectManifest::discover(dir.path()).unwrap_err();
         assert!(err.to_string().contains("LSW1005"));
+    }
+
+    #[test]
+    fn environment_manifest_rejects_newer_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(ENVIRONMENT_MANIFEST);
+        let toml = format!(
+            "name = \"e\"\nformat = {}\ntarget_arch = \"x86_64\"\n\
+             [toolchain]\nprovider = \"llvm-mingw\"\nversion = \"1\"\ncc = \"/cc\"\ncxx = \"/cxx\"\nsysroot = \"/s\"\n\
+             [runtime]\nprovider = \"wine\"\nversion = \"9\"\nexecutable = \"/wine\"\n",
+            ENVIRONMENT_FORMAT_VERSION + 1
+        );
+        fs::write(&path, toml).unwrap();
+        let err = EnvironmentManifest::load(&path).unwrap_err();
+        assert!(err.to_string().contains("LSW1007"));
     }
 
     #[test]
