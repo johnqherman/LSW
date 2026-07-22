@@ -229,6 +229,12 @@ enum Cmd {
     Doctor,
     /// Generate shell completion scripts (bash, zsh, fish, powershell, elvish).
     Completions { shell: clap_complete::Shell },
+    /// Generate man pages (top-level to stdout, or all pages into --dir).
+    Man {
+        /// Directory to write lsw.1 and lsw-<subcommand>.1 into.
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
     /// Explain an LSW#### error code.
     Explain { code: String },
 }
@@ -488,6 +494,16 @@ fn main() -> ExitCode {
 
 fn cwd() -> PathBuf {
     std::env::current_dir().expect("current directory must exist")
+}
+
+fn write_man_page(cmd: &clap::Command, dir: &std::path::Path, name: &str) -> lsw_core::Result<()> {
+    let path = dir.join(format!("{name}.1"));
+    let mut buf = Vec::new();
+    clap_mangen::Man::new(cmd.clone())
+        .title(name.to_uppercase())
+        .render(&mut buf)
+        .map_err(|e| lsw_core::Error::io(path.clone(), e))?;
+    std::fs::write(&path, buf).map_err(|e| lsw_core::Error::io(path, e))
 }
 
 fn print_dep_tree(node: &lsw_core::depsops::DepNode, depth: usize) {
@@ -1482,6 +1498,28 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Completions { shell } => {
             let mut cmd = Cli::command();
             clap_complete::generate(*shell, &mut cmd, "lsw", &mut std::io::stdout());
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Man { dir } => {
+            let cmd = Cli::command();
+            match dir {
+                None => {
+                    clap_mangen::Man::new(cmd)
+                        .render(&mut std::io::stdout())
+                        .map_err(|e| lsw_core::Error::io(PathBuf::from("<stdout>"), e))?;
+                }
+                Some(dir) => {
+                    std::fs::create_dir_all(dir)
+                        .map_err(|e| lsw_core::Error::io(dir.clone(), e))?;
+                    write_man_page(&cmd, dir, "lsw")?;
+                    for sub in cmd.get_subcommands() {
+                        let name = format!("lsw-{}", sub.get_name());
+                        write_man_page(sub, dir, &name)?;
+                    }
+                    println!("wrote man pages to {}", dir.display());
+                }
+            }
             Ok(ExitCode::SUCCESS)
         }
 
