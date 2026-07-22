@@ -912,6 +912,9 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                         .map(|w| format!("  ({w})"))
                         .unwrap_or_default();
                     println!("  {:<24} exit {:?}{reason}", r.artifact, r.exit_code);
+                    if let Some(dump) = &r.dump {
+                        println!("      crash dump: {dump}");
+                    }
                 }
                 println!("Status: {status}");
                 println!("{}", report.detail);
