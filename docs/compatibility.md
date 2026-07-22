@@ -27,3 +27,8 @@ local Wine result. Without a configured host the native result stays UNKNOWN;
 LSW never reports a Wine pass as a Windows pass. Failing artifacts report their
 Windows exit code, and common crash codes are decoded (access violation, a
 missing DLL, wrong architecture, and so on).
+
+When the `[verify]` host has WER LocalDumps configured with `dump_dir` set, a
+crashing artifact's minidump is pulled back over scp and decoded: the verify
+output names the exception, the faulting module and offset, and the crash
+address. Any minidump can also be decoded directly with `lsw crash <dump>`.
