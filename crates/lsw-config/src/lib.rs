@@ -74,7 +74,7 @@ pub struct ProjectManifest {
     pub toolchain: ToolchainSection,
     #[serde(default)]
     pub runtime: RuntimeSection,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "EnvironmentSection::is_empty")]
     pub environment: EnvironmentSection,
     #[serde(default)]
     pub filesystem: FilesystemSection,
@@ -84,11 +84,11 @@ pub struct ProjectManifest {
     pub test: Option<CommandSection>,
     #[serde(default)]
     pub sandbox: SandboxSection,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "VerifySection::is_empty")]
     pub verify: VerifySection,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "EnvSection::is_empty")]
     pub env: EnvSection,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "RegistrySection::is_empty")]
     pub registry: RegistrySection,
 }
 
@@ -97,6 +97,12 @@ pub struct ProjectManifest {
 pub struct RegistrySection {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub seed: Vec<RegistrySeed>,
+}
+
+impl RegistrySection {
+    fn is_empty(&self) -> bool {
+        self.seed.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -122,6 +128,12 @@ pub struct EnvSection {
     pub secret: BTreeMap<String, String>,
 }
 
+impl EnvSection {
+    fn is_empty(&self) -> bool {
+        self.vars.is_empty() && self.secret.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct VerifySection {
@@ -133,6 +145,15 @@ pub struct VerifySection {
     pub remote_dir: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identity_file: Option<String>,
+}
+
+impl VerifySection {
+    fn is_empty(&self) -> bool {
+        self.transport.is_none()
+            && self.host.is_none()
+            && self.remote_dir.is_none()
+            && self.identity_file.is_none()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -308,6 +329,12 @@ pub struct EnvironmentSection {
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
+}
+
+impl EnvironmentSection {
+    fn is_empty(&self) -> bool {
+        self.name.is_none() && self.profile.is_none()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -615,6 +642,16 @@ mod tests {
         let loaded = ProjectManifest::load(&path).unwrap();
         assert_eq!(m, loaded);
         assert_eq!(loaded.toolchain.link, LinkMode::Dynamic);
+    }
+
+    #[test]
+    fn fresh_manifest_omits_empty_sections() {
+        let text = toml::to_string_pretty(&ProjectManifest::new("x")).unwrap();
+        for section in ["[verify]", "[env]", "[registry]", "[environment]"] {
+            assert!(!text.contains(section), "should not emit empty {section}");
+        }
+        let back: ProjectManifest = toml::from_str(&text).unwrap();
+        assert_eq!(back, ProjectManifest::new("x"));
     }
 
     #[test]
