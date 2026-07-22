@@ -93,6 +93,29 @@ fn has_dotnet_project(root: &Path) -> bool {
         .unwrap_or(false)
 }
 
+fn check_case_sensitivity(project: &Project) -> Result<()> {
+    let hazards = crate::caseops::hazards(&project.root);
+    if hazards.is_empty() {
+        return Ok(());
+    }
+    let detail = hazards
+        .iter()
+        .map(|h| format!("  {}: {}", h.dir, h.names.join(", ")))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if project.manifest.filesystem.case == lsw_config::CaseSensitivity::Strict {
+        return Err(Error::CaseCollision { detail });
+    }
+    for h in &hazards {
+        tracing::warn!(
+            dir = %h.dir,
+            names = %h.names.join(", "),
+            "case-insensitive filename collision: these clash on Windows"
+        );
+    }
+    Ok(())
+}
+
 fn detect_build_system(root: &Path) -> Option<BuildSystem> {
     if root.join("CMakeLists.txt").is_file() {
         Some(BuildSystem::Cmake)
@@ -161,6 +184,7 @@ pub struct BuildReport {
 }
 
 pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Result<BuildReport> {
+    check_case_sensitivity(project)?;
     envops::link_project(env, project)?;
     let lock_written = sync_lockfile(project, env, opts.update_lock)?;
     stamp_build_dir(project, env)?;
