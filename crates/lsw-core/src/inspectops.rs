@@ -11,6 +11,7 @@ pub struct InspectReport {
     pub info: PeInfo,
     pub details: lsw_pe::PeDetails,
     pub hardening: lsw_pe::Hardening,
+    pub resources: lsw_pe::Resources,
     pub imports: Vec<ImportStatus>,
 }
 
@@ -41,10 +42,12 @@ pub fn inspect(path: &Path, env: Option<&Environment>) -> Result<InspectReport> 
 
     let details = lsw_pe::details(path)?;
     let hardening = lsw_pe::hardening(path)?;
+    let resources = lsw_pe::resources(path).unwrap_or_default();
     Ok(InspectReport {
         info,
         details,
         hardening,
+        resources,
         imports,
     })
 }
