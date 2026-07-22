@@ -131,11 +131,16 @@ lsw env create arm64 --arch aarch64
 lsw build                                           # -> build/app.exe (ARM64 PE)
 ```
 
-Building an `aarch64` PE works on an `x86_64` host, but *running* it locally
-does not: Wine cannot execute a foreign-architecture PE without CPU
-translation, which lives outside LSW's core. `lsw run` fails honestly ("Bad
-format") rather than pretending; verify ARM64 output with `file` /
-`lsw inspect`, or on real hardware via `lsw verify --native-windows`.
+Building an `aarch64` PE works on an `x86_64` host. Running it locally needs CPU
+translation: when the target CPU family differs from the host, `lsw run`
+automatically wraps execution in qemu user-mode emulation, invoking
+`qemu-<arch>` around an architecture-specific Wine build. Provide the emulator
+(`qemu-aarch64`, `qemu-arm`) and point `LSW_WINE_AARCH64` (or `LSW_WINE_ARM`) at
+the matching Wine; set `QEMU_LD_PREFIX` to that Wine's sysroot if needed. Without
+those, `lsw run` fails honestly with an actionable error naming what to install,
+rather than pretending. Same-family targets (an `x86` PE on `x86_64`) run
+directly with no emulator. You can also verify ARM64 output on real hardware via
+`lsw verify --native-windows`.
 
 A binary produced by `lsw build` is a genuine Windows PE executable; running
 it under LSW exercises the local compatibility runtime (Wine). LSW never
