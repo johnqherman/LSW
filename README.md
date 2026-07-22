@@ -74,9 +74,11 @@ default; `gui` uses WinMain, `dll` builds a shared library).
   (`transport = "ssh"|"winrm"`; WinRM reads `LSW_WINRM_PASSWORD`), yielding an
   honest `WINDOWS_VERIFIED` / `WINDOWS_UNAVAILABLE` status distinct from the
   local Wine result.
-- **Integration** - `lsw ide env` (JSON for editor plugins), `lsw dap` (a Debug
-  Adapter Protocol server over stdio), `lsw plugin list` (out-of-process
-  `lsw-provider-*` JSON-RPC providers), `lswd` + `lsw daemon status|stop` (an
+- **Integration** - `lsw ide env` (JSON for editor plugins; VS Code, Neovim, and
+  JetBrains front-ends live in `editors/`), `lsw dap` (a Debug Adapter
+  Protocol server over stdio), `lsw plugin list` (out-of-process
+  `lsw-provider-*` JSON-RPC providers; reference implementation in
+  `crates/lsw-provider-example`), `lswd` + `lsw daemon status|stop` (an
   optional daemon; not required for normal use).
 - **Ergonomics / tooling** - `lsw completions bash|zsh|fish|powershell|elvish`,
   `lsw man [--dir <out>]`, `lsw explain LSW2004` (explain an error code),
