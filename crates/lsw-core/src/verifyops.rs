@@ -91,10 +91,14 @@ pub fn run_on_host(project: &Project, artifacts: &[PathBuf]) -> Result<VerifyRep
     };
 
     let transport = cfg.transport.as_deref().unwrap_or("ssh");
-    if transport != "ssh" {
-        return Err(Error::UnsupportedTransport {
-            transport: transport.to_owned(),
-        });
+    match transport {
+        "ssh" => {}
+        "winrm" => return crate::winrmops::run_on_host(project, artifacts),
+        other => {
+            return Err(Error::UnsupportedTransport {
+                transport: other.to_owned(),
+            });
+        }
     }
     if which("ssh").is_none() {
         return Err(Error::ToolMissing {
@@ -494,7 +498,7 @@ fn expand_tilde(path: &str) -> String {
     }
 }
 
-fn validate_windows_dir(dir: &str) -> Result<()> {
+pub(crate) fn validate_windows_dir(dir: &str) -> Result<()> {
     let bad = || Error::UnsafeRemotePath {
         value: dir.to_owned(),
     };
@@ -515,7 +519,7 @@ fn validate_windows_dir(dir: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_windows_name(name: &str) -> Result<()> {
+pub(crate) fn validate_windows_name(name: &str) -> Result<()> {
     let ok = !name.is_empty()
         && name != "."
         && name != ".."
@@ -725,7 +729,7 @@ fn ssh_opts(identity: Option<&str>) -> Vec<String> {
     opts
 }
 
-fn default_remote_dir(project: &Project) -> String {
+pub(crate) fn default_remote_dir(project: &Project) -> String {
     format!("C:\\lsw-verify\\{}", project.manifest.project.name)
 }
 

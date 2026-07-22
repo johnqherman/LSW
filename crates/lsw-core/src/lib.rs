@@ -33,6 +33,7 @@ pub mod testops;
 pub mod traceops;
 pub mod verifyops;
 pub mod watchops;
+pub mod winrmops;
 
 pub use buildops::{BuildOptions, BuildReport, BuildSystem, build};
 pub use doctorops::{DoctorReport, Section, Status, doctor};

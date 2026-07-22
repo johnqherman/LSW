@@ -70,8 +70,9 @@ default; `gui` uses WinMain, `dll` builds a shared library).
   gdb-remote stub any gdb/lldb can attach to); `lsw debug --native <pe>` runs the
   binary under cdb on the `[verify]` Windows host and returns a real backtrace.
 - **Native verification** - `lsw verify --native-windows` builds, then runs the
-  artifacts on a real Windows host over SSH (configured in `[verify]`), yielding
-  an honest `WINDOWS_VERIFIED` / `WINDOWS_UNAVAILABLE` status distinct from the
+  artifacts on a real Windows host (configured in `[verify]`) over SSH or WinRM
+  (`transport = "ssh"|"winrm"`; WinRM reads `LSW_WINRM_PASSWORD`), yielding an
+  honest `WINDOWS_VERIFIED` / `WINDOWS_UNAVAILABLE` status distinct from the
   local Wine result.
 - **Integration** - `lsw ide env` (JSON for editor plugins), `lsw dap` (a Debug
   Adapter Protocol server over stdio), `lsw plugin list` (out-of-process
