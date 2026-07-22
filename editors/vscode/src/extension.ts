@@ -1,0 +1,86 @@
+import * as vscode from "vscode";
+import { execFile } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
+
+interface IdeEnv {
+  target?: string;
+  compiler?: string;
+  includePaths?: string[];
+  defines?: string[];
+}
+
+function lswPath(): string {
+  return vscode.workspace.getConfiguration("lsw").get<string>("path", "lsw");
+}
+
+function runInTerminal(args: string[]): void {
+  const terminal = vscode.window.createTerminal("LSW");
+  terminal.show();
+  terminal.sendText([lswPath(), ...args].join(" "));
+}
+
+function configureIntelliSense(): void {
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    vscode.window.showErrorMessage("LSW: open a folder containing lsw.toml first");
+    return;
+  }
+  const root = folders[0].uri.fsPath;
+  execFile(lswPath(), ["--format", "json", "ide", "env"], { cwd: root }, (err, stdout) => {
+    if (err) {
+      vscode.window.showErrorMessage("lsw ide env failed: " + err.message);
+      return;
+    }
+    let env: IdeEnv;
+    try {
+      env = JSON.parse(stdout) as IdeEnv;
+    } catch {
+      vscode.window.showErrorMessage("could not parse lsw ide env output");
+      return;
+    }
+    const config = {
+      version: 4,
+      configurations: [
+        {
+          name: "LSW",
+          compilerPath: env.compiler ?? "",
+          includePath: (env.includePaths ?? []).concat(["${workspaceFolder}/**"]),
+          defines: env.defines ?? [],
+          intelliSenseMode: "linux-clang-x64"
+        }
+      ]
+    };
+    const dir = path.join(root, ".vscode");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "c_cpp_properties.json"), JSON.stringify(config, null, 2));
+    vscode.window.showInformationMessage("LSW: wrote .vscode/c_cpp_properties.json");
+  });
+}
+
+export function activate(context: vscode.ExtensionContext): void {
+  const register = (id: string, handler: (...args: unknown[]) => unknown): void => {
+    context.subscriptions.push(vscode.commands.registerCommand(id, handler));
+  };
+  register("lsw.build", () => runInTerminal(["build"]));
+  register("lsw.test", () => runInTerminal(["test"]));
+  register("lsw.verify", () => runInTerminal(["verify", "--native-windows"]));
+  register("lsw.run", async () => {
+    const program = await vscode.window.showInputBox({
+      prompt: "Program to run",
+      value: "build/app.exe"
+    });
+    if (program) {
+      runInTerminal(["run", program]);
+    }
+  });
+  register("lsw.configureIntelliSense", configureIntelliSense);
+
+  context.subscriptions.push(
+    vscode.debug.registerDebugAdapterDescriptorFactory("lsw", {
+      createDebugAdapterDescriptor: () => new vscode.DebugAdapterExecutable(lswPath(), ["dap"])
+    })
+  );
+}
+
+export function deactivate(): void {}
