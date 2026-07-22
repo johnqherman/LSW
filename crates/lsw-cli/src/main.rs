@@ -294,6 +294,12 @@ enum Cmd {
 enum DepsCmd {
     /// Print the transitive DLL dependency tree.
     Tree { file: PathBuf },
+    /// Install a mingw-w64 library (headers, import/static libs, DLLs).
+    Add { name: String },
+    /// Remove an installed library.
+    Remove { name: String },
+    /// List installed libraries.
+    List,
 }
 
 #[derive(Subcommand)]
@@ -1065,6 +1071,54 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 );
             } else {
                 print_dep_tree(&root, 0);
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Deps(DepsCmd::Add { name }) => {
+            let (p, _env) = active_env(&dirs)?;
+            let pkg = lsw_core::depsops::add(&p, &dirs, name)?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&pkg).expect("serializes")
+                );
+            } else {
+                println!(
+                    "{} added {} {}",
+                    color::green("+"),
+                    pkg.name,
+                    color::dim(&pkg.version)
+                );
+                println!("  headers and libraries under deps/; recorded in lsw.toml");
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Deps(DepsCmd::Remove { name }) => {
+            let (p, _env) = active_env(&dirs)?;
+            if lsw_core::depsops::remove(&p, name)? {
+                println!("{} removed {name}", color::yellow("-"));
+            } else {
+                println!("{name} is not an installed dependency");
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Deps(DepsCmd::List) => {
+            let (p, _env) = active_env(&dirs)?;
+            let deps = lsw_core::depsops::list(&p);
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&deps).expect("serializes")
+                );
+            } else if deps.is_empty() {
+                println!("no dependencies (add one with: lsw deps add <name>)");
+            } else {
+                for d in &deps {
+                    println!("  {:<20} {}", d.name, d.version);
+                }
             }
             Ok(ExitCode::SUCCESS)
         }

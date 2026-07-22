@@ -90,6 +90,8 @@ pub struct ProjectManifest {
     pub env: EnvSection,
     #[serde(default, skip_serializing_if = "RegistrySection::is_empty")]
     pub registry: RegistrySection,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub dependencies: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
