@@ -33,10 +33,13 @@ enum Format {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Scaffold a new project (lsw.toml + CMake hello template).
+    /// Scaffold a new project (lsw.toml + CMake template).
     Init {
         /// Project name; omit to initialize the current directory.
         name: Option<String>,
+        /// Project template.
+        #[arg(long, value_enum, default_value_t = TemplateArg::Console)]
+        template: TemplateArg,
     },
     /// Manage isolated Windows-target environments.
     #[command(subcommand)]
@@ -347,6 +350,23 @@ enum SandboxArg {
     Strict,
 }
 
+#[derive(Clone, Copy, ValueEnum)]
+enum TemplateArg {
+    Console,
+    Gui,
+    Dll,
+}
+
+impl From<TemplateArg> for lsw_core::Template {
+    fn from(value: TemplateArg) -> Self {
+        match value {
+            TemplateArg::Console => lsw_core::Template::Console,
+            TemplateArg::Gui => lsw_core::Template::Gui,
+            TemplateArg::Dll => lsw_core::Template::Dll,
+        }
+    }
+}
+
 fn sandbox_from(a: Option<SandboxArg>) -> lsw_core::Sandbox {
     match a {
         Some(SandboxArg::Strict) => lsw_core::Sandbox::Strict,
@@ -449,8 +469,8 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
     let dirs = Dirs::resolve()?;
 
     match &cli.command {
-        Cmd::Init { name } => {
-            let report = lsw_core::init(&cwd(), name.as_deref())?;
+        Cmd::Init { name, template } => {
+            let report = lsw_core::init(&cwd(), name.as_deref(), (*template).into())?;
             println!("Initialized LSW project at {}", report.root.display());
             for f in &report.created {
                 println!("  created {}", f.display());

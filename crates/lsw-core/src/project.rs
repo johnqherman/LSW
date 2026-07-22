@@ -35,11 +35,17 @@ impl Project {
     }
 }
 
-const TEMPLATE_MAIN: &str = r#"#include <windows.h>
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Template {
+    #[default]
+    Console,
+    Gui,
+    Dll,
+}
+
+const CONSOLE_MAIN: &str = r#"#include <windows.h>
 #include <stdio.h>
 
-// Console hello. For a GUI variant, switch WIN32_EXECUTABLE on in
-// CMakeLists.txt and use WinMain + MessageBoxA instead.
 int main(void) {
     printf("Hello from LSW\n");
     printf("Running on tick %lu\n", (unsigned long)GetTickCount());
@@ -47,18 +53,55 @@ int main(void) {
 }
 "#;
 
-const TEMPLATE_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
+const GUI_MAIN: &str = r#"#include <windows.h>
+
+int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
+    (void)inst; (void)prev; (void)cmd; (void)show;
+    MessageBoxA(NULL, "Hello from LSW", "LSW", MB_OK | MB_ICONINFORMATION);
+    return 0;
+}
+"#;
+
+const DLL_MAIN: &str = r#"#include <windows.h>
+
+__declspec(dllexport) int lsw_answer(void) {
+    return 42;
+}
+
+BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
+    (void)inst; (void)reason; (void)reserved;
+    return TRUE;
+}
+"#;
+
+const CONSOLE_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
 project({name} C)
 
 add_executable({name} src/main.c)
 
-# For a GUI application (no console window):
-# set_target_properties({name} PROPERTIES WIN32_EXECUTABLE ON)
-
-# `lsw test` runs these through the environment's Windows runtime.
 enable_testing()
 add_test(NAME {name}_runs COMMAND {name})
 "#;
+
+const GUI_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
+project({name} C)
+
+add_executable({name} WIN32 src/main.c)
+"#;
+
+const DLL_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
+project({name} C)
+
+add_library({name} SHARED src/main.c)
+"#;
+
+fn template_sources(template: Template) -> (&'static str, &'static str) {
+    match template {
+        Template::Console => (CONSOLE_CMAKE, CONSOLE_MAIN),
+        Template::Gui => (GUI_CMAKE, GUI_MAIN),
+        Template::Dll => (DLL_CMAKE, DLL_MAIN),
+    }
+}
 
 const TEMPLATE_GITIGNORE: &str = "build/\n";
 
@@ -68,7 +111,7 @@ pub struct InitReport {
     pub created: Vec<PathBuf>,
 }
 
-pub fn init(parent: &Path, name: Option<&str>) -> Result<InitReport> {
+pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<InitReport> {
     let (root, project_name) = match name {
         Some(n) => (parent.join(n), n.to_owned()),
         None => {
@@ -104,12 +147,13 @@ pub fn init(parent: &Path, name: Option<&str>) -> Result<InitReport> {
     ProjectManifest::new(&project_name).save(&manifest_path)?;
     created.push(manifest_path);
 
+    let (cmake, main_c) = template_sources(template);
     write_file(
         &root.join("CMakeLists.txt"),
-        &TEMPLATE_CMAKE.replace("{name}", &project_name),
+        &cmake.replace("{name}", &project_name),
         &mut created,
     )?;
-    write_file(&root.join("src/main.c"), TEMPLATE_MAIN, &mut created)?;
+    write_file(&root.join("src/main.c"), main_c, &mut created)?;
     let gitignore = root.join(".gitignore");
     if !gitignore.exists() {
         write_file(&gitignore, TEMPLATE_GITIGNORE, &mut created)?;
@@ -125,7 +169,7 @@ mod tests {
     #[test]
     fn init_named_creates_scaffold() {
         let dir = tempfile::tempdir().unwrap();
-        let report = init(dir.path(), Some("hello")).unwrap();
+        let report = init(dir.path(), Some("hello"), Template::Console).unwrap();
         assert_eq!(report.root, dir.path().join("hello"));
         assert!(report.root.join("lsw.toml").is_file());
         assert!(report.root.join("CMakeLists.txt").is_file());
@@ -136,11 +180,33 @@ mod tests {
     }
 
     #[test]
+    fn init_templates_pick_the_right_scaffold() {
+        let dir = tempfile::tempdir().unwrap();
+        init(dir.path(), Some("g"), Template::Gui).unwrap();
+        let g = fs::read_to_string(dir.path().join("g/CMakeLists.txt")).unwrap();
+        assert!(g.contains("WIN32"));
+        assert!(
+            fs::read_to_string(dir.path().join("g/src/main.c"))
+                .unwrap()
+                .contains("WinMain")
+        );
+
+        init(dir.path(), Some("d"), Template::Dll).unwrap();
+        let d = fs::read_to_string(dir.path().join("d/CMakeLists.txt")).unwrap();
+        assert!(d.contains("add_library") && d.contains("SHARED"));
+        assert!(
+            fs::read_to_string(dir.path().join("d/src/main.c"))
+                .unwrap()
+                .contains("dllexport")
+        );
+    }
+
+    #[test]
     fn init_in_place_uses_directory_name() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("myapp");
         fs::create_dir(&root).unwrap();
-        let report = init(&root, None).unwrap();
+        let report = init(&root, None, Template::Console).unwrap();
         let project = Project::discover(&report.root).unwrap();
         assert_eq!(project.manifest.project.name, "myapp");
     }
@@ -148,8 +214,8 @@ mod tests {
     #[test]
     fn init_refuses_double_init() {
         let dir = tempfile::tempdir().unwrap();
-        init(dir.path(), Some("x")).unwrap();
-        let err = init(dir.path(), Some("x")).unwrap_err();
+        init(dir.path(), Some("x"), Template::Console).unwrap();
+        let err = init(dir.path(), Some("x"), Template::Console).unwrap_err();
         assert!(err.to_string().contains("LSW2009"));
     }
 
