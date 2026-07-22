@@ -189,31 +189,46 @@ fn validate_windows_name(name: &str) -> Result<()> {
     }
 }
 
+fn newest_dump(host: &str, identity: Option<&str>, dump_remote: &str, exe: &str) -> Option<String> {
+    let out = Command::new("ssh")
+        .args(ssh_opts(identity))
+        .arg(host)
+        .arg(format!("cmd /c dir /b /o-d \"{dump_remote}\\{exe}.*.dmp\""))
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&out.stdout).lines().find_map(|l| {
+        let t = l.trim();
+        (!t.is_empty() && t.to_ascii_lowercase().ends_with(".dmp")).then(|| t.to_owned())
+    })
+}
+
 fn collect_dump(
     host: &str,
     identity: Option<&str>,
     dump_remote: &str,
     exe: &str,
+    before: Option<&str>,
     dump_local: &std::path::Path,
 ) -> Option<String> {
-    let list = Command::new("ssh")
-        .args(ssh_opts(identity))
-        .arg(host)
-        .arg(format!(
-            "cmd /c \"ping -n 3 127.0.0.1 >nul & dir /b /o-d \"{dump_remote}\\{exe}.*.dmp\"\""
-        ))
-        .output()
-        .ok()?;
-    let stdout = String::from_utf8_lossy(&list.stdout);
-    let name = stdout.lines().find_map(|l| {
-        let t = l.trim();
-        (!t.is_empty() && t.to_ascii_lowercase().ends_with(".dmp")).then(|| t.to_owned())
-    })?;
+    let mut name = None;
+    for attempt in 0..8 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+        if let Some(found) = newest_dump(host, identity, dump_remote, exe) {
+            if before != Some(found.as_str()) {
+                name = Some(found);
+                break;
+            }
+        }
+    }
+    let name = name?;
     std::fs::create_dir_all(dump_local).ok()?;
     let dest = dump_local.join(&name);
+    let remote_fwd = dump_remote.replace('\\', "/");
     let scp = Command::new("scp")
         .args(ssh_opts(identity))
-        .arg(format!("{host}:{dump_remote}\\{name}"))
+        .arg(format!("{host}:{remote_fwd}/{name}"))
         .arg(&dest)
         .output()
         .ok()?;
@@ -273,6 +288,7 @@ fn run_ssh_plan(
     let mut results = Vec::new();
     let mut all_passed = true;
     for program in &plan.run {
+        let dump_before = dump_remote.and_then(|dir| newest_dump(host, identity, dir, program));
         let sentinel = "__LSW_EXIT__";
         let remote_cmd = format!(
             "cmd /v:on /c \"cd /d \"{dir}\" && \"{prog}\" & echo {sentinel}!errorlevel!\"",
@@ -304,9 +320,14 @@ fn run_ssh_plan(
             all_passed = false;
         }
         let dump = match (dump_remote, remote_code) {
-            (Some(dir), Some(code)) if crash_reason(code).is_some() => {
-                collect_dump(host, identity, dir, program, dump_local)
-            }
+            (Some(dir), Some(code)) if crash_reason(code).is_some() => collect_dump(
+                host,
+                identity,
+                dir,
+                program,
+                dump_before.as_deref(),
+                dump_local,
+            ),
             _ => None,
         };
         results.push(AgentResult {
