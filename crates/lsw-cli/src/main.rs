@@ -203,6 +203,9 @@ enum Cmd {
         /// With --gdb: print connection info only, don't launch host gdb.
         #[arg(long, requires = "gdb")]
         no_start: bool,
+        /// Run on the [verify] Windows host under cdb for a real backtrace.
+        #[arg(long, conflicts_with_all = ["gdb", "no_start"])]
+        native: bool,
     },
     /// Run a Debug Adapter Protocol server over stdio for IDEs.
     Dap,
@@ -1274,8 +1277,40 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             args,
             gdb,
             no_start,
+            native,
         } => {
             let (p, env) = active_env(&dirs)?;
+            if *native {
+                match lsw_core::verifyops::native_backtrace(&p, program)? {
+                    None => {
+                        eprintln!(
+                            "no [verify] host configured in lsw.toml; native debugging needs a Windows host"
+                        );
+                        return Ok(ExitCode::FAILURE);
+                    }
+                    Some(bt) => {
+                        if cli.format == Format::Json {
+                            println!("{}", serde_json::to_string_pretty(&bt).expect("serializes"));
+                        } else {
+                            println!("Native debug on {}", bt.host);
+                            if let Some(e) = &bt.exception {
+                                println!("Exception: {e}");
+                            }
+                            if bt.frames.is_empty() {
+                                println!(
+                                    "(no stack frames captured; the program may not have crashed)"
+                                );
+                            } else {
+                                println!("Backtrace:");
+                                for f in &bt.frames {
+                                    println!("  #{:<2} {}", f.index, f.call_site);
+                                }
+                            }
+                        }
+                        return Ok(ExitCode::SUCCESS);
+                    }
+                }
+            }
             let status = lsw_core::debugops::debug(
                 &env,
                 Some(&p),
