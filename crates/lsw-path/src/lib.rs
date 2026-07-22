@@ -188,6 +188,22 @@ fn render_windows(drive: char, comps: &[impl AsRef<str>]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn windows_linux_roundtrip_under_project(
+            segs in proptest::collection::vec("[a-z0-9_]{1,8}", 1..6)
+        ) {
+            let drive_c = PathBuf::from("/data/lsw/environments/e1/prefix/drive_c");
+            let project = PathBuf::from("/home/alice/code/demo");
+            let mapper = PathMapper::for_environment(&drive_c, &project, "demo");
+            let host = project.join(segs.join("/"));
+            let win = mapper.to_windows(&host).unwrap();
+            prop_assert!(win.starts_with("C:\\src\\demo"));
+            prop_assert_eq!(mapper.to_linux(&win).unwrap(), host);
+        }
+    }
 
     fn env_mapper() -> (PathMapper, PathBuf, PathBuf) {
         let drive_c = PathBuf::from("/data/lsw/environments/e1/prefix/drive_c");

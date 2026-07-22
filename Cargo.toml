@@ -39,6 +39,7 @@ toml = "0.9"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tempfile = "3"
+proptest = "1"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
