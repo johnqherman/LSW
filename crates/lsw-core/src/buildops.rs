@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use lsw_config::{LinkMode, Lockfile, ResolvedToolchain};
+use lsw_config::{LinkMode, Lockfile, ResolvedToolchain, TargetArch};
 
 use crate::envops::{self, Environment};
 use crate::error::{Error, Result};
@@ -33,6 +33,30 @@ fn api_defines(api: &str) -> Vec<String> {
     }
 }
 
+fn meson_cpu_family(arch: TargetArch) -> &'static str {
+    match arch {
+        TargetArch::X86_64 => "x86_64",
+        TargetArch::X86 => "x86",
+        TargetArch::Aarch64 | TargetArch::Arm64Ec => "aarch64",
+        TargetArch::Armv7 => "arm",
+    }
+}
+
+fn write_meson_cross_file(
+    path: &Path,
+    tc: &ResolvedToolchain,
+    arch: TargetArch,
+) -> std::io::Result<()> {
+    let triple = arch.mingw_triple();
+    let family = meson_cpu_family(arch);
+    let text = format!(
+        "[binaries]\nc = '{cc}'\ncpp = '{cxx}'\nar = '{triple}-ar'\nstrip = '{triple}-strip'\nwindres = '{triple}-windres'\n\n[host_machine]\nsystem = 'windows'\ncpu_family = '{family}'\ncpu = '{family}'\nendian = 'little'\n",
+        cc = tc.cc.display(),
+        cxx = tc.cxx.display(),
+    );
+    fs::write(path, text)
+}
+
 fn effective_toolchain(env: &Environment, project: &Project) -> ResolvedToolchain {
     let mut tc = env.manifest.toolchain.clone();
     if project.manifest.toolchain.link == LinkMode::Dynamic {
@@ -49,7 +73,37 @@ fn effective_toolchain(env: &Environment, project: &Project) -> ResolvedToolchai
 pub enum BuildSystem {
     Cmake,
     Cargo,
+    Make,
+    Ninja,
+    Meson,
     Explicit,
+}
+
+fn detect_build_system(root: &Path) -> Option<BuildSystem> {
+    if root.join("CMakeLists.txt").is_file() {
+        Some(BuildSystem::Cmake)
+    } else if root.join("meson.build").is_file() {
+        Some(BuildSystem::Meson)
+    } else if root.join("Cargo.toml").is_file() {
+        Some(BuildSystem::Cargo)
+    } else if root.join("build.ninja").is_file() {
+        Some(BuildSystem::Ninja)
+    } else if root.join("Makefile").is_file() || root.join("makefile").is_file() {
+        Some(BuildSystem::Make)
+    } else {
+        None
+    }
+}
+
+fn build_system_from_name(name: &str) -> Option<BuildSystem> {
+    match name {
+        "cmake" => Some(BuildSystem::Cmake),
+        "cargo" => Some(BuildSystem::Cargo),
+        "make" => Some(BuildSystem::Make),
+        "ninja" => Some(BuildSystem::Ninja),
+        "meson" => Some(BuildSystem::Meson),
+        _ => None,
+    }
 }
 
 #[derive(Debug)]
@@ -73,17 +127,12 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
 
     let explicit = project.manifest.build.as_ref();
     let system = match (opts.system.as_deref(), explicit) {
-        (Some("cmake"), _) => BuildSystem::Cmake,
-        (Some("cargo"), _) => BuildSystem::Cargo,
+        (Some(name), _) if build_system_from_name(name).is_some() => {
+            build_system_from_name(name).unwrap()
+        }
         (Some(_), Some(_)) | (None, Some(_)) => BuildSystem::Explicit,
         (Some(_), None) | (None, None) => {
-            if project.root.join("CMakeLists.txt").is_file() {
-                BuildSystem::Cmake
-            } else if project.root.join("Cargo.toml").is_file() {
-                BuildSystem::Cargo
-            } else {
-                return Err(Error::NoBuildSystem);
-            }
+            detect_build_system(&project.root).ok_or(Error::NoBuildSystem)?
         }
     };
 
@@ -153,6 +202,45 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 env,
                 &tc,
                 &["cmake".to_owned(), "--build".to_owned(), "build".to_owned()],
+                &mut commands,
+            )?;
+        }
+        BuildSystem::Make => {
+            run_step(project, env, &tc, &["make".to_owned()], &mut commands)?;
+            artifact_dir = project.root.clone();
+        }
+        BuildSystem::Ninja => {
+            run_step(project, env, &tc, &["ninja".to_owned()], &mut commands)?;
+            artifact_dir = project.root.clone();
+        }
+        BuildSystem::Meson => {
+            let cross_file = env.layout.root.join("meson-cross.ini");
+            write_meson_cross_file(&cross_file, &tc, env.manifest.target_arch)
+                .map_err(|e| Error::io(cross_file.clone(), e))?;
+            if !project.root.join("build").join("meson-info").is_dir() {
+                run_step(
+                    project,
+                    env,
+                    &tc,
+                    &[
+                        "meson".to_owned(),
+                        "setup".to_owned(),
+                        "build".to_owned(),
+                        format!("--cross-file={}", cross_file.display()),
+                    ],
+                    &mut commands,
+                )?;
+            }
+            run_step(
+                project,
+                env,
+                &tc,
+                &[
+                    "meson".to_owned(),
+                    "compile".to_owned(),
+                    "-C".to_owned(),
+                    "build".to_owned(),
+                ],
                 &mut commands,
             )?;
         }
@@ -446,6 +534,21 @@ mod tests {
             cxx_flags: vec![],
             link_flags,
         }
+    }
+
+    #[test]
+    fn build_system_detection_prefers_in_a_stable_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        assert_eq!(detect_build_system(root), None);
+        std::fs::write(root.join("Makefile"), "all:\n").unwrap();
+        assert_eq!(detect_build_system(root), Some(BuildSystem::Make));
+        std::fs::write(root.join("meson.build"), "project('x')\n").unwrap();
+        assert_eq!(detect_build_system(root), Some(BuildSystem::Meson));
+        std::fs::write(root.join("CMakeLists.txt"), "").unwrap();
+        assert_eq!(detect_build_system(root), Some(BuildSystem::Cmake));
+        assert_eq!(build_system_from_name("ninja"), Some(BuildSystem::Ninja));
+        assert_eq!(build_system_from_name("bogus"), None);
     }
 
     #[test]
