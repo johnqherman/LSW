@@ -80,12 +80,12 @@ pub fn build_msix(
 
     let msix = dist.join(format!("{stem}.msix"));
     let _ = std::fs::remove_file(&msix);
-    sign_msix(&unsigned, &msix, publisher)?;
+    authenticode_sign(&unsigned, &msix, publisher)?;
     let _ = std::fs::remove_file(&unsigned);
     Ok(msix)
 }
 
-fn sign_msix(unsigned: &Path, out: &Path, publisher: &str) -> Result<()> {
+pub fn authenticode_sign(unsigned: &Path, out: &Path, publisher: &str) -> Result<()> {
     if which("osslsigncode").is_none() {
         return Err(Error::ToolMissing {
             tool: "osslsigncode".into(),

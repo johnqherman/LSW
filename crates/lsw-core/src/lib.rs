@@ -23,6 +23,7 @@ pub mod rustops;
 pub mod sbomops;
 pub mod sdkops;
 pub mod serviceops;
+pub mod signops;
 pub mod testops;
 pub mod traceops;
 pub mod verifyops;

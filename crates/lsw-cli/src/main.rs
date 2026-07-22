@@ -118,6 +118,13 @@ enum Cmd {
     Sbom { file: PathBuf },
     /// Diff two PEs by imports and exports.
     Diff { a: PathBuf, b: PathBuf },
+    /// Authenticode-sign a PE with a cached self-signed identity.
+    Sign {
+        file: PathBuf,
+        /// Certificate subject (default: a self-signed LSW identity).
+        #[arg(long)]
+        publisher: Option<String>,
+    },
     /// Translate paths between Linux and Windows views.
     Path {
         /// Print the Windows form of a Linux path.
@@ -771,6 +778,12 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 "{}",
                 serde_json::to_string_pretty(&bom).expect("serializes")
             );
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Sign { file, publisher } => {
+            lsw_core::signops::sign(file, publisher.as_deref())?;
+            println!("signed {}", file.display());
             Ok(ExitCode::SUCCESS)
         }
 
