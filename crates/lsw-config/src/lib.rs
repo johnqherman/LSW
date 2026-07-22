@@ -88,6 +88,29 @@ pub struct ProjectManifest {
     pub verify: VerifySection,
     #[serde(default)]
     pub env: EnvSection,
+    #[serde(default)]
+    pub registry: RegistrySection,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegistrySection {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub seed: Vec<RegistrySeed>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RegistrySeed {
+    pub key: String,
+    pub name: String,
+    pub value: String,
+    #[serde(default = "default_registry_type", rename = "type")]
+    pub kind: String,
+}
+
+fn default_registry_type() -> String {
+    "string".to_owned()
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -602,6 +625,19 @@ mod tests {
         assert_eq!(m.filesystem.mount_project, "/src");
         assert_eq!(m.toolchain.link, LinkMode::Static);
         assert!(m.build.is_none());
+    }
+
+    #[test]
+    fn registry_seed_roundtrips_with_type_default() {
+        let src = "[project]\nname = \"x\"\n[[registry.seed]]\nkey = \"HKCU\\\\Software\\\\App\"\nname = \"Flag\"\nvalue = \"1\"\ntype = \"dword\"\n[[registry.seed]]\nkey = \"HKCU\\\\Software\\\\App\"\nname = \"Path\"\nvalue = \"C:\\\\x\"\n";
+        let m: ProjectManifest = toml::from_str(src).unwrap();
+        assert_eq!(m.registry.seed.len(), 2);
+        assert_eq!(m.registry.seed[0].kind, "dword");
+        assert_eq!(m.registry.seed[1].kind, "string");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(PROJECT_MANIFEST);
+        m.save(&path).unwrap();
+        assert_eq!(ProjectManifest::load(&path).unwrap(), m);
     }
 
     #[test]

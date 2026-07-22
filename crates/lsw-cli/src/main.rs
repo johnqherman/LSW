@@ -275,6 +275,8 @@ enum RegistryCmd {
     Export { key: String, file: PathBuf },
     /// Merge a host .reg file into the environment's registry.
     Import { file: PathBuf },
+    /// Apply the project's [registry] seeds to the active environment.
+    Seed,
     /// Discard all registry state and rebuild prefix defaults.
     Reset,
 }
@@ -763,7 +765,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         }
 
         Cmd::Registry(op) => {
-            let (_p, env) = active_env(&dirs)?;
+            let (p, env) = active_env(&dirs)?;
             match op {
                 RegistryCmd::Get { key, value } => {
                     lsw_core::registryops::get(&env, key, value.as_deref())?;
@@ -784,6 +786,10 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 RegistryCmd::Import { file } => {
                     lsw_core::registryops::import(&env, file)?;
                     println!("imported {}", file.display());
+                }
+                RegistryCmd::Seed => {
+                    let n = lsw_core::registryops::seed(&env, &p)?;
+                    println!("applied {n} registry seed(s) to '{}'", env.name);
                 }
                 RegistryCmd::Reset => {
                     lsw_core::registryops::reset(&env)?;

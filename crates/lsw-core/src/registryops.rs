@@ -59,6 +59,28 @@ pub fn set(env: &Environment, key: &str, value: &str, data: &str, kind: &str) ->
     )
 }
 
+fn reg_type(kind: &str) -> &'static str {
+    match kind.to_ascii_lowercase().as_str() {
+        "dword" | "reg_dword" => "REG_DWORD",
+        "expand" | "reg_expand_sz" => "REG_EXPAND_SZ",
+        _ => "REG_SZ",
+    }
+}
+
+pub fn seed(env: &Environment, project: &crate::project::Project) -> Result<usize> {
+    let seeds = &project.manifest.registry.seed;
+    for entry in seeds {
+        set(
+            env,
+            &entry.key,
+            &entry.name,
+            &entry.value,
+            reg_type(&entry.kind),
+        )?;
+    }
+    Ok(seeds.len())
+}
+
 pub fn export(env: &Environment, key: &str, file: &Path) -> Result<()> {
     run_registry_tool(
         env,
@@ -92,4 +114,18 @@ pub fn reset(env: &Environment) -> Result<()> {
         }
     }
     Ok(WineRuntime.prepare(&prefix)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reg_type_maps_kinds() {
+        assert_eq!(reg_type("string"), "REG_SZ");
+        assert_eq!(reg_type("dword"), "REG_DWORD");
+        assert_eq!(reg_type("DWORD"), "REG_DWORD");
+        assert_eq!(reg_type("expand"), "REG_EXPAND_SZ");
+        assert_eq!(reg_type("whatever"), "REG_SZ");
+    }
 }
