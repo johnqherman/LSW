@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -77,6 +78,17 @@ pub struct ProjectManifest {
     pub sandbox: SandboxSection,
     #[serde(default)]
     pub verify: VerifySection,
+    #[serde(default)]
+    pub env: EnvSection,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnvSection {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub vars: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub secret: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -546,6 +558,18 @@ mod tests {
         assert_eq!(m.filesystem.mount_project, "/src");
         assert_eq!(m.toolchain.link, LinkMode::Static);
         assert!(m.build.is_none());
+    }
+
+    #[test]
+    fn env_section_roundtrips_vars_and_secrets() {
+        let src = "[project]\nname = \"x\"\n[env.vars]\nRUST_LOG = \"debug\"\n[env.secret]\nAPI_TOKEN = \"HOST_API_TOKEN\"\n";
+        let m: ProjectManifest = toml::from_str(src).unwrap();
+        assert_eq!(m.env.vars.get("RUST_LOG").unwrap(), "debug");
+        assert_eq!(m.env.secret.get("API_TOKEN").unwrap(), "HOST_API_TOKEN");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(PROJECT_MANIFEST);
+        m.save(&path).unwrap();
+        assert_eq!(ProjectManifest::load(&path).unwrap(), m);
     }
 
     #[test]
