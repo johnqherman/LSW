@@ -48,7 +48,7 @@ default; `gui` uses WinMain, `dll` builds a shared library).
 
 ## Command reference
 
-- **Build / run** - `lsw build [--system cmake|cargo|make|ninja|meson]
+- **Build / run** - `lsw build [--system cmake|cargo|make|ninja|meson|zig|dotnet]
   [--reproducible] [--update-lock]`, `lsw run [--host|--windows]
   [--sandbox strict] [--headless] <program>`, `lsw exec ... <cmd>`,
   `lsw test [--headless]`, `lsw shell [--windows]`.
@@ -91,15 +91,19 @@ default; `gui` uses WinMain, `dll` builds a shared library).
   `lsw watch`, `lsw config check` (lint `lsw.toml`), `lsw ci init github`
   (generate a GitHub Actions workflow).
 
-Most report-style commands accept `--format json` for machine consumption.
-Editor packages (VS Code extension, Neovim plugin) live under `editors/` and
-shell out to `lsw ide env` and `lsw dap`.
+Most report-style commands accept `--format json` for machine consumption. The
+editor front-ends under `editors/` - a VS Code extension, a Neovim plugin, and
+JetBrains External Tools - shell out to `lsw ide env` and `lsw dap`.
 
 ## Languages and build systems
 
 **C / C++** build through CMake, Meson, Ninja, or Make (auto-detected), or an
 explicit `[build]` command in `lsw.toml`. CMake and Meson receive generated
 cross-toolchain files; all systems get the cross `CC`/`CXX`/`CFLAGS`/`LDFLAGS`.
+
+**Zig** (`build.zig`) and **.NET** (`.csproj`/`.sln`) projects are auto-detected
+too - `lsw build` drives `zig build` and `dotnet publish` at the environment's
+Windows target.
 
 **Rust** is first-class (`Cargo.toml` auto-detected):
 
