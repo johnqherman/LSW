@@ -107,6 +107,10 @@ enum Cmd {
     },
     /// Inspect a PE binary: format, architecture, subsystem, imports.
     Inspect { file: PathBuf },
+    /// Audit a PE's security hardening (ASLR, DEP, CFG, SafeSEH, signing).
+    Audit { file: PathBuf },
+    /// List the exported symbols of a PE (mirror of imports).
+    Exports { file: PathBuf },
     /// Translate paths between Linux and Windows views.
     Path {
         /// Print the Windows form of a Linux path.
@@ -704,6 +708,48 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             }
             let status = lsw_core::shell(&env, Some(&p), *windows)?;
             Ok(exit_from_status(status))
+        }
+
+        Cmd::Audit { file } => {
+            let report = lsw_core::auditops::audit(file)?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("serializes")
+                );
+            } else {
+                println!("\nLSW AUDIT  {}\n", file.display());
+                for c in &report.checks {
+                    let mark = if c.enabled { "+" } else { "X" };
+                    println!("  {mark} {:<22} {}", c.name, c.detail);
+                }
+                println!(
+                    "\n{}",
+                    if report.hardened {
+                        "baseline hardening present (ASLR + DEP)"
+                    } else {
+                        "WEAK: missing ASLR or DEP"
+                    }
+                );
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Exports { file } => {
+            let names = lsw_core::auditops::exports(file)?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&names).expect("serializes")
+                );
+            } else if names.is_empty() {
+                println!("no exports (not a DLL, or no export table)");
+            } else {
+                for n in &names {
+                    println!("{n}");
+                }
+            }
+            Ok(ExitCode::SUCCESS)
         }
 
         Cmd::Inspect { file } => {
