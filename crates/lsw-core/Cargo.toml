@@ -3,6 +3,12 @@ name = "lsw-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Core orchestration for LSW: environments, builds, runtime, packaging, analysis."
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 lsw-config.workspace = true

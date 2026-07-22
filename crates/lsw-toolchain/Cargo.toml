@@ -3,6 +3,12 @@ name = "lsw-toolchain"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Cross toolchain providers (MinGW / clang-cl) for LSW."
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 lsw-config.workspace = true
