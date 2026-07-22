@@ -608,6 +608,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lsw-provider-example"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "lsw-runtime"
 version = "0.1.0"
 dependencies = [

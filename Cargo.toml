@@ -8,6 +8,7 @@ members = [
     "crates/lsw-runtime",
     "crates/lsw-path",
     "crates/lsw-pe",
+    "crates/lsw-provider-example",
 ]
 
 [workspace.package]

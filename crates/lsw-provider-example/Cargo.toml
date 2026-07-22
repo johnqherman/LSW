@@ -1,0 +1,22 @@
+[package]
+name = "lsw-provider-example"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Reference out-of-process LSW provider plugin (JSON-RPC over stdio)."
+publish = false
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[[bin]]
+name = "lsw-provider-example"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true
