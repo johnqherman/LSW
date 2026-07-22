@@ -910,6 +910,13 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                         "entry_point": report.details.entry_point,
                         "image_base": report.details.image_base,
                         "sections": sections,
+                        "resources": {
+                            "has_manifest": report.resources.manifest.is_some(),
+                            "execution_level": report.resources.execution_level,
+                            "dpi_aware": report.resources.dpi_aware,
+                            "version": report.resources.version,
+                            "has_icon": report.resources.has_icon,
+                        },
                         "imports": imports,
                     })
                 );
@@ -934,6 +941,20 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                         "  {:<10} vsize={:<10} raw={}",
                         s.name, s.virtual_size, s.raw_size
                     );
+                }
+                let res = &report.resources;
+                if res.manifest.is_some() || res.has_icon || !res.version.is_empty() {
+                    println!("Resources:");
+                    if let Some(level) = &res.execution_level {
+                        println!("  manifest execution-level: {level}");
+                    }
+                    if let Some(dpi) = &res.dpi_aware {
+                        println!("  manifest dpi-aware: {dpi}");
+                    }
+                    for (k, v) in &res.version {
+                        println!("  {k}: {v}");
+                    }
+                    println!("  icon: {}", flag(res.has_icon));
                 }
                 println!("Imports:");
                 for i in &report.imports {

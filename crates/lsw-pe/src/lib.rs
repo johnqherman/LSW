@@ -256,6 +256,163 @@ fn details_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<PeDetai
     })
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Resources {
+    pub manifest: Option<String>,
+    pub execution_level: Option<String>,
+    pub dpi_aware: Option<String>,
+    pub version: std::collections::BTreeMap<String, String>,
+    pub has_icon: bool,
+}
+
+const RT_ICON_GROUP: u16 = 14;
+const RT_VERSION: u16 = 16;
+const RT_MANIFEST: u16 = 24;
+
+pub fn resources(path: &Path) -> Result<Resources, PeError> {
+    let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+    if !data.starts_with(MZ_MAGIC) {
+        return Err(PeError::NotPe {
+            path: path.to_path_buf(),
+        });
+    }
+    match optional_header_magic(&*data).map_err(|e| PeError::malformed(path, e))? {
+        pe::IMAGE_NT_OPTIONAL_HDR32_MAGIC => resources_typed::<ImageNtHeaders32>(path, &data),
+        pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC => resources_typed::<ImageNtHeaders64>(path, &data),
+        other => Err(PeError::malformed(
+            path,
+            format!("unrecognized optional header magic 0x{other:04x}"),
+        )),
+    }
+}
+
+fn rva_to_bytes<'d, Pe: ImageNtHeaders>(
+    file: &PeFile<'d, Pe>,
+    data: &'d [u8],
+    rva: u32,
+    size: u32,
+) -> Option<&'d [u8]> {
+    for section in file.section_table().iter() {
+        let va = section.virtual_address.get(LE);
+        let vsize = section.virtual_size.get(LE);
+        let raw = section.size_of_raw_data.get(LE);
+        let span = vsize.max(raw);
+        if rva >= va && rva < va.saturating_add(span) {
+            let ptr = section.pointer_to_raw_data.get(LE);
+            let start = ptr.checked_add(rva - va)? as usize;
+            let end = start.checked_add(size as usize)?;
+            return data.get(start..end.min(data.len()));
+        }
+    }
+    None
+}
+
+fn resources_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Resources, PeError> {
+    use object::read::pe::ResourceDirectoryEntryData::{Data, Table};
+    use object::read::pe::ResourceNameOrId;
+
+    let file = PeFile::<Pe>::parse(data).map_err(|e| PeError::malformed(path, e))?;
+    let mut out = Resources::default();
+    let sections = file.section_table();
+    let Some(dir) = file
+        .data_directories()
+        .resource_directory(data, &sections)
+        .map_err(|e| PeError::malformed(path, e))?
+    else {
+        return Ok(out);
+    };
+    let root = dir.root().map_err(|e| PeError::malformed(path, e))?;
+
+    for type_entry in root.entries {
+        let id = match type_entry.name_or_id() {
+            ResourceNameOrId::Id(id) => id,
+            ResourceNameOrId::Name(_) => continue,
+        };
+        if id != RT_ICON_GROUP && id != RT_VERSION && id != RT_MANIFEST {
+            continue;
+        }
+        if id == RT_ICON_GROUP {
+            out.has_icon = true;
+            continue;
+        }
+        let Ok(Table(names)) = type_entry.data(dir) else {
+            continue;
+        };
+        for name_entry in names.entries {
+            let Ok(Table(langs)) = name_entry.data(dir) else {
+                continue;
+            };
+            for lang_entry in langs.entries {
+                let Ok(Data(entry)) = lang_entry.data(dir) else {
+                    continue;
+                };
+                let Some(bytes) = rva_to_bytes(
+                    &file,
+                    data,
+                    entry.offset_to_data.get(LE),
+                    entry.size.get(LE),
+                ) else {
+                    continue;
+                };
+                match id {
+                    RT_MANIFEST => parse_manifest(bytes, &mut out),
+                    RT_VERSION => parse_version(bytes, &mut out.version),
+                    _ => {}
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn parse_manifest(bytes: &[u8], out: &mut Resources) {
+    let text = String::from_utf8_lossy(bytes).into_owned();
+    out.execution_level = between(&text, "level=\"", "\"");
+    if let Some(dpi) = between(&text, "<dpiAware>", "</dpiAware>") {
+        out.dpi_aware = Some(dpi);
+    } else if text.contains("dpiAwareness") {
+        out.dpi_aware = between(&text, "<dpiAwareness>", "</dpiAwareness>");
+    }
+    out.manifest = Some(text);
+}
+
+fn between(text: &str, start: &str, end: &str) -> Option<String> {
+    let s = text.find(start)? + start.len();
+    let rest = &text[s..];
+    let e = rest.find(end)?;
+    Some(rest[..e].trim().to_owned())
+}
+
+fn parse_version(bytes: &[u8], out: &mut std::collections::BTreeMap<String, String>) {
+    let wide: Vec<u16> = bytes
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect();
+    let tokens: Vec<String> = wide
+        .split(|&u| u == 0)
+        .filter(|s| !s.is_empty())
+        .map(|s| String::from_utf16_lossy(s))
+        .collect();
+    const KEYS: &[&str] = &[
+        "FileVersion",
+        "ProductVersion",
+        "ProductName",
+        "CompanyName",
+        "FileDescription",
+        "OriginalFilename",
+        "LegalCopyright",
+    ];
+    let mut i = 0;
+    while i + 1 < tokens.len() {
+        if KEYS.contains(&tokens[i].as_str()) {
+            out.insert(tokens[i].clone(), tokens[i + 1].clone());
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+}
+
 fn pe_signature_offset(path: &Path, data: &[u8]) -> Result<usize, PeError> {
     if !data.starts_with(MZ_MAGIC) {
         return Err(PeError::NotPe {
@@ -619,6 +776,44 @@ mod tests {
     }
 
     #[test]
+    fn parse_manifest_extracts_execution_level_and_dpi() {
+        let xml = br#"<assembly><trustInfo><security><requestedPrivileges>
+            <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+            </requestedPrivileges></security></trustInfo>
+            <asmv3:windowsSettings><dpiAware>true</dpiAware></asmv3:windowsSettings></assembly>"#;
+        let mut r = Resources::default();
+        parse_manifest(xml, &mut r);
+        assert_eq!(r.execution_level.as_deref(), Some("requireAdministrator"));
+        assert_eq!(r.dpi_aware.as_deref(), Some("true"));
+        assert!(r.manifest.is_some());
+    }
+
+    #[test]
+    fn parse_version_pairs_known_keys() {
+        let mut wide: Vec<u16> = Vec::new();
+        for s in ["FileVersion", "1.2.3.4", "ProductName", "Demo", "junk"] {
+            wide.extend(s.encode_utf16());
+            wide.push(0);
+        }
+        let bytes: Vec<u8> = wide.iter().flat_map(|u| u.to_le_bytes()).collect();
+        let mut map = std::collections::BTreeMap::new();
+        parse_version(&bytes, &mut map);
+        assert_eq!(map.get("FileVersion").unwrap(), "1.2.3.4");
+        assert_eq!(map.get("ProductName").unwrap(), "Demo");
+    }
+
+    #[test]
+    fn resources_on_resourceless_pe_is_empty_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        let Some(exe) = build_fixture_exe(&dir) else {
+            return;
+        };
+        let r = resources(&exe).unwrap();
+        assert!(r.manifest.is_none());
+        assert!(!r.has_icon);
+    }
+
+    #[test]
     fn parser_never_panics_on_garbage() {
         let dir = tempfile::tempdir().unwrap();
         let mut cases: Vec<Vec<u8>> = vec![
@@ -655,6 +850,7 @@ mod tests {
             let _ = details(&path);
             let _ = imported_symbols(&path);
             let _ = coff_timestamp(&path);
+            let _ = resources(&path);
         }
     }
 
