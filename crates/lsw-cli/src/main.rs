@@ -906,7 +906,12 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     report.host.as_deref().unwrap_or("none")
                 );
                 for r in &report.results {
-                    println!("  {:<24} exit {:?}", r.artifact, r.exit_code);
+                    let reason = r
+                        .exit_code
+                        .and_then(lsw_core::verifyops::crash_reason)
+                        .map(|w| format!("  ({w})"))
+                        .unwrap_or_default();
+                    println!("  {:<24} exit {:?}{reason}", r.artifact, r.exit_code);
                 }
                 println!("Status: {status}");
                 println!("{}", report.detail);
