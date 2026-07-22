@@ -141,7 +141,7 @@ pub fn run(
                 args: args.to_vec(),
                 prefix: env.layout.prefix(),
                 cwd: windows_cwd(env, project),
-                env: windows_env(env),
+                env: windows_env(env, project),
                 sandbox: sandbox_spec(env, project, sandbox),
                 display: display_mode(display, is_gui),
             })?
@@ -177,12 +177,28 @@ fn processor_architecture(arch: TargetArch) -> &'static str {
     }
 }
 
-fn windows_env(env: &Environment) -> Vec<(String, String)> {
+fn env_overrides(
+    section: &lsw_config::EnvSection,
+    lookup: impl Fn(&str) -> Option<String>,
+) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for (key, value) in &section.vars {
+        out.push((key.clone(), value.clone()));
+    }
+    for (key, host_var) in &section.secret {
+        if let Some(value) = lookup(host_var) {
+            out.push((key.clone(), value));
+        }
+    }
+    out
+}
+
+fn windows_env(env: &Environment, project: Option<&Project>) -> Vec<(String, String)> {
     let cpus = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1);
     let profile = format!("C:\\users\\{WINDOWS_USER}");
-    vec![
+    let mut vars: Vec<(String, String)> = vec![
         ("TEMP".into(), "C:\\Temp".into()),
         ("TMP".into(), "C:\\Temp".into()),
         ("SystemRoot".into(), "C:\\windows".into()),
@@ -203,7 +219,13 @@ fn windows_env(env: &Environment) -> Vec<(String, String)> {
             processor_architecture(env.manifest.target_arch).into(),
         ),
         ("NUMBER_OF_PROCESSORS".into(), cpus.to_string()),
-    ]
+    ];
+    if let Some(project) = project {
+        vars.extend(env_overrides(&project.manifest.env, |k| {
+            std::env::var(k).ok()
+        }));
+    }
+    vars
 }
 
 fn windows_cwd(env: &Environment, project: Option<&Project>) -> Option<PathBuf> {
@@ -262,7 +284,7 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
             args,
             prefix: env.layout.prefix(),
             cwd: windows_cwd(env, project),
-            env: windows_env(env),
+            env: windows_env(env, project),
             sandbox: None,
             display: lsw_runtime::DisplayMode::Inherit,
         })?);
@@ -288,6 +310,24 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn env_overrides_applies_vars_and_resolves_present_secrets_only() {
+        let mut section = lsw_config::EnvSection::default();
+        section.vars.insert("FOO".into(), "bar".into());
+        section.secret.insert("TOKEN".into(), "HOST_TOKEN".into());
+        section
+            .secret
+            .insert("ABSENT".into(), "HOST_MISSING".into());
+        let lookup = |k: &str| match k {
+            "HOST_TOKEN" => Some("s3cr3t".to_owned()),
+            _ => None,
+        };
+        let out = env_overrides(&section, lookup);
+        assert!(out.contains(&("FOO".into(), "bar".into())));
+        assert!(out.contains(&("TOKEN".into(), "s3cr3t".into())));
+        assert!(!out.iter().any(|(k, _)| k == "ABSENT"));
+    }
 
     #[test]
     fn processor_architecture_maps_each_arch() {
