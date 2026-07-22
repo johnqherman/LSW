@@ -4,6 +4,40 @@ use std::process::ExitCode;
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use lsw_core::{BuildOptions, Dirs, Domain, EnvCreateOptions, Project, Status, TargetArch};
 
+mod color {
+    use std::io::IsTerminal;
+    use std::sync::OnceLock;
+
+    fn enabled() -> bool {
+        static E: OnceLock<bool> = OnceLock::new();
+        *E.get_or_init(|| std::env::var_os("NO_COLOR").is_none() && std::io::stdout().is_terminal())
+    }
+
+    fn wrap(code: &str, s: &str) -> String {
+        if enabled() {
+            format!("\x1b[{code}m{s}\x1b[0m")
+        } else {
+            s.to_owned()
+        }
+    }
+
+    pub fn green(s: &str) -> String {
+        wrap("32", s)
+    }
+    pub fn yellow(s: &str) -> String {
+        wrap("33", s)
+    }
+    pub fn red(s: &str) -> String {
+        wrap("31", s)
+    }
+    pub fn dim(s: &str) -> String {
+        wrap("2", s)
+    }
+    pub fn bold(s: &str) -> String {
+        wrap("1", s)
+    }
+}
+
 #[derive(Parser)]
 #[command(
     name = "lsw",
@@ -516,12 +550,12 @@ fn write_man_page(cmd: &clap::Command, dir: &std::path::Path, name: &str) -> lsw
 }
 
 fn print_dep_tree(node: &lsw_core::depsops::DepNode, depth: usize) {
+    use lsw_core::depsops::DepKind;
     let tag = match node.kind {
-        lsw_core::depsops::DepKind::Root => "",
-        lsw_core::depsops::DepKind::System => "  [system]",
-        lsw_core::depsops::DepKind::Resolved => "",
-        lsw_core::depsops::DepKind::Missing => "  [MISSING]",
-        lsw_core::depsops::DepKind::Seen => "  [seen]",
+        DepKind::Root | DepKind::Resolved => String::new(),
+        DepKind::System => color::dim("  [system]"),
+        DepKind::Missing => color::red("  [MISSING]"),
+        DepKind::Seen => color::dim("  [seen]"),
     };
     println!("{}{}{}", "  ".repeat(depth), node.name, tag);
     for child in &node.children {
@@ -832,17 +866,21 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     serde_json::to_string_pretty(&report).expect("serializes")
                 );
             } else {
-                println!("\nLSW AUDIT  {}\n", file.display());
+                println!("\n{}  {}\n", color::bold("LSW AUDIT"), file.display());
                 for c in &report.checks {
-                    let mark = if c.enabled { "+" } else { "X" };
+                    let mark = if c.enabled {
+                        color::green("+")
+                    } else {
+                        color::red("X")
+                    };
                     println!("  {mark} {:<22} {}", c.name, c.detail);
                 }
                 println!(
                     "\n{}",
                     if report.hardened {
-                        "baseline hardening present (ASLR + DEP)"
+                        color::green("baseline hardening present (ASLR + DEP)")
                     } else {
-                        "WEAK: missing ASLR or DEP"
+                        color::red("WEAK: missing ASLR or DEP")
                     }
                 );
             }
@@ -901,8 +939,8 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             } else {
                 for f in &findings {
                     let tag = match f.severity {
-                        lsw_core::configops::Severity::Warn => "warning",
-                        lsw_core::configops::Severity::Error => "error",
+                        lsw_core::configops::Severity::Warn => color::yellow("warning"),
+                        lsw_core::configops::Severity::Error => color::red("error"),
                     };
                     println!("{tag}: {}", f.message);
                 }
@@ -1509,9 +1547,9 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     println!("{}", section.name);
                     for r in &section.rows {
                         let status = match r.status {
-                            Status::Ok => "OK",
-                            Status::Warn => "WARNING",
-                            Status::Fail => "FAIL",
+                            Status::Ok => color::green("OK"),
+                            Status::Warn => color::yellow("WARNING"),
+                            Status::Fail => color::red("FAIL"),
                         };
                         println!("  {:<18} {:<52} {}", r.label, r.value, status);
                     }
