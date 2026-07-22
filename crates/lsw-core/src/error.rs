@@ -113,6 +113,9 @@ pub enum Error {
     #[error("LSW2029: MSIX signing failed: {detail}")]
     MsixSign { detail: String },
 
+    #[error("LSW2030: invalid [sandbox] network = \"{value}\" (expected host, isolated, or none)")]
+    InvalidSandboxNetwork { value: String },
+
     #[error(
         "LSW2025: Rust has no GNU-ABI Windows target for arch '{arch}'\n\
          Rust builds support x86_64, x86, and aarch64. armv7/arm64ec are MSVC-only in Rust."

@@ -36,21 +36,35 @@ pub enum Sandbox {
     Strict,
 }
 
+fn parse_network(value: &str) -> Option<lsw_runtime::NetworkMode> {
+    match value {
+        "host" => Some(lsw_runtime::NetworkMode::Host),
+        "isolated" => Some(lsw_runtime::NetworkMode::Isolated),
+        "none" => Some(lsw_runtime::NetworkMode::None),
+        _ => None,
+    }
+}
+
 fn sandbox_spec(
     env: &Environment,
     project: Option<&Project>,
     sandbox: Sandbox,
-) -> Option<lsw_runtime::SandboxSpec> {
+) -> Result<Option<lsw_runtime::SandboxSpec>> {
     match sandbox {
-        Sandbox::None => None,
+        Sandbox::None => Ok(None),
         Sandbox::Strict => {
             let mut rw_binds = vec![env.layout.root.clone()];
             if let Some(p) = project {
                 rw_binds.push(p.root.clone());
             }
-            let network = project
-                .map(|p| p.manifest.sandbox.network == "host")
-                .unwrap_or(true);
+            let network = match project {
+                Some(p) => parse_network(&p.manifest.sandbox.network).ok_or_else(|| {
+                    Error::InvalidSandboxNetwork {
+                        value: p.manifest.sandbox.network.clone(),
+                    }
+                })?,
+                None => lsw_runtime::NetworkMode::Host,
+            };
             let (cpu_seconds, memory_bytes) = project
                 .map(|p| {
                     (
@@ -59,12 +73,12 @@ fn sandbox_spec(
                     )
                 })
                 .unwrap_or((None, None));
-            Some(lsw_runtime::SandboxSpec {
+            Ok(Some(lsw_runtime::SandboxSpec {
                 rw_binds,
                 network,
                 cpu_seconds,
                 memory_bytes,
-            })
+            }))
         }
     }
 }
@@ -179,7 +193,7 @@ pub fn run(
                 prefix: env.layout.prefix(),
                 cwd: windows_cwd(env, project),
                 env: windows_env(env, project),
-                sandbox: sandbox_spec(env, project, sandbox),
+                sandbox: sandbox_spec(env, project, sandbox)?,
                 display: display_mode(display, is_gui),
             })?
         }
