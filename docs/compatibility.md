@@ -31,12 +31,13 @@ LSW never reports a Wine pass as a Windows pass. Failing artifacts report their
 Windows exit code, and common crash codes are decoded (access violation, a
 missing DLL, wrong architecture, and so on).
 
-Two transports are supported, selected by `transport` in `[verify]`. The default
-`ssh` uses `ssh`/`scp` with key authentication. `winrm` speaks WS-Man over HTTP
-or HTTPS (curl with Basic auth); the account password is read from the
-`LSW_WINRM_PASSWORD` environment variable and artifacts are streamed to the host
-over the shell's stdin. SSH is the simpler default and additionally collects
-crash dumps.
+Three transports are supported, selected by `transport` in `[verify]`. The
+default `ssh` uses `ssh`/`scp` with key authentication. `https` speaks WS-Man
+over TLS (port 5986) and `winrm` speaks WS-Man over plaintext HTTP (port 5985);
+both use curl with Basic auth, read the account password from the
+`LSW_WINRM_PASSWORD` environment variable, and stream artifacts to the host over
+the shell's stdin. SSH is the simpler default and additionally collects crash
+dumps.
 
 When the `[verify]` host has WER LocalDumps configured with `dump_dir` set (SSH
 transport), a crashing artifact's minidump is pulled back over scp and decoded:
