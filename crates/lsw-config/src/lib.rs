@@ -131,6 +131,8 @@ pub struct VerifySection {
     pub host: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity_file: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
