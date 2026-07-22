@@ -391,7 +391,7 @@ fn parse_version(bytes: &[u8], out: &mut std::collections::BTreeMap<String, Stri
     let tokens: Vec<String> = wide
         .split(|&u| u == 0)
         .filter(|s| !s.is_empty())
-        .map(|s| String::from_utf16_lossy(s))
+        .map(String::from_utf16_lossy)
         .collect();
     const KEYS: &[&str] = &[
         "FileVersion",

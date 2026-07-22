@@ -379,10 +379,11 @@ fn collect_streams(resp: &str, name: &str, out: &mut Vec<u8>) {
         let content_end = open_end + end_rel;
         let tag = &resp[start..open_end];
         let content = &resp[open_end..content_end];
-        if tag.contains(&marker) && !content.is_empty() {
-            if let Ok(bytes) = B64.decode(content.trim()) {
-                out.extend_from_slice(&bytes);
-            }
+        if tag.contains(&marker)
+            && !content.is_empty()
+            && let Ok(bytes) = B64.decode(content.trim())
+        {
+            out.extend_from_slice(&bytes);
         }
         cursor = content_end + "</rsp:Stream>".len();
     }
