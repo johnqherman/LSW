@@ -78,15 +78,35 @@ pub enum DisplayMode {
     Virtual,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NetworkMode {
+    Host,
+    Isolated,
+    #[default]
+    None,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SandboxSpec {
     pub rw_binds: Vec<PathBuf>,
-    pub network: bool,
+    pub network: NetworkMode,
     pub cpu_seconds: Option<u64>,
     pub memory_bytes: Option<u64>,
 }
 
-pub fn bwrap_args(spec: &SandboxSpec) -> Vec<String> {
+pub fn find_pasta() -> Option<PathBuf> {
+    find_on_path("pasta").or_else(|| find_on_path("slirp4netns"))
+}
+
+fn should_unshare_net(mode: NetworkMode, pasta_available: bool) -> bool {
+    match mode {
+        NetworkMode::Host => false,
+        NetworkMode::None => true,
+        NetworkMode::Isolated => !pasta_available,
+    }
+}
+
+pub fn bwrap_args(spec: &SandboxSpec, unshare_net: bool) -> Vec<String> {
     let mut args: Vec<String> = [
         "--die-with-parent",
         "--proc",
@@ -132,7 +152,7 @@ pub fn bwrap_args(spec: &SandboxSpec) -> Vec<String> {
         args.push(p.clone());
         args.push(p);
     }
-    if !spec.network {
+    if unshare_net {
         args.push("--unshare-net".into());
     }
     args
@@ -442,8 +462,19 @@ impl RuntimeProvider for WineRuntime {
 
         if let Some(spec) = &req.sandbox {
             let bwrap = find_bwrap().ok_or(RuntimeError::SandboxUnavailable)?;
+            let pasta = if spec.network == NetworkMode::Isolated {
+                find_pasta()
+            } else {
+                None
+            };
+            let unshare_net = should_unshare_net(spec.network, pasta.is_some());
+            if let Some(pasta) = &pasta {
+                argv.push(pasta.clone().into_os_string());
+                argv.push("--config-net".into());
+                argv.push("--".into());
+            }
             argv.push(bwrap.into_os_string());
-            argv.extend(bwrap_args(spec).into_iter().map(Into::into));
+            argv.extend(bwrap_args(spec, unshare_net).into_iter().map(Into::into));
             if virtual_display {
                 for a in ["--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix"] {
                     argv.push(a.into());
@@ -515,10 +546,10 @@ mod tests {
     fn bwrap_args_lock_down_the_filesystem_and_namespaces() {
         let spec = SandboxSpec {
             rw_binds: vec![PathBuf::from("/data/env"), PathBuf::from("/home/u/proj")],
-            network: false,
+            network: NetworkMode::None,
             ..Default::default()
         };
-        let args = bwrap_args(&spec);
+        let args = bwrap_args(&spec, true);
         let ro_usr = args.windows(3).any(|w| w == ["--ro-bind", "/usr", "/usr"]);
         assert!(ro_usr, "must ro-bind /usr");
         for flag in [
@@ -544,10 +575,22 @@ mod tests {
     fn bwrap_args_keep_network_when_requested() {
         let spec = SandboxSpec {
             rw_binds: vec![],
-            network: true,
+            network: NetworkMode::Host,
             ..Default::default()
         };
-        assert!(!bwrap_args(&spec).iter().any(|a| a == "--unshare-net"));
+        assert!(
+            !bwrap_args(&spec, false)
+                .iter()
+                .any(|a| a == "--unshare-net")
+        );
+    }
+
+    #[test]
+    fn network_mode_decides_unshare_net() {
+        assert!(!should_unshare_net(NetworkMode::Host, false));
+        assert!(should_unshare_net(NetworkMode::None, true));
+        assert!(!should_unshare_net(NetworkMode::Isolated, true));
+        assert!(should_unshare_net(NetworkMode::Isolated, false));
     }
 
     fn skip_without_wine(test: &str) -> bool {
