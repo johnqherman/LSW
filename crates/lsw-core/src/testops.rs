@@ -53,6 +53,7 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
         &BuildOptions {
             system: None,
             update_lock: false,
+            reproducible: false,
         },
     )?;
     let build = Component {

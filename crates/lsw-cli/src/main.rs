@@ -51,6 +51,9 @@ enum Cmd {
         /// Refresh lsw.lock instead of failing on drift.
         #[arg(long)]
         update_lock: bool,
+        /// Zero PE timestamps for reproducible, byte-identical artifacts.
+        #[arg(long)]
+        reproducible: bool,
     },
     /// Run an executable (PE via the Windows runtime, ELF natively).
     Run {
@@ -533,6 +536,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Build {
             system,
             update_lock,
+            reproducible,
         } => {
             let (p, env) = active_env(&dirs)?;
             let report = lsw_core::build(
@@ -541,6 +545,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 &BuildOptions {
                     system: system.clone(),
                     update_lock: *update_lock,
+                    reproducible: *reproducible,
                 },
             )?;
             if cli.format == Format::Json {
