@@ -110,6 +110,7 @@ fn build_system_from_name(name: &str) -> Option<BuildSystem> {
 pub struct BuildOptions {
     pub system: Option<String>,
     pub update_lock: bool,
+    pub reproducible: bool,
 }
 
 #[derive(Debug)]
@@ -136,7 +137,10 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
         }
     };
 
-    let tc = effective_toolchain(env, project);
+    let mut tc = effective_toolchain(env, project);
+    if opts.reproducible {
+        tc.link_flags.push("-Wl,--no-insert-timestamp".to_owned());
+    }
     let mut commands = Vec::new();
     let mut artifact_dir = project.root.join("build");
     match system {
@@ -248,6 +252,12 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
 
     let mut artifacts = find_artifacts(&artifact_dir, &project.root);
     verify_artifacts_are_pe(project, &artifacts)?;
+
+    if opts.reproducible {
+        for artifact in &artifacts {
+            let _ = lsw_pe::set_coff_timestamp(&project.root.join(artifact), 0);
+        }
+    }
 
     let deployed = deploy_runtime_dlls(&tc, &artifacts, &project.root)?;
     if !deployed.is_empty() {

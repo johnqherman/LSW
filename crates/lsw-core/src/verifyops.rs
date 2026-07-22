@@ -69,6 +69,7 @@ pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
         &BuildOptions {
             system: None,
             update_lock: false,
+            reproducible: false,
         },
     )?;
 

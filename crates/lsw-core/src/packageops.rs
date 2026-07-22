@@ -37,6 +37,7 @@ pub fn package(
         &BuildOptions {
             system: None,
             update_lock: false,
+            reproducible: false,
         },
     )?;
     if build.artifacts.is_empty() {
