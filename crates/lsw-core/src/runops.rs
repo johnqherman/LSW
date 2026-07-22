@@ -51,7 +51,20 @@ fn sandbox_spec(
             let network = project
                 .map(|p| p.manifest.sandbox.network == "host")
                 .unwrap_or(true);
-            Some(lsw_runtime::SandboxSpec { rw_binds, network })
+            let (cpu_seconds, memory_bytes) = project
+                .map(|p| {
+                    (
+                        p.manifest.sandbox.cpu_seconds,
+                        p.manifest.sandbox.memory_mb.map(|mb| mb * 1024 * 1024),
+                    )
+                })
+                .unwrap_or((None, None));
+            Some(lsw_runtime::SandboxSpec {
+                rw_binds,
+                network,
+                cpu_seconds,
+                memory_bytes,
+            })
         }
     }
 }
