@@ -209,7 +209,7 @@ fn run_ssh_plan(host: &str, plan: &AgentPlan, identity: Option<&str>) -> Result<
     for program in &plan.run {
         let sentinel = "__LSW_EXIT__";
         let remote_cmd = format!(
-            "cmd /c \"cd /d \"{dir}\" && \"{prog}\" & echo {sentinel}!errorlevel!\"",
+            "cmd /v:on /c \"cd /d \"{dir}\" && \"{prog}\" & echo {sentinel}!errorlevel!\"",
             dir = plan.remote_dir,
             prog = program,
         );
