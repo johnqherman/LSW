@@ -15,6 +15,9 @@ struct Cli {
     /// Verbose diagnostic logging.
     #[arg(long, global = true)]
     verbose: bool,
+    /// Maximum-detail trace logging (implies --verbose).
+    #[arg(long, global = true)]
+    trace: bool,
     /// Output format for machine consumption where supported.
     #[arg(long, global = true, value_enum, default_value_t = Format::Human)]
     format: Format,
@@ -366,8 +369,15 @@ impl From<ArchArg> for TargetArch {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
+    let log_filter = if cli.trace {
+        "trace"
+    } else if cli.verbose {
+        "debug"
+    } else {
+        "warn"
+    };
     tracing_subscriber::fmt()
-        .with_env_filter(if cli.verbose { "debug" } else { "warn" })
+        .with_env_filter(log_filter)
         .with_writer(std::io::stderr)
         .init();
 
