@@ -619,6 +619,46 @@ mod tests {
     }
 
     #[test]
+    fn parser_never_panics_on_garbage() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut cases: Vec<Vec<u8>> = vec![
+            vec![],
+            b"MZ".to_vec(),
+            b"MZ\x00\x00".to_vec(),
+            {
+                let mut v = vec![0u8; 0x40];
+                v[0] = b'M';
+                v[1] = b'Z';
+                v[0x3C] = 0xFF;
+                v[0x3D] = 0xFF;
+                v
+            },
+            {
+                let mut v = vec![0u8; 0x80];
+                v[0] = b'M';
+                v[1] = b'Z';
+                v[0x3C] = 0x40;
+                v[0x40] = b'P';
+                v[0x41] = b'E';
+                v
+            },
+        ];
+        for i in 0..64u8 {
+            cases.push(vec![i; (i as usize) * 3 + 1]);
+        }
+        for (n, bytes) in cases.iter().enumerate() {
+            let path = write_file(&dir, &format!("case{n}.bin"), bytes);
+            let _ = detect(&path);
+            let _ = imports(&path);
+            let _ = hardening(&path);
+            let _ = exports(&path);
+            let _ = details(&path);
+            let _ = imported_symbols(&path);
+            let _ = coff_timestamp(&path);
+        }
+    }
+
+    #[test]
     fn imported_symbols_lists_named_functions() {
         let dir = tempfile::tempdir().unwrap();
         let Some(exe) = build_fixture_exe(&dir) else {
