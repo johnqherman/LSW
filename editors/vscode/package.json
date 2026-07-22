@@ -61,9 +61,9 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^26.1.1",
     "@types/vscode": "^1.75.0",
-    "esbuild": "^0.20.0",
-    "typescript": "^5.4.0"
+    "esbuild": "^0.28.1",
+    "typescript": "^7.0.2"
   }
 }
