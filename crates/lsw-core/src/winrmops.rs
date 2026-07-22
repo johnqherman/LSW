@@ -37,15 +37,21 @@ impl Winrm {
                 fix: "install curl to reach the Windows verification host over WinRM".into(),
             });
         }
+        let force_https = cfg.transport.as_deref() == Some("https");
         let (user, hostport) = match host.split_once('@') {
             Some((u, h)) => (u.to_owned(), h.to_owned()),
             None => ("Administrator".to_owned(), host.clone()),
         };
+        let default_port = if force_https { "5986" } else { "5985" };
         let (hostname, port) = match hostport.rsplit_once(':') {
             Some((h, p)) if p.chars().all(|c| c.is_ascii_digit()) => (h.to_owned(), p.to_owned()),
-            _ => (hostport.clone(), "5985".to_owned()),
+            _ => (hostport.clone(), default_port.to_owned()),
         };
-        let scheme = if port == "5986" { "https" } else { "http" };
+        let scheme = if force_https || port == "5986" {
+            "https"
+        } else {
+            "http"
+        };
         let password = std::env::var("LSW_WINRM_PASSWORD").map_err(|_| Error::ProbeFailed {
             host: host.clone(),
             detail: "set LSW_WINRM_PASSWORD in the environment for WinRM auth".into(),
