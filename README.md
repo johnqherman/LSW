@@ -38,9 +38,10 @@ default; `gui` uses WinMain, `dll` builds a shared library).
   [--sandbox strict] [--headless] <program>`, `lsw exec ... <cmd>`,
   `lsw test [--headless]`, `lsw shell [--windows]`.
 - **Binary analysis** - `lsw inspect <pe>` (format, arch, subsystem, entry
-  point, sections, imports), `lsw audit <pe>` (hardening flags), `lsw exports
-  <dll>`, `lsw diff a.exe b.exe`, `lsw sbom <pe>` (CycloneDX), `lsw sign <pe>`
-  (Authenticode).
+  point, sections, embedded manifest/version-info/icon, imports), `lsw audit
+  <pe>` (hardening flags), `lsw exports <dll>`, `lsw deps tree <pe>` (transitive
+  DLL tree), `lsw diff a.exe b.exe`, `lsw strings <file>`, `lsw sbom <pe>`
+  (CycloneDX), `lsw sign <pe>` (Authenticode).
 - **Paths** - `lsw path --windows|--linux <path>`.
 - **Environment state** - `lsw env create|list|clone|restore|remove`,
   `lsw registry get|set|seed|export|import|reset`, `lsw ps`,
@@ -58,8 +59,10 @@ default; `gui` uses WinMain, `dll` builds a shared library).
   Adapter Protocol server over stdio), `lsw plugin list` (out-of-process
   `lsw-provider-*` JSON-RPC providers), `lswd` + `lsw daemon status|stop` (an
   optional daemon; not required for normal use).
-- **Ergonomics** - `lsw completions bash|zsh|fish|powershell|elvish`,
-  `lsw explain LSW2004` (explain an error code), `lsw watch`.
+- **Ergonomics / tooling** - `lsw completions bash|zsh|fish|powershell|elvish`,
+  `lsw man [--dir <out>]`, `lsw explain LSW2004` (explain an error code),
+  `lsw watch`, `lsw config check` (lint `lsw.toml`), `lsw ci init github`
+  (generate a GitHub Actions workflow).
 
 Most report-style commands accept `--format json` for machine consumption.
 Editor packages (VS Code extension, Neovim plugin) live under `editors/` and
