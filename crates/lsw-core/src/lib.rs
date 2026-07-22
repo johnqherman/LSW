@@ -5,6 +5,7 @@ pub mod compatops;
 pub mod daemonops;
 pub mod dapops;
 pub mod debugops;
+pub mod depsops;
 pub mod diffops;
 pub mod doctorops;
 pub mod envops;
