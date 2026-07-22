@@ -306,14 +306,35 @@ fn resolve_program(program: &Path, domain: Domain) -> Result<ResolvedProgram> {
     })
 }
 
-pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Result<ExitStatus> {
-    if windows {
-        let args = project
-            .and_then(|p| crate::envops::mapper(env, p).to_windows(&p.root).ok())
+fn shell_invocation(powershell: bool, dos: Option<&str>) -> (PathBuf, Vec<String>) {
+    if powershell {
+        let mut args = vec!["-NoExit".to_owned()];
+        if let Some(dos) = dos {
+            args.push("-Command".to_owned());
+            args.push(format!("Set-Location -LiteralPath '{dos}'"));
+        }
+        (PathBuf::from("powershell.exe"), args)
+    } else {
+        let args = dos
             .map(|dos| vec!["/k".to_owned(), format!("cd /d {dos}")])
             .unwrap_or_default();
+        (PathBuf::from("cmd.exe"), args)
+    }
+}
+
+fn has_powershell(env: &Environment) -> bool {
+    env.layout
+        .drive_c()
+        .join("windows/system32/WindowsPowerShell/v1.0/powershell.exe")
+        .is_file()
+}
+
+pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Result<ExitStatus> {
+    if windows {
+        let dos = project.and_then(|p| crate::envops::mapper(env, p).to_windows(&p.root).ok());
+        let (program, args) = shell_invocation(has_powershell(env), dos.as_deref());
         return Ok(WineRuntime.execute(&ExecutionRequest {
-            program: PathBuf::from("cmd.exe"),
+            program,
             args,
             prefix: env.layout.prefix(),
             cwd: windows_cwd(env, project),
@@ -343,6 +364,22 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shell_invocation_prefers_powershell_when_present() {
+        let (prog, args) = shell_invocation(true, Some("C:\\src\\demo"));
+        assert_eq!(prog, PathBuf::from("powershell.exe"));
+        assert_eq!(args[0], "-NoExit");
+        assert!(args.last().unwrap().contains("Set-Location"));
+        assert!(args.last().unwrap().contains("C:\\src\\demo"));
+
+        let (prog, args) = shell_invocation(false, Some("C:\\src\\demo"));
+        assert_eq!(prog, PathBuf::from("cmd.exe"));
+        assert_eq!(args, vec!["/k", "cd /d C:\\src\\demo"]);
+
+        let (_, args) = shell_invocation(false, None);
+        assert!(args.is_empty());
+    }
 
     #[test]
     fn msi_detection_and_z_drive_mapping() {
