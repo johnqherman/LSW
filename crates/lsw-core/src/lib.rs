@@ -1,5 +1,6 @@
 pub mod auditops;
 pub mod buildops;
+pub mod caseops;
 pub mod ciops;
 pub mod compatdb;
 pub mod compatops;
