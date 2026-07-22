@@ -1334,12 +1334,15 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             native,
         } => {
             let (p, env) = active_env(&dirs)?;
-            let report = if *db {
+            let mut report = if *db {
                 lsw_core::compatops::compat_recording(&env, program, args, &dirs)?
             } else {
                 lsw_core::compatops::compat(&env, program, args)?
             };
             let native = if *native {
+                if let Some(probe) = lsw_core::verifyops::probe_imports(&p, program)? {
+                    lsw_core::compatops::apply_native(&mut report, &probe);
+                }
                 Some(lsw_core::verifyops::run_on_host(&p, &[program.clone()])?)
             } else {
                 None
@@ -1371,16 +1374,26 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                         println!("  X {a}");
                     }
                 }
-                println!("\nFeature                Local");
-                println!("---------------------------------");
-                for c in &report.capabilities {
-                    let s = match c.local {
-                        lsw_core::compatops::Support::Yes => "yes",
-                        lsw_core::compatops::Support::Partial => "partial",
-                        lsw_core::compatops::Support::No => "no",
-                        lsw_core::compatops::Support::Unused => "-",
-                    };
-                    println!("{:<22} {}", c.feature, s);
+                let sup = |s: lsw_core::compatops::Support| match s {
+                    lsw_core::compatops::Support::Yes => "yes",
+                    lsw_core::compatops::Support::Partial => "partial",
+                    lsw_core::compatops::Support::No => "no",
+                    lsw_core::compatops::Support::Unused => "-",
+                };
+                let has_native = report.capabilities.iter().any(|c| c.native.is_some());
+                if has_native {
+                    println!("\nFeature                Local      Native");
+                    println!("------------------------------------------");
+                    for c in &report.capabilities {
+                        let n = c.native.map(sup).unwrap_or("?");
+                        println!("{:<22} {:<10} {}", c.feature, sup(c.local), n);
+                    }
+                } else {
+                    println!("\nFeature                Local");
+                    println!("---------------------------------");
+                    for c in &report.capabilities {
+                        println!("{:<22} {}", c.feature, sup(c.local));
+                    }
                 }
                 println!("\n{}", report.note);
                 if let Some(nat) = &native {
