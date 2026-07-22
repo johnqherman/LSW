@@ -852,6 +852,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             } else {
                 println!("\nLSW Compatibility Report  {}\n", program.display());
                 println!("Required imported DLLs:  {}", report.imported_dlls);
+                println!("Imported API functions:  {}", report.imported_functions);
                 println!("Loaded at runtime:       {}", report.loaded_dlls);
                 println!("Supported locally:       {}", report.supported_locally);
                 println!(
