@@ -37,7 +37,14 @@ downloaded: only do it with binaries you trust.
 - It never claims a program that runs under Wine will behave identically on
   native Windows. Use `lsw verify --native-windows` for a real Windows result.
 
-## Reporting
+## Reporting a vulnerability
 
-This is a personal project; open an issue on the repository for security
-concerns.
+Please report security vulnerabilities privately, not through public issues. Use
+GitHub's private vulnerability reporting on this repository:
+**Security > Advisories > Report a vulnerability**
+(https://github.com/johnqherman/LSW/security/advisories/new).
+
+Include the LSW version (`lsw --version`), affected command or code path, and a
+reproduction if possible. You will get an acknowledgement and a fix or
+mitigation timeline. Please give a reasonable window to address the issue before
+any public disclosure.

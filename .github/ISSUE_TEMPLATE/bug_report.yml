@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in LSW behaves incorrectly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please include enough detail to reproduce.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what did LSW do instead?
+      placeholder: lsw build produced ... but I expected ...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands, and a minimal lsw.toml / source if possible.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: lsw-version
+    attributes:
+      label: LSW version
+      description: Output of `lsw --version`.
+      placeholder: lsw 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: lsw doctor output
+      description: Paste `lsw doctor` (host, runtime, toolchain diagnostics).
+      render: text
+    validations:
+      required: false
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      description: Linux distribution and kernel, Wine version.
+      placeholder: Fedora 43, kernel 6.x, wine 11.x
+    validations:
+      required: true

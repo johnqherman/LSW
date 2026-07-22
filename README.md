@@ -1,5 +1,11 @@
 # LSW - Linux Subsystem for Windows Development
 
+[![CI](https://github.com/johnqherman/LSW/actions/workflows/ci.yml/badge.svg)](https://github.com/johnqherman/LSW/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/lsw.svg)](https://crates.io/crates/lsw)
+[![docs.rs](https://img.shields.io/docsrs/lsw)](https://docs.rs/lsw)
+[![license](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](#license)
+[![msrv](https://img.shields.io/badge/rustc-1.85+-blue.svg)](rust-toolchain.toml)
+
 LSW is a Linux-native development environment for building, running, and
 inspecting Microsoft Windows applications without leaving Linux. It is
 conceptually the inverse of WSL: where WSL hosts a Linux environment on
