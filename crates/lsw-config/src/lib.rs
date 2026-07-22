@@ -216,6 +216,16 @@ pub struct ToolchainSection {
     pub provider: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    #[serde(default)]
+    pub link: LinkMode,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LinkMode {
+    #[default]
+    Static,
+    Dynamic,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -512,6 +522,7 @@ mod tests {
         let mut m = ProjectManifest::new("hello-win32");
         m.target.api = Some("win10".into());
         m.toolchain.provider = Some("llvm-mingw".into());
+        m.toolchain.link = LinkMode::Dynamic;
         m.environment.name = Some("win11-x64".into());
         m.build = Some(CommandSection {
             command: vec!["cmake".into(), "--build".into(), "build".into()],
@@ -522,6 +533,7 @@ mod tests {
         m.save(&path).unwrap();
         let loaded = ProjectManifest::load(&path).unwrap();
         assert_eq!(m, loaded);
+        assert_eq!(loaded.toolchain.link, LinkMode::Dynamic);
     }
 
     #[test]
@@ -532,7 +544,15 @@ mod tests {
         assert_eq!(m.runtime.provider, "wine");
         assert_eq!(m.filesystem.project_drive, "C:");
         assert_eq!(m.filesystem.mount_project, "/src");
+        assert_eq!(m.toolchain.link, LinkMode::Static);
         assert!(m.build.is_none());
+    }
+
+    #[test]
+    fn link_mode_parses_lowercase() {
+        let m: ProjectManifest =
+            toml::from_str("[project]\nname = \"x\"\n[toolchain]\nlink = \"dynamic\"\n").unwrap();
+        assert_eq!(m.toolchain.link, LinkMode::Dynamic);
     }
 
     #[test]
