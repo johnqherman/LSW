@@ -914,6 +914,18 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                         println!("  + {c}");
                     }
                 }
+                if !report.registry_access.is_empty() {
+                    println!("Registry operations: {}", report.registry_access.len());
+                    for r in &report.registry_access {
+                        println!("  R {r}");
+                    }
+                }
+                if !report.filesystem_access.is_empty() {
+                    println!("Filesystem operations: {}", report.filesystem_access.len());
+                    for f in &report.filesystem_access {
+                        println!("  F {f}");
+                    }
+                }
                 if report.unsupported.is_empty() {
                     println!("Unsupported APIs: none observed");
                 } else {

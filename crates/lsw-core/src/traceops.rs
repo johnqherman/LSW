@@ -12,6 +12,8 @@ pub struct TraceReport {
     pub imported_dlls: Vec<String>,
     pub loaded_dlls: Vec<String>,
     pub observed_calls: Vec<String>,
+    pub registry_access: Vec<String>,
+    pub filesystem_access: Vec<String>,
     pub unsupported: Vec<String>,
     pub exit_code: Option<i32>,
 }
@@ -43,9 +45,9 @@ pub fn trace(
     })?;
 
     let channels = if opts.relay {
-        "+loaddll,+relay,fixme-all"
+        "+loaddll,+reg,+file,+relay,fixme-all"
     } else {
-        "+loaddll,fixme-all"
+        "+loaddll,+reg,+file,fixme-all"
     };
 
     let output = Command::new(&wine)
@@ -65,6 +67,8 @@ pub fn trace(
         imported_dlls,
         loaded_dlls: parsed.loaded,
         observed_calls: parsed.calls,
+        registry_access: parsed.registry,
+        filesystem_access: parsed.filesystem,
         unsupported: parsed.unsupported,
         exit_code: output.status.code(),
     })
@@ -73,12 +77,25 @@ pub fn trace(
 struct ParsedTrace {
     loaded: Vec<String>,
     calls: Vec<String>,
+    registry: Vec<String>,
+    filesystem: Vec<String>,
     unsupported: Vec<String>,
+}
+
+fn extract_channel_op(line: &str, tag: &str) -> Option<String> {
+    let after = line.split_once(tag).map(|(_, r)| r)?.trim_start();
+    let op: String = after
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    if op.is_empty() { None } else { Some(op) }
 }
 
 fn parse_wine_trace(stderr: &str) -> ParsedTrace {
     let mut loaded = BTreeSet::new();
     let mut calls = BTreeSet::new();
+    let mut registry = BTreeSet::new();
+    let mut filesystem = BTreeSet::new();
     let mut unsupported = BTreeSet::new();
 
     for line in stderr.lines() {
@@ -87,6 +104,20 @@ fn parse_wine_trace(stderr: &str) -> ParsedTrace {
         if line.contains("trace:loaddll:") {
             if let Some(name) = extract_module_name(line) {
                 loaded.insert(name);
+            }
+            continue;
+        }
+
+        if line.contains("trace:reg:") {
+            if let Some(op) = extract_channel_op(line, "trace:reg:") {
+                registry.insert(op);
+            }
+            continue;
+        }
+
+        if line.contains("trace:file:") {
+            if let Some(op) = extract_channel_op(line, "trace:file:") {
+                filesystem.insert(op);
             }
             continue;
         }
@@ -110,6 +141,8 @@ fn parse_wine_trace(stderr: &str) -> ParsedTrace {
     ParsedTrace {
         loaded: loaded.into_iter().collect(),
         calls: calls.into_iter().collect(),
+        registry: registry.into_iter().collect(),
+        filesystem: filesystem.into_iter().collect(),
         unsupported: unsupported.into_iter().collect(),
     }
 }
@@ -196,6 +229,17 @@ irrelevant line
             "err:module:import_dll No implementation for dxgi.dll.SomeNewFn imported from ...";
         let p = parse_wine_trace(stderr);
         assert_eq!(p.unsupported, vec!["dxgi!SomeNewFn"]);
+    }
+
+    #[test]
+    fn categorizes_registry_and_filesystem_access() {
+        let stderr = "0024:trace:reg:RegOpenKeyExW (HKLM,...)\n\
+                      0024:trace:reg:RegQueryValueExW (...)\n\
+                      0024:trace:file:CreateFileW L\"C:\\\\x\"\n\
+                      0024:trace:file:CreateFileW L\"C:\\\\y\"";
+        let p = parse_wine_trace(stderr);
+        assert_eq!(p.registry, vec!["RegOpenKeyExW", "RegQueryValueExW"]);
+        assert_eq!(p.filesystem, vec!["CreateFileW"]);
     }
 
     #[test]
