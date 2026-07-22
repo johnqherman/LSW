@@ -330,15 +330,21 @@ fn run_step(
     let rendered = argv.join(" ");
     commands.push(rendered.clone());
 
-    let c_flags = tc.c_flags.join(" ");
-    let cxx_flags = tc
+    let mut c_flags = tc.c_flags.join(" ");
+    let mut cxx_flags = tc
         .c_flags
         .iter()
         .chain(&tc.cxx_flags)
         .cloned()
         .collect::<Vec<_>>()
         .join(" ");
-    let link_flags = tc.link_flags.join(" ");
+    let mut link_flags = tc.link_flags.join(" ");
+    if let Some((include, lib, _bin)) = crate::depsops::dep_dirs(project) {
+        let include_flag = format!(" -I{}", include.display());
+        c_flags.push_str(&include_flag);
+        cxx_flags.push_str(&include_flag);
+        link_flags.push_str(&format!(" -L{}", lib.display()));
+    }
     let mut command = Command::new(program);
     lsw_runtime::scrub_wine_env(&mut command);
     command

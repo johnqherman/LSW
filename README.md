@@ -50,17 +50,25 @@ default; `gui` uses WinMain, `dll` builds a shared library).
 - **Binary analysis** - `lsw inspect <pe>` (format, arch, subsystem, entry
   point, sections, embedded manifest/version-info/icon, imports), `lsw audit
   <pe>` (hardening flags), `lsw exports <dll>`, `lsw deps tree <pe>` (transitive
-  DLL tree), `lsw diff a.exe b.exe`, `lsw strings <file>`, `lsw sbom <pe>`
-  (CycloneDX), `lsw sign <pe>` (Authenticode).
+  DLL tree), `lsw crash <dump.dmp>` (decode a Windows minidump: exception,
+  faulting module, address), `lsw diff a.exe b.exe`, `lsw strings <file>`,
+  `lsw sbom <pe>` (CycloneDX), `lsw sign <pe>` (Authenticode).
+- **Dependencies** - `lsw deps add|remove|list <name>` installs prebuilt
+  mingw-w64 libraries (headers, import/static libs, DLLs) from the upstream
+  package set into the project's `deps/` sysroot, recorded in `[dependencies]`;
+  builds pick up the include and library paths automatically.
 - **Paths** - `lsw path --windows|--linux <path>`.
 - **Environment state** - `lsw env create|list|clone|restore|remove`,
   `lsw registry get|set|seed|export|import|reset`, `lsw ps`,
   `lsw kill <pid>|--all`, `lsw service create|start|stop|query|delete`.
-- **Compatibility** - `lsw compat [--db] <pe>` (measured report: imported DLLs,
-  imported API functions, runtime trace), `lsw compat-query <dll|module!func>`,
-  `lsw trace <pe>` (DLL loads, registry/filesystem access, unsupported APIs).
+- **Compatibility** - `lsw compat [--db] [--native] <pe>` (measured report:
+  imported DLLs, imported API functions, runtime trace; `--native` adds a real
+  Windows verdict plus a per-DLL/function capability probe on the `[verify]`
+  host), `lsw compat-query <dll|module!func>`, `lsw trace <pe>` (DLL loads,
+  registry/filesystem access, unsupported APIs).
 - **Debugging** - `lsw debug <pe> [--gdb [--no-start]]` (winedbg, or a
-  gdb-remote stub any gdb/lldb can attach to).
+  gdb-remote stub any gdb/lldb can attach to); `lsw debug --native <pe>` runs the
+  binary under cdb on the `[verify]` Windows host and returns a real backtrace.
 - **Native verification** - `lsw verify --native-windows` builds, then runs the
   artifacts on a real Windows host over SSH (configured in `[verify]`), yielding
   an honest `WINDOWS_VERIFIED` / `WINDOWS_UNAVAILABLE` status distinct from the

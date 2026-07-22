@@ -186,6 +186,28 @@ pub enum Error {
 
     #[error("LSW2032: native import probe failed on '{host}': {detail}")]
     ProbeFailed { host: String, detail: String },
+
+    #[error(
+        "LSW2033: package '{name}' not found in the {repo} package set\n\
+         Names follow the upstream library (e.g. zlib, sqlite3, libpng)."
+    )]
+    DepNotFound { name: String, repo: String },
+
+    #[error("LSW2034: could not fetch {url}: {detail}")]
+    DownloadFailed { url: String, detail: String },
+
+    #[error("LSW2035: checksum mismatch for {name} (expected {expected}, got {actual})")]
+    ChecksumMismatch {
+        name: String,
+        expected: String,
+        actual: String,
+    },
+
+    #[error("LSW2036: could not unpack {name}: {detail}")]
+    ExtractFailed { name: String, detail: String },
+
+    #[error("LSW2037: {arch} has no mingw-w64 package repository")]
+    DepArchUnsupported { arch: String },
 }
 
 impl Error {
