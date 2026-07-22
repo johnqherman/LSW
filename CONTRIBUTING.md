@@ -1,14 +1,15 @@
 # Contributing to LSW
 
-Thanks for your interest. LSW is a Rust workspace; contributions go through pull
-requests against `main`.
+Thank you for your interest. LSW is a Rust workspace. Send contributions as
+pull requests against `main`.
 
 ## Development setup
 
-Building and testing LSW needs only a stable Rust toolchain (see
-`rust-toolchain.toml`; MSRV is 1.85). Wine, MinGW-w64, and the other Windows
-tooling are *runtime* dependencies for using `lsw`, not for building it, so the
-test suite runs offline on a stock Linux install.
+To build and test LSW, you need only a stable Rust toolchain (see
+`rust-toolchain.toml`; the MSRV is 1.85). Wine, MinGW-w64, and the other
+Windows tools are runtime dependencies of `lsw`. They are not build
+dependencies. Thus the test suite runs offline on a standard Linux
+installation.
 
 ```
 git clone https://github.com/johnqherman/LSW
@@ -18,7 +19,8 @@ cargo build --workspace
 
 ## The gate
 
-Every change must pass the same checks CI runs. Run them before opening a PR:
+Each change must pass the same checks that CI runs. Run them before you open a
+pull request:
 
 ```
 cargo fmt --all --check
@@ -29,47 +31,50 @@ cargo deny check          # optional locally; CI runs it
 
 ## Conventions
 
-Match the style of the module you are editing.
+Use the style of the module that you change.
 
-- **Formatting is automated.** `cargo fmt` is the source of truth for style, and
-  `cargo clippy --workspace --all-targets -- -D warnings` must be clean - both
-  are enforced by CI.
-- **Comment the why, not the what.** Prefer code that reads on its own; add a
-  comment where the reasoning behind a decision isn't obvious, and keep it
-  accurate as the code changes.
-- **Errors are actionable.** New failures use the `LSW####` scheme (see
-  `crates/lsw-core/src/error.rs`) with a message that tells the user how to fix
-  the problem, not just what went wrong.
-- **Never equate Wine with native Windows.** LSW's premise is honest, measured
-  compatibility - keep local-runtime results distinct from native-verification
-  results, and never report a Wine pass as a Windows guarantee.
-- **Tests come with changes.** New behavior needs unit tests; bug fixes need a
-  regression test. Keep `cargo test --workspace` green.
-- **Reuse the existing abstractions.** Prefer the established patterns - the
-  `RuntimeProvider` / `ToolchainProvider` traits, the error enum, the `Dirs`
-  layout - over new one-off mechanisms.
-- **Keep dependencies lean.** Add a crate only when it clearly earns its place;
-  `cargo deny` gates licenses and advisories.
-- **Write clear commit messages.** Follow
-  [Conventional Commits](https://www.conventionalcommits.org) - a `feat:` /
-  `fix:` / `docs:` / `chore:` / `refactor:` prefix and a subject that explains
-  the *why* when it isn't obvious.
+- **Formatting is automated.** `cargo fmt` is the source of truth for style.
+  `cargo clippy --workspace --all-targets -- -D warnings` must be clean. CI
+  makes sure of both.
+- **Give the why in comments, not the what.** Write code that is clear without
+  comments. Add a comment where the reason for a decision is not obvious. Keep
+  the comment correct when the code changes.
+- **Make errors actionable.** New failures use the `LSW####` scheme (see
+  `crates/lsw-core/src/error.rs`). The message must tell the user how to
+  repair the problem, not only what occurred.
+- **Do not tell the user that Wine is native Windows.** The premise of LSW is
+  honest, measured compatibility. Keep local-runtime results and
+  native-verification results separate. Do not report a Wine pass as a Windows
+  guarantee.
+- **Send tests with changes.** New behavior needs unit tests. Bug repairs need
+  a regression test. Keep `cargo test --workspace` green.
+- **Use the existing abstractions.** Use the established patterns: the
+  `RuntimeProvider` and `ToolchainProvider` traits, the error enum, and the
+  `Dirs` layout. Do not add new one-off mechanisms.
+- **Keep the dependencies few.** Add a crate only when its value is clear.
+  `cargo deny` controls the licenses and the advisories.
+- **Write clear commit messages.** Use
+  [Conventional Commits](https://www.conventionalcommits.org): a `feat:`,
+  `fix:`, `docs:`, `chore:`, or `refactor:` prefix, and a subject that gives
+  the why when the why is not obvious.
 
-## Testing against real Windows
+## Tests against real Windows
 
-The native-verification paths (`lsw verify --native-windows`, `lsw compat
---native`, `lsw debug --native`, WinRM/HTTPS transports) need a reachable
-Windows host configured under `[verify]` in `lsw.toml`. These are exercised
-manually, not in CI. `docs/compatibility.md` describes the transports and setup.
+The native-verification paths (`lsw verify --native-windows`,
+`lsw compat --native`, `lsw debug --native`, and the WinRM/HTTPS transports)
+need a Windows host that you can get access to. Configure the host in
+`[verify]` in `lsw.toml`. These paths are tested manually, not in CI. The
+native-verification section of the README describes the transports and the
+setup.
 
 ## Scope
 
-LSW targets Windows *userspace* application development from Linux. Kernel
-drivers, a full Windows desktop, Active Directory, and redistributing
-proprietary Microsoft content are explicit non-goals - please open an issue
-before proposing work in those directions.
+The target of LSW is Windows userspace application development from Linux.
+Kernel drivers, a full Windows desktop, Active Directory, and redistribution
+of proprietary Microsoft content are not goals. Open an issue before you
+propose work in those directions.
 
 ## License
 
-By contributing you agree that your contributions are licensed under the
-project's dual `Apache-2.0 OR MIT` terms.
+When you contribute, you agree that your contributions have the dual
+`Apache-2.0 OR MIT` license of the project.
