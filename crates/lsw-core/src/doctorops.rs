@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use serde::Serialize;
 
 use lsw_config::Dirs;
@@ -32,6 +34,42 @@ pub struct Section {
 pub struct DoctorReport {
     pub sections: Vec<Section>,
     pub healthy: bool,
+}
+
+fn case_collisions(names: &[String]) -> Vec<String> {
+    let mut seen: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut out = Vec::new();
+    for name in names {
+        let lower = name.to_lowercase();
+        match seen.get(&lower) {
+            Some(first) => out.push(format!("{first} / {name}")),
+            None => {
+                seen.insert(lower, name.clone());
+            }
+        }
+    }
+    out
+}
+
+fn scan_case_collisions(root: &Path) -> usize {
+    const SKIP: &[&str] = &["build", "target", ".git", "node_modules"];
+    let mut stack = vec![root.to_path_buf()];
+    let mut total = 0;
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        let mut names = Vec::new();
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if entry.path().is_dir() && !SKIP.contains(&name.as_str()) {
+                stack.push(entry.path());
+            }
+            names.push(name);
+        }
+        total += case_collisions(&names).len();
+    }
+    total
 }
 
 fn row(label: &str, value: impl Into<String>, status: Status) -> Row {
@@ -108,6 +146,22 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
 
     if let Some(p) = project {
         let mut rows = vec![row("lsw.toml", "valid", Status::Ok)];
+        let collisions = scan_case_collisions(&p.root);
+        rows.push(row(
+            "Case sensitivity",
+            if collisions == 0 {
+                "no case-only filename collisions".to_owned()
+            } else {
+                format!(
+                    "{collisions} case-only collision(s); may break on case-insensitive Windows"
+                )
+            },
+            if collisions == 0 {
+                Status::Ok
+            } else {
+                Status::Warn
+            },
+        ));
         match envops::resolve_active(dirs, p) {
             Ok(env) => {
                 let diag = lsw_runtime::WineRuntime.diagnostics(&env.layout.prefix());
@@ -186,4 +240,23 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
         .flat_map(|s| &s.rows)
         .any(|r| r.status == Status::Fail);
     Ok(DoctorReport { sections, healthy })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn case_collisions_flags_case_only_duplicates() {
+        let names = vec![
+            "README.md".to_owned(),
+            "readme.md".to_owned(),
+            "src".to_owned(),
+            "Main.rs".to_owned(),
+        ];
+        let hits = case_collisions(&names);
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].to_lowercase().contains("readme.md"));
+        assert!(case_collisions(&["a".to_owned(), "b".to_owned()]).is_empty());
+    }
 }
