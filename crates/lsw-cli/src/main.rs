@@ -138,6 +138,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Kill { pid, all } => cmd::state::kill(pid, all, &dirs),
         Cmd::Service(op) => cmd::state::service(op, &dirs, cli.format),
         Cmd::Rust(op) => cmd::lang::rust(op, &dirs, cli.format),
+        Cmd::Dotnet(op) => cmd::lang::dotnet(op, &dirs, cli.format),
         Cmd::Daemon(op) => cmd::integration::daemon(op, &dirs),
         Cmd::Plugin(op) => cmd::integration::plugin(op),
         Cmd::Sdk(op) => cmd::lang::sdk(op, &dirs),

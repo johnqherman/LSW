@@ -263,7 +263,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                     "-r".to_owned(),
                     rid.to_owned(),
                     "--self-contained".to_owned(),
-                    "false".to_owned(),
+                    "true".to_owned(),
                 ],
                 &mut commands,
             )?;
