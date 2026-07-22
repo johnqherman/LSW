@@ -116,6 +116,8 @@ enum Cmd {
     Exports { file: PathBuf },
     /// Generate a CycloneDX SBOM for a PE (imports + toolchain provenance).
     Sbom { file: PathBuf },
+    /// Diff two PEs by imports and exports.
+    Diff { a: PathBuf, b: PathBuf },
     /// Translate paths between Linux and Windows views.
     Path {
         /// Print the Windows form of a Linux path.
@@ -769,6 +771,26 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                 "{}",
                 serde_json::to_string_pretty(&bom).expect("serializes")
             );
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Diff { a, b } => {
+            let report = lsw_core::diffops::diff(a, b)?;
+            if cli.format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("serializes")
+                );
+            } else {
+                for (label, d) in [("imports", &report.imports), ("exports", &report.exports)] {
+                    for x in &d.added {
+                        println!("+ {label} {x}");
+                    }
+                    for x in &d.removed {
+                        println!("- {label} {x}");
+                    }
+                }
+            }
             Ok(ExitCode::SUCCESS)
         }
 
