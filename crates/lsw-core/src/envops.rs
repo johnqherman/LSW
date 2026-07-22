@@ -84,6 +84,9 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         }
     }
 
+    for dir in dirs.managed_dirs() {
+        fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
+    }
     fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
     fs::create_dir_all(layout.logs()).map_err(|e| Error::io(layout.logs(), e))?;
 
