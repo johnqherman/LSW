@@ -72,7 +72,10 @@ pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
             reproducible: false,
         },
     )?;
+    run_on_host(project, &build.artifacts)
+}
 
+pub fn run_on_host(project: &Project, artifacts: &[PathBuf]) -> Result<VerifyReport> {
     let cfg = &project.manifest.verify;
     let Some(host) = cfg.host.clone() else {
         return Ok(VerifyReport {
@@ -104,7 +107,7 @@ pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
         .unwrap_or_else(|| default_remote_dir(project));
 
     validate_windows_dir(&remote_dir)?;
-    let plan = plan(project, &build.artifacts, &remote_dir);
+    let plan = plan(project, artifacts, &remote_dir);
     for (_, name) in &plan.uploads {
         validate_windows_name(name)?;
     }

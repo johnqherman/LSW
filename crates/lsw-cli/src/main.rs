@@ -212,6 +212,9 @@ enum Cmd {
         /// Record observations into the persistent compatibility database.
         #[arg(long)]
         db: bool,
+        /// Also run the binary on the configured [verify] Windows host for a native verdict.
+        #[arg(long)]
+        native: bool,
     },
     /// Query the persistent compatibility database.
     CompatQuery {
@@ -1267,17 +1270,30 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Cmd::Compat { program, args, db } => {
-            let (_p, env) = active_env(&dirs)?;
+        Cmd::Compat {
+            program,
+            args,
+            db,
+            native,
+        } => {
+            let (p, env) = active_env(&dirs)?;
             let report = if *db {
                 lsw_core::compatops::compat_recording(&env, program, args, &dirs)?
             } else {
                 lsw_core::compatops::compat(&env, program, args)?
             };
+            let native = if *native {
+                Some(lsw_core::verifyops::run_on_host(&p, &[program.clone()])?)
+            } else {
+                None
+            };
             if cli.format == Format::Json {
                 println!(
                     "{}",
-                    serde_json::to_string_pretty(&report).expect("serializes")
+                    serde_json::to_string_pretty(
+                        &serde_json::json!({ "compat": report, "native": native })
+                    )
+                    .expect("serializes")
                 );
             } else {
                 println!("\nLSW Compatibility Report  {}\n", program.display());
@@ -1310,6 +1326,19 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
                     println!("{:<22} {}", c.feature, s);
                 }
                 println!("\n{}", report.note);
+                if let Some(nat) = &native {
+                    println!(
+                        "\nNative (real Windows): {:?} on {}",
+                        nat.status,
+                        nat.host.as_deref().unwrap_or("-")
+                    );
+                    for r in &nat.results {
+                        println!("  {:<24} exit {:?}", r.artifact, r.exit_code);
+                    }
+                    if nat.results.is_empty() {
+                        println!("  {}", nat.detail);
+                    }
+                }
             }
             Ok(ExitCode::SUCCESS)
         }
