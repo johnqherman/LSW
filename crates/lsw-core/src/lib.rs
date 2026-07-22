@@ -11,6 +11,7 @@ pub mod depsops;
 pub mod diffops;
 pub mod doctorops;
 pub mod dumpops;
+pub mod emulateops;
 pub mod envops;
 pub mod error;
 pub mod explainops;

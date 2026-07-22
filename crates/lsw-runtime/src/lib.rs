@@ -69,6 +69,13 @@ pub struct ExecutionRequest {
     pub env: Vec<(String, String)>,
     pub sandbox: Option<SandboxSpec>,
     pub display: DisplayMode,
+    pub emulate: Option<Emulation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Emulation {
+    pub qemu: PathBuf,
+    pub wine: PathBuf,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -447,7 +454,10 @@ impl RuntimeProvider for WineRuntime {
     }
 
     fn execute(&self, req: &ExecutionRequest) -> Result<ExitStatus, RuntimeError> {
-        let executable = Self::wine_executable()?;
+        let (loader, executable) = match &req.emulate {
+            Some(em) => (Some(em.qemu.clone()), em.wine.clone()),
+            None => (None, Self::wine_executable()?),
+        };
 
         let virtual_display = req.display == DisplayMode::Virtual;
         let sandboxed = req.sandbox.is_some();
@@ -482,6 +492,9 @@ impl RuntimeProvider for WineRuntime {
             }
         }
 
+        if let Some(loader) = &loader {
+            argv.push(loader.clone().into_os_string());
+        }
         argv.push(executable.clone().into_os_string());
         argv.push(req.program.clone().into_os_string());
         argv.extend(req.args.iter().map(Into::into));
@@ -785,6 +798,7 @@ mod tests {
                 env: Vec::new(),
                 sandbox: None,
                 display: DisplayMode::Inherit,
+                emulate: None,
             })
             .unwrap();
         assert!(status.success(), "cmd.exe /c exit 0 failed: {status}");

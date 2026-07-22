@@ -135,6 +135,7 @@ pub fn run(
             env: windows_env(env, project),
             sandbox: None,
             display: lsw_runtime::DisplayMode::Inherit,
+            emulate: crate::emulateops::resolve(env.manifest.target_arch)?,
         })?;
         return Ok(RunReport {
             domain: Domain::Windows,
@@ -195,6 +196,7 @@ pub fn run(
                 env: windows_env(env, project),
                 sandbox: sandbox_spec(env, project, sandbox)?,
                 display: display_mode(display, is_gui),
+                emulate: crate::emulateops::resolve(env.manifest.target_arch)?,
             })?
         }
         Domain::Host | Domain::Auto => {
@@ -368,6 +370,7 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
             env: windows_env(env, project),
             sandbox: None,
             display: lsw_runtime::DisplayMode::Inherit,
+            emulate: crate::emulateops::resolve(env.manifest.target_arch)?,
         })?);
     }
 
