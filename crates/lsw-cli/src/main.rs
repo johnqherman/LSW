@@ -121,6 +121,13 @@ enum Cmd {
     Sbom { file: PathBuf },
     /// Diff two PEs by imports and exports.
     Diff { a: PathBuf, b: PathBuf },
+    /// Extract printable ASCII and UTF-16 strings from a file.
+    Strings {
+        file: PathBuf,
+        /// Minimum string length.
+        #[arg(long, default_value_t = 4)]
+        min: usize,
+    },
     /// Authenticode-sign a PE with a cached self-signed identity.
     Sign {
         file: PathBuf,
@@ -806,6 +813,13 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Sign { file, publisher } => {
             lsw_core::signops::sign(file, publisher.as_deref())?;
             println!("signed {}", file.display());
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Cmd::Strings { file, min } => {
+            for s in lsw_core::stringsops::strings(file, *min)? {
+                println!("{s}");
+            }
             Ok(ExitCode::SUCCESS)
         }
 
