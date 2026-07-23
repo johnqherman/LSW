@@ -164,6 +164,15 @@ pub fn prepare(project: &Project, env: &Environment, tc: &ResolvedToolchain) -> 
 
     let aot_dir = project.root.join("build").join("lsw-aot");
     let shim_dir = aot_dir.join("libs");
+    for d in [&aot_dir, &shim_dir] {
+        if let Ok(meta) = fs::symlink_metadata(d)
+            && meta.file_type().is_symlink()
+        {
+            return Err(Error::AotUnsupported {
+                detail: format!("{} is a symlink; refusing to build through it", d.display()),
+            });
+        }
+    }
     fs::create_dir_all(&shim_dir).map_err(|e| Error::io(shim_dir.clone(), e))?;
 
     for (msvc_name, mingw_name) in IMPORT_LIBS {

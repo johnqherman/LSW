@@ -351,20 +351,20 @@ pub fn add(
         .arg("-tf")
         .arg(&cached)
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(|e| Error::io(PathBuf::from("tar"), e))?;
     let mut stdout = listing_child.stdout.take().expect("piped stdout");
     let mut captured = Vec::new();
-    (&mut stdout)
+    let read_result = (&mut stdout)
         .take(MAX_LISTING_BYTES + 1)
-        .read_to_end(&mut captured)
-        .map_err(|e| Error::io(PathBuf::from("tar"), e))?;
-    let too_big = captured.len() as u64 > MAX_LISTING_BYTES;
+        .read_to_end(&mut captured);
     let _ = std::io::copy(&mut stdout, &mut std::io::sink());
     let listing_status = listing_child
         .wait()
         .map_err(|e| Error::io(PathBuf::from("tar"), e))?;
+    read_result.map_err(|e| Error::io(PathBuf::from("tar"), e))?;
+    let too_big = captured.len() as u64 > MAX_LISTING_BYTES;
     if too_big {
         return Err(Error::ExtractFailed {
             name: name.to_owned(),

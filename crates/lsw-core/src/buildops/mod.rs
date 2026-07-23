@@ -536,7 +536,8 @@ fn walk(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
+        let is_symlink = entry.file_type().map(|t| t.is_symlink()).unwrap_or(true);
+        if !is_symlink && path.is_dir() {
             let name = path
                 .file_name()
                 .and_then(|n| n.to_str())
