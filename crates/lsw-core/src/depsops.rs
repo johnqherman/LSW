@@ -363,6 +363,10 @@ pub fn remove(project: &crate::project::Project, name: &str) -> Result<bool> {
     }
 
     let root = deps_root(project);
+    if name.contains('/') || name.contains('\\') || name.contains("..") {
+        manifest.save(&manifest_path)?;
+        return Ok(true);
+    }
     let files_manifest = root.join(".lsw").join(format!("{name}.files"));
     if let Ok(list) = std::fs::read_to_string(&files_manifest) {
         for rel in list.lines() {
