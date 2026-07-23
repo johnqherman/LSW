@@ -241,5 +241,8 @@ pub(crate) fn trace(
             }
         }
     }
-    Ok(ExitCode::SUCCESS)
+    Ok(match report.exit_code {
+        Some(code) if code != 0 => ExitCode::from(code.clamp(0, 255) as u8),
+        _ => ExitCode::SUCCESS,
+    })
 }

@@ -61,7 +61,7 @@ pub fn trace(
     let stderr = String::from_utf8_lossy(&output.stderr);
     let parsed = parse_wine_trace(&stderr);
 
-    print!("{}", String::from_utf8_lossy(&output.stdout));
+    eprint!("{}", String::from_utf8_lossy(&output.stdout));
 
     Ok(TraceReport {
         imported_dlls,

@@ -26,10 +26,15 @@ pub(crate) fn build(
         },
     )?;
     if format == Format::Json {
+        let artifacts: Vec<String> = report
+            .artifacts
+            .iter()
+            .map(|a| a.display().to_string())
+            .collect();
         let payload = serde_json::json!({
             "system": format!("{:?}", report.system),
             "commands": report.commands,
-            "artifacts": report.artifacts,
+            "artifacts": artifacts,
             "lock_written": report.lock_written,
         });
         println!("{payload}");
