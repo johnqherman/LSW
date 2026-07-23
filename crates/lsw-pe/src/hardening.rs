@@ -79,9 +79,22 @@ fn hardening_typed<Pe: ImageNtHeaders>(
         .data_directories()
         .get(pe::IMAGE_DIRECTORY_ENTRY_SECURITY)
         .map(|d| {
-            let addr = d.virtual_address.get(LE) as u64;
-            let size = d.size.get(LE) as u64;
-            addr != 0 && size != 0 && addr.saturating_add(size) <= data.len() as u64
+            let addr = d.virtual_address.get(LE) as usize;
+            let size = d.size.get(LE) as usize;
+            if addr == 0 || size < 8 {
+                return false;
+            }
+            let Some(hdr) = data.get(addr..addr.saturating_add(8)) else {
+                return false;
+            };
+            let dw_length = u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]) as usize;
+            let revision = u16::from_le_bytes([hdr[4], hdr[5]]);
+            let cert_type = u16::from_le_bytes([hdr[6], hdr[7]]);
+            dw_length >= 8
+                && dw_length <= size
+                && addr.saturating_add(dw_length) <= data.len()
+                && matches!(revision, 0x0100 | 0x0200)
+                && cert_type == 0x0002
         })
         .unwrap_or(false);
     Ok(Hardening {
