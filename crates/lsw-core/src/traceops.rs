@@ -104,8 +104,13 @@ pub fn trace(
             Err(_) => break (None, false),
         }
     };
-    let stdout_bytes = out_rx.and_then(|rx| rx.recv().ok()).unwrap_or_default();
-    let stderr_bytes = err_rx.and_then(|rx| rx.recv().ok()).unwrap_or_default();
+    let drain_wait = Duration::from_secs(5);
+    let stdout_bytes = out_rx
+        .and_then(|rx| rx.recv_timeout(drain_wait).ok())
+        .unwrap_or_default();
+    let stderr_bytes = err_rx
+        .and_then(|rx| rx.recv_timeout(drain_wait).ok())
+        .unwrap_or_default();
 
     let stderr = String::from_utf8_lossy(&stderr_bytes);
     let parsed = parse_wine_trace(&stderr);
