@@ -1,4 +1,5 @@
 mod env;
+mod gpu;
 mod sandbox;
 mod types;
 mod wine;
@@ -179,14 +180,49 @@ mod tests {
             ("MY_VAR".to_owned(), "1".to_owned()),
         ];
         let env = full_env(Path::new("/p"), &extra);
-        let base_len = base_env(Path::new("/p")).len();
-        assert_eq!(&env[base_len..], &extra[..]);
+        assert_eq!(&env[env.len() - extra.len()..], &extra[..]);
         let last_winedebug = env
             .iter()
             .rev()
             .find(|(k, _)| k == "WINEDEBUG")
             .map(|(_, v)| v.as_str());
         assert_eq!(last_winedebug, Some("+loaddll"));
+    }
+
+    #[test]
+    fn egl_pin_only_on_all_nvidia_systems() {
+        use crate::gpu::egl_vendor_pin_for;
+        let dir = tempfile::tempdir().unwrap();
+        let json = dir.path().join("10_nvidia.json");
+        std::fs::write(&json, "{}").unwrap();
+        let nv = |n: usize| vec!["0x10de".to_owned(); n];
+
+        let pin = egl_vendor_pin_for(false, &nv(2), &json).unwrap();
+        assert_eq!(pin.0, "__EGL_VENDOR_LIBRARY_FILENAMES");
+        assert_eq!(pin.1, json.display().to_string());
+
+        let hybrid = vec!["0x1002".to_owned(), "0x10de".to_owned()];
+        assert!(egl_vendor_pin_for(false, &hybrid, &json).is_none());
+        assert!(egl_vendor_pin_for(false, &["0x1002".to_owned()], &json).is_none());
+        assert!(egl_vendor_pin_for(false, &[], &json).is_none());
+        assert!(egl_vendor_pin_for(true, &nv(1), &json).is_none());
+        assert!(egl_vendor_pin_for(false, &nv(1), &dir.path().join("missing.json")).is_none());
+    }
+
+    #[test]
+    fn render_node_vendors_reads_sysfs_layout() {
+        use crate::gpu::render_node_vendors;
+        let dir = tempfile::tempdir().unwrap();
+        for (node, vendor) in [("renderD128", "0x1002\n"), ("renderD129", "0x10de\n")] {
+            let dev = dir.path().join(node).join("device");
+            std::fs::create_dir_all(&dev).unwrap();
+            std::fs::write(dev.join("vendor"), vendor).unwrap();
+        }
+        std::fs::create_dir_all(dir.path().join("card0").join("device")).unwrap();
+        let mut vendors = render_node_vendors(dir.path());
+        vendors.sort();
+        assert_eq!(vendors, vec!["0x1002".to_owned(), "0x10de".to_owned()]);
+        assert!(render_node_vendors(&dir.path().join("nope")).is_empty());
     }
 
     #[test]
