@@ -126,7 +126,7 @@ const WINDOWS_RESERVED_NAMES: &[&str] = &[
     "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
 ];
 
-fn sanitize_project_name(raw: &str) -> String {
+pub(crate) fn sanitize_project_name(raw: &str) -> String {
     let cleaned: String = raw
         .chars()
         .map(|c| {
@@ -206,9 +206,9 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
                     Error::io(path.clone(), e)
                 }
             })?;
+        created.push(path.clone());
         file.write_all(contents.as_bytes())
             .map_err(|e| Error::io(path.clone(), e))?;
-        created.push(path.clone());
         Ok(())
     }
 

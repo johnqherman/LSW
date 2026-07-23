@@ -63,7 +63,10 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<RustInitRepo
                     path: parent.to_path_buf(),
                     detail: "cannot derive a project name from this directory".into(),
                 })?;
-            (parent.to_path_buf(), n)
+            (
+                parent.to_path_buf(),
+                crate::project::sanitize_project_name(&n),
+            )
         }
     };
 
@@ -99,29 +102,37 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<RustInitRepo
                     Error::io(path.clone(), e)
                 }
             })?;
+        created.push(path.clone());
         file.write_all(contents.as_bytes())
             .map_err(|e| Error::io(path.clone(), e))?;
-        created.push(path);
         Ok(())
     }
 
     let mut created = Vec::new();
-
-    let manifest = lsw_config::ProjectManifest::new(&project_name);
     let manifest_path = root.join(lsw_config::PROJECT_MANIFEST);
-    manifest.save(&manifest_path)?;
-    created.push(manifest_path);
+    let result: Result<()> = (|| {
+        lsw_config::ProjectManifest::new(&project_name).save(&manifest_path)?;
+        created.push(manifest_path.clone());
+        write_file(
+            &root,
+            "Cargo.toml",
+            &TEMPLATE_CARGO.replace("{name}", &cargo_package_name(&project_name)),
+            &mut created,
+        )?;
+        write_file(&root, "src/main.rs", TEMPLATE_MAIN, &mut created)?;
+        let _ = TEMPLATE_LSW;
+        Ok(())
+    })();
 
-    write_file(
-        &root,
-        "Cargo.toml",
-        &TEMPLATE_CARGO.replace("{name}", &cargo_package_name(&project_name)),
-        &mut created,
-    )?;
-    write_file(&root, "src/main.rs", TEMPLATE_MAIN, &mut created)?;
-    let _ = TEMPLATE_LSW;
-
-    Ok(RustInitReport { root, created })
+    match result {
+        Ok(()) => Ok(RustInitReport { root, created }),
+        Err(e) => {
+            for path in created.iter().rev() {
+                let _ = fs::remove_file(path);
+            }
+            Err(e)
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]

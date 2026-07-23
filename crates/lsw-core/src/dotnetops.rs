@@ -43,7 +43,10 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<DotnetInitRe
                     path: parent.to_path_buf(),
                     detail: "cannot derive a project name from this directory".into(),
                 })?;
-            (parent.to_path_buf(), n)
+            (
+                parent.to_path_buf(),
+                crate::project::sanitize_project_name(&n),
+            )
         }
     };
 
@@ -79,28 +82,36 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<DotnetInitRe
                     Error::io(path.clone(), e)
                 }
             })?;
+        created.push(path.clone());
         file.write_all(contents.as_bytes())
             .map_err(|e| Error::io(path.clone(), e))?;
-        created.push(path);
         Ok(())
     }
 
     let mut created = Vec::new();
-
-    let manifest = lsw_config::ProjectManifest::new(&project_name);
     let manifest_path = root.join(lsw_config::PROJECT_MANIFEST);
-    manifest.save(&manifest_path)?;
-    created.push(manifest_path);
+    let result: Result<()> = (|| {
+        lsw_config::ProjectManifest::new(&project_name).save(&manifest_path)?;
+        created.push(manifest_path.clone());
+        write_file(
+            &root,
+            &format!("{project_name}.csproj"),
+            TEMPLATE_CSPROJ,
+            &mut created,
+        )?;
+        write_file(&root, "Program.cs", TEMPLATE_PROGRAM, &mut created)?;
+        Ok(())
+    })();
 
-    write_file(
-        &root,
-        &format!("{project_name}.csproj"),
-        TEMPLATE_CSPROJ,
-        &mut created,
-    )?;
-    write_file(&root, "Program.cs", TEMPLATE_PROGRAM, &mut created)?;
-
-    Ok(DotnetInitReport { root, created })
+    match result {
+        Ok(()) => Ok(DotnetInitReport { root, created }),
+        Err(e) => {
+            for path in created.iter().rev() {
+                let _ = fs::remove_file(path);
+            }
+            Err(e)
+        }
+    }
 }
 
 fn has_dotnet_project(root: &std::path::Path) -> bool {
