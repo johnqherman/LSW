@@ -30,6 +30,9 @@ pub struct DotnetInitReport {
 }
 
 pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<DotnetInitReport> {
+    if let Some(n) = name {
+        crate::envops::validate_name("project", n)?;
+    }
     let (root, project_name) = match name {
         Some(n) => (parent.join(n), n.to_owned()),
         None => {
@@ -58,6 +61,12 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<DotnetInitRe
         created: &mut Vec<std::path::PathBuf>,
     ) -> Result<()> {
         let path = root.join(rel);
+        if path.exists() {
+            return Err(Error::InitFailed {
+                path: path.clone(),
+                detail: format!("{rel} already exists; refusing to overwrite"),
+            });
+        }
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir).map_err(|e| Error::io(dir.to_path_buf(), e))?;
         }

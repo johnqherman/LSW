@@ -6,7 +6,9 @@ use lsw_config::{ResolvedToolchain, TargetArch};
 use crate::util::which;
 
 fn cmake_escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('$', "\\$")
 }
 
 fn cmake_flags(flags: impl IntoIterator<Item = String>) -> String {
