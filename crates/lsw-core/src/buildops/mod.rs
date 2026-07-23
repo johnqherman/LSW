@@ -321,19 +321,25 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             let cross_file = env.layout.root.join("meson-cross.ini");
             write_meson_cross_file(&cross_file, &tc, env.manifest.target_arch)
                 .map_err(|e| Error::io(cross_file.clone(), e))?;
-            if !project.root.join("build").join("meson-info").is_dir() {
-                run_step(
-                    project,
-                    env,
-                    &tc,
-                    &[
-                        "meson".to_owned(),
-                        "setup".to_owned(),
-                        "build".to_owned(),
-                        format!("--cross-file={}", cross_file.display()),
-                    ],
-                    &mut commands,
-                )?;
+            let cross_hash = file_hash(&cross_file);
+            let configured = project.root.join("build").join("meson-info").is_dir();
+            let fp_path = project.root.join("build").join(".lsw-meson-cross");
+            let fp_match = configured
+                && std::fs::read_to_string(&fp_path).ok().as_deref() == cross_hash.as_deref();
+            if !fp_match {
+                let mut setup = vec![
+                    "meson".to_owned(),
+                    "setup".to_owned(),
+                    "build".to_owned(),
+                    format!("--cross-file={}", cross_file.display()),
+                ];
+                if configured {
+                    setup.push("--reconfigure".to_owned());
+                }
+                run_step(project, env, &tc, &setup, &mut commands)?;
+                if let Some(hash) = &cross_hash {
+                    let _ = std::fs::write(&fp_path, hash);
+                }
             }
             run_step(
                 project,
@@ -382,8 +388,16 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
     verify_artifacts_are_pe(project, &artifacts)?;
 
     if opts.reproducible {
+        let canon_root = project.root.canonicalize().ok();
         for artifact in &artifacts {
-            lsw_pe::set_coff_timestamp(&project.root.join(artifact), 0)?;
+            let abs = project.root.join(artifact);
+            let within = canon_root
+                .as_ref()
+                .zip(abs.canonicalize().ok())
+                .is_some_and(|(root, canon)| canon.starts_with(root));
+            if within {
+                lsw_pe::set_coff_timestamp(&abs, 0)?;
+            }
         }
     }
 
