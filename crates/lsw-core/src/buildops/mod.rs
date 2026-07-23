@@ -63,7 +63,7 @@ fn check_case_sensitivity(project: &Project) -> Result<()> {
     Ok(())
 }
 
-fn detect_build_system(root: &Path) -> Option<BuildSystem> {
+pub(crate) fn detect_build_system(root: &Path) -> Option<BuildSystem> {
     if root.join("CMakeLists.txt").is_file() {
         Some(BuildSystem::Cmake)
     } else if root.join("meson.build").is_file() {
@@ -359,7 +359,12 @@ fn walk(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            if path.file_name().is_some_and(|n| n == "CMakeFiles") {
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default();
+            let cargo_internal = (name == "deps" || name == "build") && dir.join("deps").is_dir();
+            if name == "CMakeFiles" || cargo_internal {
                 continue;
             }
             walk(&path, out);
