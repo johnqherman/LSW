@@ -194,8 +194,12 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             } else {
                 None
             };
+            let ambient: Vec<String> = CMAKE_AFFECTING_ENV
+                .iter()
+                .map(|k| format!("{k}={}", std::env::var(k).unwrap_or_default()))
+                .collect();
             let cmake_config = format!(
-                "{tc:?}|generator={generator:?}|toolchain={}|emulator={}|deps={:?}",
+                "{tc:?}|generator={generator:?}|toolchain={}|emulator={}|deps={:?}|env={ambient:?}",
                 toolchain_file.display(),
                 env.manifest.runtime.executable.display(),
                 crate::depsops::dep_dirs(project)
@@ -350,6 +354,16 @@ fn verify_artifacts_are_pe(project: &Project, artifacts: &[PathBuf]) -> Result<(
     }
     Ok(())
 }
+
+const CMAKE_AFFECTING_ENV: &[&str] = &[
+    "CMAKE_GENERATOR",
+    "CMAKE_PREFIX_PATH",
+    "PKG_CONFIG_PATH",
+    "CPATH",
+    "C_INCLUDE_PATH",
+    "CPLUS_INCLUDE_PATH",
+    "LIBRARY_PATH",
+];
 
 fn cmake_config_fingerprint(config: &str) -> String {
     use sha2::Digest;
