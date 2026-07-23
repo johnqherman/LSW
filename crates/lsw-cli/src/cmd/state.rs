@@ -82,22 +82,33 @@ pub(crate) fn kill(pid: &Option<u32>, all: &bool, dirs: &Dirs) -> lsw_core::Resu
 
 pub(crate) fn service(op: &ServiceCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     let (_p, env) = active_env(dirs)?;
+    let json = format == Format::Json;
+    let ack = |action: &str, name: &str| {
+        if json {
+            println!(
+                "{}",
+                serde_json::json!({ "service": name, "action": action })
+            );
+        } else {
+            println!("{action} service '{name}'");
+        }
+    };
     match op {
         ServiceCmd::Create { name, bin } => {
             lsw_core::serviceops::create(&env, name, bin)?;
-            println!("created service '{name}'");
+            ack("created", name);
         }
         ServiceCmd::Start { name } => {
             lsw_core::serviceops::start(&env, name)?;
-            println!("started service '{name}'");
+            ack("started", name);
         }
         ServiceCmd::Stop { name } => {
             lsw_core::serviceops::stop(&env, name)?;
-            println!("stopped service '{name}'");
+            ack("stopped", name);
         }
         ServiceCmd::Query { name } => {
             let status = lsw_core::serviceops::query(&env, name)?;
-            if format == Format::Json {
+            if json {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(&status).expect("serializes")
@@ -108,7 +119,7 @@ pub(crate) fn service(op: &ServiceCmd, dirs: &Dirs, format: Format) -> lsw_core:
         }
         ServiceCmd::Delete { name } => {
             lsw_core::serviceops::delete(&env, name)?;
-            println!("deleted service '{name}'");
+            ack("deleted", name);
         }
     }
     Ok(ExitCode::SUCCESS)

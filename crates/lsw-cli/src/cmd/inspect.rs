@@ -259,7 +259,10 @@ pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
             let (p, _env) = active_env(dirs)?;
             let removed = lsw_core::depsops::remove(&p, name)?;
             if format == Format::Json {
-                println!("{}", serde_json::json!({ "name": name, "removed": removed }));
+                println!(
+                    "{}",
+                    serde_json::json!({ "name": name, "removed": removed })
+                );
             } else if removed {
                 println!("{} removed {name}", color::yellow("-"));
             } else {

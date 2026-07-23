@@ -9,11 +9,15 @@ pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
     match op {
         RustCmd::Init { name } => {
             let report = lsw_core::rustops::init(&cwd()?, name.as_deref())?;
-            println!("Initialized LSW Rust project at {}", report.root.display());
-            for f in &report.created {
-                println!("  created {}", f.display());
+            if format == Format::Json {
+                print_init_json(&report.root, &report.created);
+            } else {
+                println!("Initialized LSW Rust project at {}", report.root.display());
+                for f in &report.created {
+                    println!("  created {}", f.display());
+                }
+                println!("Next: lsw env create <name> && lsw build");
             }
-            println!("Next: lsw env create <name> && lsw build");
             Ok(ExitCode::SUCCESS)
         }
 
@@ -39,20 +43,44 @@ pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
                 println!("  Runtime execution {}", mark(report.runtime_execution));
                 println!("  Native validation {}", mark(report.native_validation));
             }
-            Ok(ExitCode::SUCCESS)
+            let broken = [
+                report.compiler_target,
+                report.linker,
+                report.crt,
+                report.windows_imports,
+                report.runtime_execution,
+            ]
+            .contains(&lsw_core::rustops::Check::Missing);
+            Ok(if broken {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            })
         }
     }
+}
+
+fn print_init_json(root: &std::path::Path, created: &[std::path::PathBuf]) {
+    let files: Vec<String> = created.iter().map(|f| f.display().to_string()).collect();
+    println!(
+        "{}",
+        serde_json::json!({ "root": root.display().to_string(), "created": files })
+    );
 }
 
 pub(crate) fn dotnet(op: &DotnetCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     match op {
         DotnetCmd::Init { name } => {
             let report = lsw_core::dotnetops::init(&cwd()?, name.as_deref())?;
-            println!("Initialized LSW C# project at {}", report.root.display());
-            for f in &report.created {
-                println!("  created {}", f.display());
+            if format == Format::Json {
+                print_init_json(&report.root, &report.created);
+            } else {
+                println!("Initialized LSW C# project at {}", report.root.display());
+                for f in &report.created {
+                    println!("  created {}", f.display());
+                }
+                println!("Next: lsw env create <name> && lsw build");
             }
-            println!("Next: lsw env create <name> && lsw build");
             Ok(ExitCode::SUCCESS)
         }
 
@@ -78,30 +106,72 @@ pub(crate) fn dotnet(op: &DotnetCmd, dirs: &Dirs, format: Format) -> lsw_core::R
                 println!("  NativeAOT         {}", mark(report.native_aot));
                 println!("  Native validation {}", mark(report.native_validation));
             }
-            Ok(ExitCode::SUCCESS)
+            let broken = [
+                report.sdk,
+                report.runtime_identifier,
+                report.self_contained,
+                report.runtime_execution,
+            ]
+            .contains(&lsw_core::dotnetops::Check::Missing);
+            Ok(if broken {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            })
         }
     }
 }
 
-pub(crate) fn sdk(op: &SdkCmd, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
+pub(crate) fn sdk(op: &SdkCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
+    let json = format == Format::Json;
     match op {
         SdkCmd::Import { name, from, force } => {
-            println!("Importing SDK '{name}' from {}...", from.display());
-            println!(
-                "Note: you are responsible for the license terms of any Microsoft SDK content you import."
-            );
+            if !json {
+                println!("Importing SDK '{name}' from {}...", from.display());
+                println!(
+                    "Note: you are responsible for the license terms of any Microsoft SDK content you import."
+                );
+            }
             let report = lsw_core::sdkops::import(dirs, name, from, *force)?;
-            println!(
-                "Imported '{}' ({} files) to {}",
-                report.name,
-                report.files_copied,
-                report.root.display()
-            );
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "name": report.name,
+                        "files_copied": report.files_copied,
+                        "root": report.root.display().to_string(),
+                    })
+                );
+            } else {
+                println!(
+                    "Imported '{}' ({} files) to {}",
+                    report.name,
+                    report.files_copied,
+                    report.root.display()
+                );
+            }
             Ok(ExitCode::SUCCESS)
         }
 
         SdkCmd::List => {
             let sdks = lsw_core::sdkops::list(dirs)?;
+            if json {
+                let items: Vec<_> = sdks
+                    .iter()
+                    .map(|s| {
+                        serde_json::json!({
+                            "name": s.name,
+                            "usable": s.usable,
+                            "source": s.source.display().to_string(),
+                        })
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&items).expect("serializes")
+                );
+                return Ok(ExitCode::SUCCESS);
+            }
             if sdks.is_empty() {
                 println!("No SDKs imported. Import one with: lsw sdk import <name> --from <path>");
             }
@@ -118,7 +188,11 @@ pub(crate) fn sdk(op: &SdkCmd, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
 
         SdkCmd::Remove { name } => {
             lsw_core::sdkops::remove(dirs, name)?;
-            println!("Removed SDK '{name}'");
+            if json {
+                println!("{}", serde_json::json!({ "name": name, "removed": true }));
+            } else {
+                println!("Removed SDK '{name}'");
+            }
             Ok(ExitCode::SUCCESS)
         }
     }

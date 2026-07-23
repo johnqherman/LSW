@@ -10,6 +10,7 @@ pub(crate) fn package(
     target: &PackageTargetArg,
     verify: bool,
     dirs: &Dirs,
+    format: Format,
 ) -> lsw_core::Result<ExitCode> {
     if verify && !matches!(target, PackageTargetArg::Msi) {
         eprintln!("--verify requires --target msi");
@@ -25,6 +26,31 @@ pub(crate) fn package(
         PackageTargetArg::Msix => lsw_core::packageops::PackageTarget::Msix,
     };
     let report = lsw_core::packageops::package(&p, &env, target)?;
+    let verified = if verify && let Some(msi) = &report.msi {
+        Some(lsw_core::installops::verify_msi(
+            dirs,
+            &env,
+            &p.manifest.project.name,
+            msi,
+            &report.files,
+        )?)
+    } else {
+        None
+    };
+    if format == Format::Json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "package": report,
+                "verified": verified.map(|c| serde_json::json!({
+                    "files": c.files.len(),
+                    "install_dir": c.install_dir.display().to_string(),
+                })),
+            }))
+            .expect("serializes")
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
     println!("Packaged: {}", report.directory.display());
     for f in &report.files {
         println!("  {f}");
@@ -38,14 +64,7 @@ pub(crate) fn package(
     if let Some(msix) = &report.msix {
         println!("MSIX:      {} (self-signed)", msix.display());
     }
-    if verify && let Some(msi) = &report.msi {
-        let check = lsw_core::installops::verify_msi(
-            dirs,
-            &env,
-            &p.manifest.project.name,
-            msi,
-            &report.files,
-        )?;
+    if let Some(check) = &verified {
         println!(
             "Verified:  installed {} file(s) to {}, uninstalled clean",
             check.files.len(),
