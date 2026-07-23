@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0 OR MIT"
@@ -23,12 +23,12 @@ keywords = ["windows", "wine", "cross-compilation", "mingw", "pe"]
 categories = ["development-tools", "command-line-utilities"]
 
 [workspace.dependencies]
-lsw-core = { path = "crates/lsw-core", version = "0.2.0" }
-lsw-config = { path = "crates/lsw-config", version = "0.2.0" }
-lsw-toolchain = { path = "crates/lsw-toolchain", version = "0.2.0" }
-lsw-runtime = { path = "crates/lsw-runtime", version = "0.2.0" }
-lsw-path = { path = "crates/lsw-path", version = "0.2.0" }
-lsw-pe = { path = "crates/lsw-pe", version = "0.2.0" }
+lsw-core = { path = "crates/lsw-core", version = "0.3.0" }
+lsw-config = { path = "crates/lsw-config", version = "0.3.0" }
+lsw-toolchain = { path = "crates/lsw-toolchain", version = "0.3.0" }
+lsw-runtime = { path = "crates/lsw-runtime", version = "0.3.0" }
+lsw-path = { path = "crates/lsw-path", version = "0.3.0" }
+lsw-pe = { path = "crates/lsw-pe", version = "0.3.0" }
 
 anyhow = "1"
 base64 = "0.22"
