@@ -188,6 +188,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 env.manifest.target_arch,
             )
             .map_err(|e| Error::io(toolchain_file.clone(), e))?;
+            refresh_stale_cmake_build_dir(&project.root.join("build"), &tc)?;
 
             let generator = if which("ninja").is_some() {
                 Some("Ninja")
@@ -219,6 +220,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 &["cmake".to_owned(), "--build".to_owned(), "build".to_owned()],
                 &mut commands,
             )?;
+            write_cmake_toolchain_marker(&project.root.join("build"), &tc);
         }
         BuildSystem::Make => {
             run_step(project, env, &tc, &["make".to_owned()], &mut commands)?;
@@ -341,6 +343,32 @@ fn verify_artifacts_are_pe(project: &Project, artifacts: &[PathBuf]) -> Result<(
         }
     }
     Ok(())
+}
+
+fn refresh_stale_cmake_build_dir(
+    build_dir: &Path,
+    tc: &lsw_config::ResolvedToolchain,
+) -> Result<()> {
+    use sha2::Digest;
+    if !build_dir.join("CMakeCache.txt").is_file() {
+        return Ok(());
+    }
+    let fingerprint = format!("{:x}", sha2::Sha256::digest(format!("{tc:?}").as_bytes()));
+    let marker = build_dir.join(".lsw-toolchain");
+    if fs::read_to_string(&marker).is_ok_and(|m| m.trim() == fingerprint) {
+        return Ok(());
+    }
+    fs::remove_dir_all(build_dir).map_err(|e| Error::io(build_dir.to_path_buf(), e))?;
+    fs::create_dir_all(build_dir).map_err(|e| Error::io(build_dir.to_path_buf(), e))?;
+    fs::write(&marker, fingerprint).map_err(|e| Error::io(marker.clone(), e))?;
+    Ok(())
+}
+
+fn write_cmake_toolchain_marker(build_dir: &Path, tc: &lsw_config::ResolvedToolchain) {
+    use sha2::Digest;
+    let fingerprint = format!("{:x}", sha2::Sha256::digest(format!("{tc:?}").as_bytes()));
+    let _ = fs::create_dir_all(build_dir);
+    let _ = fs::write(build_dir.join(".lsw-toolchain"), fingerprint);
 }
 
 fn find_artifacts(build_dir: &std::path::Path, project_root: &std::path::Path) -> Vec<PathBuf> {
