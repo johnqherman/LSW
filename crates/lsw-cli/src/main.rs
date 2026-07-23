@@ -125,7 +125,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Config(op) => cmd::config::config(op, cli.format),
         Cmd::Sign { file, publisher } => cmd::package::sign(file, publisher),
         Cmd::Path { windows, linux } => cmd::package::path(windows, linux, &dirs, cli.format),
-        Cmd::Registry(op) => cmd::state::registry(op, &dirs),
+        Cmd::Registry(op) => cmd::state::registry(op, &dirs, cli.format),
         Cmd::Debug {
             program,
             args,

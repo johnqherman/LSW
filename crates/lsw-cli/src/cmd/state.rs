@@ -5,8 +5,23 @@ use lsw_core::Dirs;
 use crate::active_env;
 use crate::cli::{Format, RegistryCmd, ServiceCmd};
 
-pub(crate) fn registry(op: &RegistryCmd, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
+pub(crate) fn registry(
+    op: &RegistryCmd,
+    dirs: &Dirs,
+    format: Format,
+) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
+    let json = format == Format::Json;
+    let emit = |value: serde_json::Value, text: String| {
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&value).expect("serializes")
+            );
+        } else {
+            println!("{text}");
+        }
+    };
     match op {
         RegistryCmd::Get { key, value } => {
             lsw_core::registryops::get(&env, key, value.as_deref())?;
@@ -18,23 +33,38 @@ pub(crate) fn registry(op: &RegistryCmd, dirs: &Dirs) -> lsw_core::Result<ExitCo
             kind,
         } => {
             lsw_core::registryops::set(&env, key, value, data, kind)?;
-            println!("set {key}\\{value}");
+            emit(
+                serde_json::json!({"action": "set", "key": key, "value": value}),
+                format!("set {key}\\{value}"),
+            );
         }
         RegistryCmd::Export { key, file } => {
             lsw_core::registryops::export(&env, key, file)?;
-            println!("exported {key} to {}", file.display());
+            emit(
+                serde_json::json!({"action": "export", "key": key, "file": file.display().to_string()}),
+                format!("exported {key} to {}", file.display()),
+            );
         }
         RegistryCmd::Import { file } => {
             lsw_core::registryops::import(&env, file)?;
-            println!("imported {}", file.display());
+            emit(
+                serde_json::json!({"action": "import", "file": file.display().to_string()}),
+                format!("imported {}", file.display()),
+            );
         }
         RegistryCmd::Seed => {
             let n = lsw_core::registryops::seed(&env, &p)?;
-            println!("applied {n} registry seed(s) to '{}'", env.name);
+            emit(
+                serde_json::json!({"action": "seed", "environment": env.name, "applied": n}),
+                format!("applied {n} registry seed(s) to '{}'", env.name),
+            );
         }
         RegistryCmd::Reset => {
             lsw_core::registryops::reset(&env)?;
-            println!("registry reset to prefix defaults for '{}'", env.name);
+            emit(
+                serde_json::json!({"action": "reset", "environment": env.name}),
+                format!("registry reset to prefix defaults for '{}'", env.name),
+            );
         }
     }
     Ok(ExitCode::SUCCESS)
