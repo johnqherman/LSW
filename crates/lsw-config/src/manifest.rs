@@ -290,8 +290,12 @@ impl ProjectManifest {
             .create_new(true)
             .open(path)
             .map_err(|e| ConfigError::write(path, e))?;
-        file.write_all(text.as_bytes())
-            .map_err(|e| ConfigError::write(path, e))
+        if let Err(e) = file.write_all(text.as_bytes()) {
+            drop(file);
+            let _ = fs::remove_file(path);
+            return Err(ConfigError::write(path, e));
+        }
+        Ok(())
     }
 
     pub fn discover(start: &Path) -> Result<(PathBuf, Self)> {
