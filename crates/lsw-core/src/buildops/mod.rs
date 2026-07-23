@@ -194,7 +194,11 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             } else {
                 None
             };
-            let cmake_config = format!("{tc:?}|generator={generator:?}");
+            let cmake_config = format!(
+                "{tc:?}|generator={generator:?}|toolchain={}|emulator={}",
+                toolchain_file.display(),
+                env.manifest.runtime.executable.display()
+            );
             refresh_stale_cmake_build_dir(&project.root.join("build"), &cmake_config)?;
             let mut configure = vec![
                 "cmake".to_owned(),
