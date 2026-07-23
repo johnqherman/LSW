@@ -353,6 +353,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
     let mut artifacts = find_artifacts(&artifact_dir, &project.root);
     if flat_layout {
         let manifest = project.root.join("build").join(".lsw-artifacts");
+        artifacts.retain(|rel| is_safe_artifact(rel));
         let touched: Vec<PathBuf> = artifacts
             .iter()
             .filter(|rel| {
@@ -371,7 +372,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
         } else if let Ok(recorded) = fs::read(&manifest) {
             let remembered: Vec<PathBuf> = decode_artifact_manifest(&recorded)
                 .into_iter()
-                .filter(|rel| project.root.join(rel).is_file())
+                .filter(|rel| is_safe_artifact(rel) && project.root.join(rel).is_file())
                 .collect();
             if !remembered.is_empty() {
                 artifacts = remembered;
@@ -458,6 +459,13 @@ fn write_cmake_toolchain_marker(build_dir: &Path, config: &str) {
         build_dir.join(".lsw-toolchain"),
         cmake_config_fingerprint(config),
     );
+}
+
+fn is_safe_artifact(rel: &Path) -> bool {
+    !rel.is_absolute()
+        && !rel
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
 }
 
 fn encode_artifact_manifest(artifacts: &[PathBuf]) -> Vec<u8> {
