@@ -74,6 +74,9 @@ pub fn plan(project: &Project, artifacts: &[PathBuf], remote_dir: &str) -> Agent
 }
 
 pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
+    if project.manifest.verify.host.is_none() {
+        return run_on_host(project, &[]);
+    }
     let build = buildops::build(
         project,
         env,

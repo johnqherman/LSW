@@ -40,9 +40,12 @@ pub(crate) fn registry(op: &RegistryCmd, dirs: &Dirs) -> lsw_core::Result<ExitCo
     Ok(ExitCode::SUCCESS)
 }
 
-pub(crate) fn ps(dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
+pub(crate) fn ps(all: bool, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     let (_p, env) = active_env(dirs)?;
-    let processes = lsw_core::psops::ps(&env)?;
+    let mut processes = lsw_core::psops::ps(&env)?;
+    if !all {
+        processes.retain(|p| !lsw_core::psops::is_wine_infrastructure(&p.command));
+    }
     if format == Format::Json {
         println!(
             "{}",
@@ -50,6 +53,9 @@ pub(crate) fn ps(dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
         );
     } else if processes.is_empty() {
         println!("No processes running in environment '{}'", env.name);
+        if !all {
+            println!("(wine infrastructure is hidden; lsw ps --all shows it)");
+        }
     } else {
         println!("{:<8} COMMAND", "PID");
         for p in processes {

@@ -214,7 +214,11 @@ pub(crate) enum Cmd {
         verify: bool,
     },
     /// List the environment's Windows/runtime processes.
-    Ps,
+    Ps {
+        /// Include wine infrastructure processes (wineserver, services.exe, ...).
+        #[arg(long)]
+        all: bool,
+    },
     /// Terminate an environment process (or all with --all).
     Kill {
         pid: Option<u32>,

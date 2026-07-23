@@ -58,7 +58,7 @@ pub(crate) fn verify(
     }
     Ok(match report.status {
         lsw_core::verifyops::VerifyStatus::WindowsVerified => ExitCode::SUCCESS,
-        lsw_core::verifyops::VerifyStatus::WindowsUnavailable => ExitCode::SUCCESS,
+        lsw_core::verifyops::VerifyStatus::WindowsUnavailable => ExitCode::FAILURE,
         lsw_core::verifyops::VerifyStatus::WindowsFailed => ExitCode::FAILURE,
     })
 }
