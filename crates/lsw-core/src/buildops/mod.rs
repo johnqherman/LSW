@@ -586,6 +586,28 @@ mod tests {
     }
 
     #[test]
+    fn artifact_manifest_roundtrips_including_newline_names() {
+        let items = vec![
+            PathBuf::from("app.exe"),
+            PathBuf::from("build/sub/tool.dll"),
+            PathBuf::from("weird\nname.exe"),
+        ];
+        let encoded = encode_artifact_manifest(&items);
+        assert!(encoded.contains(&0));
+        assert_eq!(decode_artifact_manifest(&encoded), items);
+    }
+
+    #[test]
+    fn artifact_manifest_decodes_legacy_newline_format() {
+        let legacy = b"app.exe\nsecond.exe\n";
+        assert_eq!(
+            decode_artifact_manifest(legacy),
+            vec![PathBuf::from("app.exe"), PathBuf::from("second.exe")]
+        );
+        assert!(decode_artifact_manifest(b"").is_empty());
+    }
+
+    #[test]
     fn artifacts_walk_skips_cmakefiles() {
         let tmp = tempfile::tempdir().unwrap();
         let build = tmp.path().join("build");
