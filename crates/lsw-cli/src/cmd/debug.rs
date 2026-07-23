@@ -19,10 +19,10 @@ pub(crate) fn debug(
     if *native {
         match lsw_core::verifyops::native_backtrace(&p, program)? {
             None => {
-                eprintln!(
-                    "no [verify] host configured in lsw.toml; native debugging needs a Windows host"
-                );
-                return Ok(ExitCode::FAILURE);
+                return Ok(crate::usage_failure(
+                    format,
+                    "no [verify] host configured in lsw.toml; native debugging needs a Windows host",
+                ));
             }
             Some(bt) => {
                 if format == Format::Json {

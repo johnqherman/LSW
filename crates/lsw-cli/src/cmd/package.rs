@@ -13,8 +13,10 @@ pub(crate) fn package(
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
     if verify && !matches!(target, PackageTargetArg::Msi) {
-        eprintln!("--verify requires --target msi");
-        return Ok(ExitCode::FAILURE);
+        return Ok(crate::usage_failure(
+            format,
+            "--verify requires --target msi",
+        ));
     }
     let (p, env) = active_env(dirs)?;
     let target = match target {
@@ -106,8 +108,10 @@ pub(crate) fn path(
         }
         (None, Some(text)) => ("linux", mapper.to_linux(text)?.display().to_string()),
         _ => {
-            eprintln!("usage: lsw path --windows <linux-path> | --linux <windows-path>");
-            return Ok(ExitCode::FAILURE);
+            return Ok(crate::usage_failure(
+                format,
+                "specify exactly one of --windows <linux-path> or --linux <windows-path>",
+            ));
         }
     };
     if format == Format::Json {

@@ -46,6 +46,18 @@ pub(crate) fn cwd() -> lsw_core::Result<PathBuf> {
     std::env::current_dir().map_err(|e| lsw_core::Error::io(PathBuf::from("."), e))
 }
 
+pub(crate) fn usage_failure(format: Format, message: &str) -> ExitCode {
+    if format == Format::Json {
+        println!(
+            "{}",
+            serde_json::json!({ "error": { "code": "LSW0000", "message": message } })
+        );
+    } else {
+        eprintln!("error: {message}");
+    }
+    ExitCode::FAILURE
+}
+
 pub(crate) fn print_dep_tree(node: &lsw_core::depsops::DepNode, depth: usize) {
     use lsw_core::depsops::DepKind;
     let tag = match node.kind {
