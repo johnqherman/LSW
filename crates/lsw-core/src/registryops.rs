@@ -60,6 +60,16 @@ pub fn set(env: &Environment, key: &str, value: &str, data: &str, kind: &str) ->
     )
 }
 
+pub fn delete(env: &Environment, key: &str, value: Option<&str>) -> Result<()> {
+    let mut args = vec!["delete".to_owned(), key.to_owned()];
+    if let Some(v) = value {
+        args.push("/v".to_owned());
+        args.push(v.to_owned());
+    }
+    args.push("/f".to_owned());
+    run_registry_tool(env, "reg.exe", args)
+}
+
 fn reg_type(kind: &str) -> &'static str {
     match kind.to_ascii_lowercase().as_str() {
         "dword" | "reg_dword" => "REG_DWORD",

@@ -127,14 +127,18 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
     };
     manifest.save(&layout.manifest())?;
 
-    Ok(EnvCreateReport {
-        environment: Environment {
-            name: opts.name.clone(),
-            layout,
-            manifest,
-        },
-        probe,
-    })
+    let environment = Environment {
+        name: opts.name.clone(),
+        layout,
+        manifest,
+    };
+    let _ = crate::registryops::delete(
+        &environment,
+        "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\RunServices",
+        Some("winemenubuilder"),
+    );
+
+    Ok(EnvCreateReport { environment, probe })
 }
 
 #[derive(Debug)]
