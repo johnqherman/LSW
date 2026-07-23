@@ -361,17 +361,33 @@ pub fn remove(project: &crate::project::Project, name: &str) -> Result<bool> {
     if manifest.dependencies.remove(name).is_none() {
         return Ok(false);
     }
-    manifest.save(&manifest_path)?;
 
     let root = deps_root(project);
     let files_manifest = root.join(".lsw").join(format!("{name}.files"));
     if let Ok(list) = std::fs::read_to_string(&files_manifest) {
         for rel in list.lines() {
-            let target = root.join(rel.trim());
-            let _ = std::fs::remove_file(&target);
+            let rel = rel.trim();
+            if rel.is_empty() {
+                continue;
+            }
+            let relp = std::path::Path::new(rel);
+            if relp.is_absolute()
+                || relp
+                    .components()
+                    .any(|c| matches!(c, std::path::Component::ParentDir))
+            {
+                continue;
+            }
+            let target = root.join(relp);
+            if let Err(e) = std::fs::remove_file(&target)
+                && e.kind() != std::io::ErrorKind::NotFound
+            {
+                return Err(Error::io(target, e));
+            }
         }
     }
     let _ = std::fs::remove_file(&files_manifest);
+    manifest.save(&manifest_path)?;
     Ok(true)
 }
 

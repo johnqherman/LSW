@@ -9,11 +9,11 @@ use crate::project::Project;
 pub(crate) fn stamp_build_dir(project: &Project, env: &Environment) -> Result<()> {
     let build_dir = project.root.join("build");
     let marker = build_dir.join(".lsw-env");
-    if build_dir.is_dir() {
-        let owner = fs::read_to_string(&marker).unwrap_or_default();
-        if owner.trim() != env.name {
-            fs::remove_dir_all(&build_dir).map_err(|e| Error::io(build_dir.clone(), e))?;
-        }
+    if build_dir.is_dir()
+        && let Ok(owner) = fs::read_to_string(&marker)
+        && owner.trim() != env.name
+    {
+        fs::remove_dir_all(&build_dir).map_err(|e| Error::io(build_dir.clone(), e))?;
     }
     fs::create_dir_all(&build_dir).map_err(|e| Error::io(build_dir.clone(), e))?;
     fs::write(&marker, &env.name).map_err(|e| Error::io(marker, e))
