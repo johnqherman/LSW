@@ -118,6 +118,7 @@ pub struct Adapter<'a> {
     stop_on_entry: bool,
     started: bool,
     exited: bool,
+    current_thread: i64,
 }
 
 impl Drop for Adapter<'_> {
@@ -141,6 +142,7 @@ impl<'a> Adapter<'a> {
             stop_on_entry: false,
             started: false,
             exited: false,
+            current_thread: 1,
         }
     }
 
@@ -361,11 +363,13 @@ impl<'a> Adapter<'a> {
             return Ok(vec![response]);
         }
         if self.stop_on_entry {
+            self.refresh_current_thread();
+            let thread = self.current_thread;
             let stopped = self.event(
                 "stopped",
                 serde_json::json!({
                     "reason": "entry",
-                    "threadId": 1,
+                    "threadId": thread,
                     "allThreadsStopped": true,
                 }),
             );
@@ -392,6 +396,14 @@ impl<'a> Adapter<'a> {
     }
 
     fn handle_stack_trace(&mut self, req: &ProtocolMessage) -> Result<Vec<ProtocolMessage>> {
+        let thread_id = req
+            .arguments
+            .get("threadId")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(self.current_thread);
+        if let Some(conn) = self.conn.as_mut() {
+            conn.select_thread(thread_id);
+        }
         let frames = self.build_frames().unwrap_or_default();
         let total = frames.len();
         Ok(vec![self.success_response(
@@ -521,11 +533,12 @@ impl<'a> Adapter<'a> {
     fn handle_pause(&mut self, req: &ProtocolMessage) -> Result<Vec<ProtocolMessage>> {
         let response = self.success_response(req, serde_json::Value::Null);
         if self.conn.is_some() && !self.exited {
+            let thread = self.current_thread;
             let stopped = self.event(
                 "stopped",
                 serde_json::json!({
                     "reason": "pause",
-                    "threadId": 1,
+                    "threadId": thread,
                     "allThreadsStopped": true,
                 }),
             );
@@ -787,26 +800,38 @@ impl<'a> Adapter<'a> {
         out.push(ev);
     }
 
+    fn refresh_current_thread(&mut self) {
+        if let Some(conn) = self.conn.as_mut()
+            && let Some(id) = conn.current_thread()
+        {
+            self.current_thread = id;
+        }
+    }
+
     fn report_stop(&mut self, stop: Stop, reason: &str, out: &mut Vec<ProtocolMessage>) {
         match stop {
             Stop::Signal { signal: 5 } => {
+                self.refresh_current_thread();
+                let thread = self.current_thread;
                 let ev = self.event(
                     "stopped",
                     serde_json::json!({
                         "reason": reason,
-                        "threadId": 1,
+                        "threadId": thread,
                         "allThreadsStopped": true,
                     }),
                 );
                 out.push(ev);
             }
             Stop::Signal { signal } => {
+                self.refresh_current_thread();
+                let thread = self.current_thread;
                 let ev = self.event(
                     "stopped",
                     serde_json::json!({
                         "reason": "exception",
                         "description": format!("signal {signal}"),
-                        "threadId": 1,
+                        "threadId": thread,
                         "allThreadsStopped": true,
                     }),
                 );
