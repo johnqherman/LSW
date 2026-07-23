@@ -3,7 +3,7 @@ use std::process::ExitCode;
 
 use lsw_core::Dirs;
 
-use crate::cli::PackageTargetArg;
+use crate::cli::{Format, PackageTargetArg};
 use crate::{active_env, cwd};
 
 pub(crate) fn package(
@@ -65,25 +65,29 @@ pub(crate) fn path(
     windows: &Option<PathBuf>,
     linux: &Option<String>,
     dirs: &Dirs,
+    format: Format,
 ) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
     let mapper = lsw_core::mapper(&env, &p);
-    match (windows, linux) {
+    let (key, value) = match (windows, linux) {
         (Some(path), None) => {
             let absolute = if path.is_absolute() {
                 path.clone()
             } else {
                 cwd().join(path)
             };
-            println!("{}", mapper.to_windows(&absolute)?);
+            ("windows", mapper.to_windows(&absolute)?)
         }
-        (None, Some(text)) => {
-            println!("{}", mapper.to_linux(text)?.display());
-        }
+        (None, Some(text)) => ("linux", mapper.to_linux(text)?.display().to_string()),
         _ => {
             eprintln!("usage: lsw path --windows <linux-path> | --linux <windows-path>");
             return Ok(ExitCode::FAILURE);
         }
+    };
+    if format == Format::Json {
+        println!("{}", serde_json::json!({ key: value }));
+    } else {
+        println!("{value}");
     }
     Ok(ExitCode::SUCCESS)
 }
