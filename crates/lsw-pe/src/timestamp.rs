@@ -14,7 +14,9 @@ fn pe_signature_offset(path: &Path, data: &[u8]) -> Result<usize, PeError> {
         return Err(PeError::malformed(path, "file too small for a DOS header"));
     }
     let e_lfanew = u32::from_le_bytes([data[0x3C], data[0x3D], data[0x3E], data[0x3F]]) as usize;
-    if data.len() < e_lfanew + 24 || &data[e_lfanew..e_lfanew + 4] != b"PE\0\0" {
+    if e_lfanew.checked_add(24).is_none_or(|end| data.len() < end)
+        || &data[e_lfanew..e_lfanew + 4] != b"PE\0\0"
+    {
         return Err(PeError::malformed(path, "missing PE signature at e_lfanew"));
     }
     Ok(e_lfanew)
