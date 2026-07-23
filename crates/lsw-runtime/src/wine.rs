@@ -256,13 +256,18 @@ impl RuntimeProvider for WineRuntime {
             command.envs(full_env(&req.prefix, &req.env));
         }
         if let Some(cwd) = &req.cwd {
+            if !cwd.is_dir() {
+                return Err(RuntimeError::ExecutionFailed {
+                    detail: format!("working directory {} does not exist", cwd.display()),
+                });
+            }
             command.current_dir(cwd);
         }
         tracing::debug!(program = %req.program.display(), prefix = %req.prefix.display(), sandboxed, virtual_display, "executing via wine");
         command
             .status()
             .map_err(|source| RuntimeError::SpawnFailed {
-                program: req.program.clone(),
+                program: PathBuf::from(head),
                 source,
             })
     }
