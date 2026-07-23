@@ -188,44 +188,64 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
     }
 
     fn write_file(path: &PathBuf, contents: &str, created: &mut Vec<PathBuf>) -> Result<()> {
-        if path.exists() {
-            return Err(Error::InitFailed {
-                path: path.clone(),
-                detail: format!("{} already exists; refusing to overwrite", path.display()),
-            });
-        }
+        use std::io::Write;
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir).map_err(|e| Error::io(dir.to_path_buf(), e))?;
         }
-        fs::write(path, contents).map_err(|e| Error::io(path.clone(), e))?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    Error::InitFailed {
+                        path: path.clone(),
+                        detail: format!("{} already exists; refusing to overwrite", path.display()),
+                    }
+                } else {
+                    Error::io(path.clone(), e)
+                }
+            })?;
+        file.write_all(contents.as_bytes())
+            .map_err(|e| Error::io(path.clone(), e))?;
         created.push(path.clone());
         Ok(())
     }
 
-    let mut created = Vec::new();
-    ProjectManifest::new(&project_name).save(&manifest_path)?;
-    created.push(manifest_path);
+    let mut created: Vec<PathBuf> = Vec::new();
+    let result: Result<Option<String>> = (|| {
+        ProjectManifest::new(&project_name).save(&manifest_path)?;
+        created.push(manifest_path.clone());
+        let existing_build = crate::buildops::detect_build_system(&root).map(|s| format!("{s:?}"));
+        if existing_build.is_none() {
+            let (cmake, main_c) = template_sources(template);
+            write_file(
+                &root.join("CMakeLists.txt"),
+                &cmake.replace("{name}", &project_name),
+                &mut created,
+            )?;
+            write_file(&root.join("src/main.c"), main_c, &mut created)?;
+        }
+        let gitignore = root.join(".gitignore");
+        if !gitignore.exists() {
+            write_file(&gitignore, TEMPLATE_GITIGNORE, &mut created)?;
+        }
+        Ok(existing_build)
+    })();
 
-    let existing_build = crate::buildops::detect_build_system(&root).map(|s| format!("{s:?}"));
-    if existing_build.is_none() {
-        let (cmake, main_c) = template_sources(template);
-        write_file(
-            &root.join("CMakeLists.txt"),
-            &cmake.replace("{name}", &project_name),
-            &mut created,
-        )?;
-        write_file(&root.join("src/main.c"), main_c, &mut created)?;
+    match result {
+        Ok(existing_build) => Ok(InitReport {
+            root,
+            created,
+            existing_build,
+        }),
+        Err(e) => {
+            for path in created.iter().rev() {
+                let _ = fs::remove_file(path);
+            }
+            Err(e)
+        }
     }
-    let gitignore = root.join(".gitignore");
-    if !gitignore.exists() {
-        write_file(&gitignore, TEMPLATE_GITIGNORE, &mut created)?;
-    }
-
-    Ok(InitReport {
-        root,
-        created,
-        existing_build,
-    })
 }
 
 #[cfg(test)]
