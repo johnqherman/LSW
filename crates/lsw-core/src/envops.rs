@@ -11,13 +11,21 @@ use lsw_toolchain::ProbeReport;
 use crate::error::{Error, Result};
 use crate::project::Project;
 
+const WINDOWS_RESERVED: &[&str] = &[
+    "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
+    "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+];
+
 pub fn validate_name(kind: &str, name: &str) -> Result<()> {
     let bad = name.is_empty()
         || name == "."
         || name == ".."
-        || name.contains('/')
-        || name.contains('\\')
-        || name.contains('\0');
+        || name.ends_with('.')
+        || name.ends_with(' ')
+        || name.chars().any(|c| {
+            matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control()
+        })
+        || WINDOWS_RESERVED.contains(&name.to_ascii_lowercase().as_str());
     if bad {
         return Err(Error::InvalidName {
             kind: kind.to_owned(),

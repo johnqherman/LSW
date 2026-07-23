@@ -232,6 +232,12 @@ pub enum Error {
 
     #[error("LSW2042: SDK import from {} failed: {detail}", path.display())]
     SdkImportFailed { path: PathBuf, detail: String },
+
+    #[error(
+        "LSW2043: [filesystem] project_drive = \"{drive}\" mount_project = \"{mount}\" is not supported\n\
+         Only project_drive = \"C:\" and mount_project = \"/src\" work today; the project mounts at C:\\src\\<name>"
+    )]
+    UnsupportedFilesystem { drive: String, mount: String },
 }
 
 impl Error {
