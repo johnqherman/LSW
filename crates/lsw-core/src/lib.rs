@@ -35,6 +35,7 @@ pub mod signops;
 pub mod stringsops;
 pub mod testops;
 pub mod traceops;
+pub mod ttyops;
 pub mod verifyops;
 pub mod watchops;
 pub mod winrmops;

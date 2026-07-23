@@ -121,6 +121,89 @@ impl WineRuntime {
                     .into(),
         })
     }
+
+    pub fn spawn(&self, req: &ExecutionRequest) -> Result<std::process::Child, RuntimeError> {
+        let mut command = self.command(req)?;
+        command.spawn().map_err(|source| RuntimeError::SpawnFailed {
+            program: PathBuf::from(command.get_program()),
+            source,
+        })
+    }
+
+    pub fn command(&self, req: &ExecutionRequest) -> Result<Command, RuntimeError> {
+        let (loader, executable) = match &req.emulate {
+            Some(em) => (Some(em.qemu.clone()), em.wine.clone()),
+            None => (None, Self::wine_executable()?),
+        };
+
+        let virtual_display = req.display == DisplayMode::Virtual;
+        let sandboxed = req.sandbox.is_some();
+        let mut argv: Vec<std::ffi::OsString> = Vec::new();
+
+        if virtual_display {
+            let xvfb = find_xvfb_run().ok_or(RuntimeError::VirtualDisplayUnavailable)?;
+            argv.push(xvfb.into_os_string());
+            argv.push("-a".into());
+            argv.push("--".into());
+        }
+
+        if let Some(spec) = &req.sandbox {
+            let bwrap = find_bwrap().ok_or(RuntimeError::SandboxUnavailable)?;
+            let pasta = if spec.network == NetworkMode::Isolated {
+                find_pasta()
+            } else {
+                None
+            };
+            let unshare_net = should_unshare_net(spec.network, pasta.is_some());
+            if let Some(pasta) = &pasta {
+                argv.push(pasta.clone().into_os_string());
+                argv.push("--config-net".into());
+                argv.push("--".into());
+            }
+            argv.push(bwrap.into_os_string());
+            argv.extend(bwrap_args(spec, unshare_net).into_iter().map(Into::into));
+            if virtual_display {
+                for a in ["--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix"] {
+                    argv.push(a.into());
+                }
+            }
+        }
+
+        if let Some(loader) = &loader {
+            argv.push(loader.clone().into_os_string());
+        }
+        argv.push(executable.clone().into_os_string());
+        argv.push(req.program.clone().into_os_string());
+        argv.extend(req.args.iter().map(Into::into));
+
+        let (head, tail) = argv.split_first().expect("argv always has wine at minimum");
+        let mut command = Command::new(head);
+        command.args(tail);
+
+        if sandboxed {
+            command.env_clear();
+            for (key, value) in sandbox_base_env() {
+                command.env(key, value);
+            }
+            command.envs(full_env(&req.prefix, &req.env));
+            if let Some(spec) = &req.sandbox {
+                apply_rlimits(&mut command, spec);
+            }
+        } else {
+            scrub_host_wine_vars(&mut command);
+            command.envs(full_env(&req.prefix, &req.env));
+        }
+        if let Some(cwd) = &req.cwd {
+            if !cwd.is_dir() {
+                return Err(RuntimeError::ExecutionFailed {
+                    detail: format!("working directory {} does not exist", cwd.display()),
+                });
+            }
+            command.current_dir(cwd);
+        }
+        tracing::debug!(program = %req.program.display(), prefix = %req.prefix.display(), sandboxed, virtual_display, "executing via wine");
+        Ok(command)
+    }
 }
 
 fn command_with_prefix(program: &Path, prefix: &Path) -> Command {
@@ -193,82 +276,11 @@ impl RuntimeProvider for WineRuntime {
     }
 
     fn execute(&self, req: &ExecutionRequest) -> Result<ExitStatus, RuntimeError> {
-        let (loader, executable) = match &req.emulate {
-            Some(em) => (Some(em.qemu.clone()), em.wine.clone()),
-            None => (None, Self::wine_executable()?),
-        };
-
-        let virtual_display = req.display == DisplayMode::Virtual;
-        let sandboxed = req.sandbox.is_some();
-        let mut argv: Vec<std::ffi::OsString> = Vec::new();
-
-        if virtual_display {
-            let xvfb = find_xvfb_run().ok_or(RuntimeError::VirtualDisplayUnavailable)?;
-            argv.push(xvfb.into_os_string());
-            argv.push("-a".into());
-            argv.push("--".into());
-        }
-
-        if let Some(spec) = &req.sandbox {
-            let bwrap = find_bwrap().ok_or(RuntimeError::SandboxUnavailable)?;
-            let pasta = if spec.network == NetworkMode::Isolated {
-                find_pasta()
-            } else {
-                None
-            };
-            let unshare_net = should_unshare_net(spec.network, pasta.is_some());
-            if let Some(pasta) = &pasta {
-                argv.push(pasta.clone().into_os_string());
-                argv.push("--config-net".into());
-                argv.push("--".into());
-            }
-            argv.push(bwrap.into_os_string());
-            argv.extend(bwrap_args(spec, unshare_net).into_iter().map(Into::into));
-            if virtual_display {
-                for a in ["--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix"] {
-                    argv.push(a.into());
-                }
-            }
-        }
-
-        if let Some(loader) = &loader {
-            argv.push(loader.clone().into_os_string());
-        }
-        argv.push(executable.clone().into_os_string());
-        argv.push(req.program.clone().into_os_string());
-        argv.extend(req.args.iter().map(Into::into));
-
-        let (head, tail) = argv.split_first().expect("argv always has wine at minimum");
-        let mut command = Command::new(head);
-        command.args(tail);
-
-        if sandboxed {
-            command.env_clear();
-            for (key, value) in sandbox_base_env() {
-                command.env(key, value);
-            }
-            command.envs(full_env(&req.prefix, &req.env));
-            if let Some(spec) = &req.sandbox {
-                apply_rlimits(&mut command, spec);
-            }
-        } else {
-            scrub_host_wine_vars(&mut command);
-            command.envs(full_env(&req.prefix, &req.env));
-        }
-        if let Some(cwd) = &req.cwd {
-            if !cwd.is_dir() {
-                return Err(RuntimeError::ExecutionFailed {
-                    detail: format!("working directory {} does not exist", cwd.display()),
-                });
-            }
-            command.current_dir(cwd);
-        }
-        tracing::debug!(program = %req.program.display(), prefix = %req.prefix.display(), sandboxed, virtual_display, "executing via wine");
-        command
-            .status()
-            .map_err(|source| RuntimeError::SpawnFailed {
-                program: PathBuf::from(head),
-                source,
+        let mut child = self.spawn(req)?;
+        child
+            .wait()
+            .map_err(|source| RuntimeError::ExecutionFailed {
+                detail: format!("waiting for {} failed: {source}", req.program.display()),
             })
     }
 

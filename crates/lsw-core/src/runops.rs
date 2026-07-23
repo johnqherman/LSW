@@ -375,15 +375,79 @@ fn has_powershell(env: &Environment) -> bool {
     path.is_file() && is_real_windows_binary(&path)
 }
 
+static SHELL_CHILD_PID: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+static LAST_SIGINT_MS: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+const SIGINT_EXIT_WINDOW_MS: i64 = 2000;
+
+extern "C" fn shell_sigint(_: libc::c_int) {
+    use std::sync::atomic::Ordering;
+    let mut ts = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    unsafe {
+        libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts);
+    }
+    let now_ms = ts.tv_sec as i64 * 1000 + ts.tv_nsec as i64 / 1_000_000;
+    let last = LAST_SIGINT_MS.swap(now_ms, Ordering::Relaxed);
+    if now_ms - last <= SIGINT_EXIT_WINDOW_MS {
+        let pid = SHELL_CHILD_PID.load(Ordering::Relaxed);
+        if pid > 0 {
+            unsafe {
+                libc::kill(pid, libc::SIGKILL);
+            }
+        }
+    } else {
+        let hint = b"\n(ctrl+c again within 2s exits the shell)\n";
+        unsafe {
+            libc::write(2, hint.as_ptr().cast(), hint.len());
+        }
+    }
+}
+
+struct ShellSignalGuard;
+
+impl ShellSignalGuard {
+    fn install() -> Self {
+        use std::sync::atomic::Ordering;
+        LAST_SIGINT_MS.store(i64::MIN / 2, Ordering::Relaxed);
+        unsafe {
+            let mut action: libc::sigaction = std::mem::zeroed();
+            action.sa_sigaction = shell_sigint as extern "C" fn(libc::c_int) as usize;
+            action.sa_flags = libc::SA_RESTART;
+            libc::sigemptyset(&mut action.sa_mask);
+            libc::sigaction(libc::SIGINT, &action, std::ptr::null_mut());
+        }
+        ShellSignalGuard
+    }
+}
+
+impl Drop for ShellSignalGuard {
+    fn drop(&mut self) {
+        use std::sync::atomic::Ordering;
+        SHELL_CHILD_PID.store(0, Ordering::Relaxed);
+        unsafe {
+            libc::signal(libc::SIGINT, libc::SIG_DFL);
+        }
+    }
+}
+
+fn wait_interactive(mut child: std::process::Child) -> std::io::Result<ExitStatus> {
+    use std::sync::atomic::Ordering;
+    SHELL_CHILD_PID.store(child.id() as i32, Ordering::Relaxed);
+    child.wait()
+}
+
 pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Result<ExitStatus> {
+    let _guard = ShellSignalGuard::install();
     if windows {
         if let Some(p) = project {
             crate::envops::link_project(env, p)?;
         }
         let dos = project.and_then(|p| crate::envops::mapper(env, p).to_windows(&p.root).ok());
         let (program, args) = shell_invocation(has_powershell(env), dos.as_deref());
-        return Ok(WineRuntime.execute(&ExecutionRequest {
-            program,
+        let request = ExecutionRequest {
+            program: program.clone(),
             args,
             prefix: env.layout.prefix(),
             cwd: windows_cwd(env, project),
@@ -391,7 +455,16 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
             sandbox: None,
             display: lsw_runtime::DisplayMode::Inherit,
             emulate: crate::emulateops::resolve(env.manifest.target_arch)?,
-        })?);
+        };
+        if crate::ttyops::stdin_is_tty() {
+            let command = WineRuntime.command(&request)?;
+            return crate::ttyops::run_shell_in_pty(
+                command,
+                "\r\n(ctrl+c again within 2s exits the shell)\r\n",
+            );
+        }
+        let child = WineRuntime.spawn(&request)?;
+        return wait_interactive(child).map_err(|e| Error::io(program, e));
     }
 
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_owned());
@@ -408,7 +481,10 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
     }
     cmd.env("PS1", format!("(lsw:{}) \\w \\$ ", env.name));
 
-    cmd.status().map_err(|e| Error::io(PathBuf::from(shell), e))
+    let child = cmd
+        .spawn()
+        .map_err(|e| Error::io(PathBuf::from(&shell), e))?;
+    wait_interactive(child).map_err(|e| Error::io(PathBuf::from(shell), e))
 }
 
 #[cfg(test)]
