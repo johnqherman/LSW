@@ -194,9 +194,11 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             } else {
                 None
             };
+            let toolchain_contents = fs::read_to_string(&toolchain_file).unwrap_or_default();
             let cmake_config = format!(
-                "{tc:?}|generator={generator:?}|toolchain={}|emulator={}|deps={:?}|env={}",
-                toolchain_file.display(),
+                "{tc:?}|arch={}|generator={generator:?}|toolchain={}|emulator={}|deps={:?}|env={}",
+                env.manifest.target_arch,
+                toolchain_contents,
                 env.manifest.runtime.executable.display(),
                 crate::depsops::dep_dirs(project),
                 ambient_env_fingerprint()
