@@ -1,6 +1,6 @@
 use std::os::fd::{FromRawFd, OwnedFd, RawFd};
 use std::process::{Command, ExitStatus, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::error::{Error, Result};
@@ -9,9 +9,23 @@ const CTRL_C: u8 = 0x03;
 const DOUBLE_PRESS_WINDOW: Duration = Duration::from_secs(2);
 
 static WINCH_PENDING: AtomicBool = AtomicBool::new(false);
+static TERMIOS_RESTORE: AtomicPtr<libc::termios> = AtomicPtr::new(std::ptr::null_mut());
 
 extern "C" fn on_winch(_: libc::c_int) {
     WINCH_PENDING.store(true, Ordering::Relaxed);
+}
+
+extern "C" fn on_fatal(sig: libc::c_int) {
+    let saved = TERMIOS_RESTORE.load(Ordering::Acquire);
+    if !saved.is_null() {
+        unsafe {
+            libc::tcsetattr(0, libc::TCSANOW, saved);
+        }
+    }
+    unsafe {
+        libc::signal(sig, libc::SIG_DFL);
+        libc::raise(sig);
+    }
 }
 
 pub fn stdin_is_tty() -> bool {
@@ -20,6 +34,8 @@ pub fn stdin_is_tty() -> bool {
 
 struct RawModeGuard {
     original: libc::termios,
+    prev_term: libc::sigaction,
+    prev_hup: libc::sigaction,
 }
 
 impl RawModeGuard {
@@ -34,7 +50,19 @@ impl RawModeGuard {
             if libc::tcsetattr(0, libc::TCSANOW, &raw) != 0 {
                 return None;
             }
-            Some(RawModeGuard { original })
+            let saved = Box::into_raw(Box::new(original));
+            TERMIOS_RESTORE.store(saved, Ordering::Release);
+            let mut action: libc::sigaction = std::mem::zeroed();
+            action.sa_sigaction = on_fatal as extern "C" fn(libc::c_int) as usize;
+            let mut prev_term: libc::sigaction = std::mem::zeroed();
+            let mut prev_hup: libc::sigaction = std::mem::zeroed();
+            libc::sigaction(libc::SIGTERM, &action, &mut prev_term);
+            libc::sigaction(libc::SIGHUP, &action, &mut prev_hup);
+            Some(RawModeGuard {
+                original,
+                prev_term,
+                prev_hup,
+            })
         }
     }
 }
@@ -42,7 +70,13 @@ impl RawModeGuard {
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
         unsafe {
+            libc::sigaction(libc::SIGTERM, &self.prev_term, std::ptr::null_mut());
+            libc::sigaction(libc::SIGHUP, &self.prev_hup, std::ptr::null_mut());
+            let saved = TERMIOS_RESTORE.swap(std::ptr::null_mut(), Ordering::AcqRel);
             libc::tcsetattr(0, libc::TCSANOW, &self.original);
+            if !saved.is_null() {
+                drop(Box::from_raw(saved));
+            }
         }
     }
 }
