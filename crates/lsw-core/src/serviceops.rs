@@ -53,10 +53,15 @@ pub fn query(env: &Environment, name: &str) -> Result<ServiceStatus> {
     let out = sc(env, vec!["query".into(), name.into()])?;
     let stdout = String::from_utf8_lossy(&out.stdout);
     if !out.status.success() && !stdout.contains("STATE") {
+        let detail = format!(
+            "{}\n{}",
+            stdout.trim(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
         return Err(Error::ServiceFailed {
             op: "query".into(),
             name: name.into(),
-            detail: String::from_utf8_lossy(&out.stderr).trim().to_owned(),
+            detail: detail.trim().to_owned(),
         });
     }
     Ok(ServiceStatus {

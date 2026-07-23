@@ -1,3 +1,11 @@
+pub(crate) fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
 pub(crate) fn diagnostic_stdio() -> std::process::Stdio {
     use std::os::fd::{AsRawFd, FromRawFd};
     let dup = unsafe { libc::dup(std::io::stderr().as_raw_fd()) };
