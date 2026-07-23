@@ -140,6 +140,7 @@ fn sanitize_project_name(raw: &str) -> String {
 }
 
 pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<InitReport> {
+    let named = name.is_some();
     let (root, project_name) = match name {
         Some(n) => {
             let sanitized = sanitize_project_name(n);
@@ -156,6 +157,19 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
             (parent.to_path_buf(), sanitize_project_name(&n))
         }
     };
+
+    if named
+        && let Ok(mut entries) = fs::read_dir(&root)
+        && entries.next().is_some()
+    {
+        return Err(Error::InitFailed {
+            path: root.clone(),
+            detail: format!(
+                "target directory '{}' already exists and is not empty (a distinct name may have sanitized to the same directory); pick another name or `cd` in and run `lsw init`",
+                root.display()
+            ),
+        });
+    }
 
     let manifest_path = root.join(PROJECT_MANIFEST);
     if manifest_path.exists() {
