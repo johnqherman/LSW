@@ -39,30 +39,35 @@ pub fn hardening(path: &Path) -> Result<Hardening, PeError> {
     }
 }
 
-fn safe_seh<Pe: ImageNtHeaders>(file: &PeFile<Pe>, data: &[u8], is_64: bool, no_seh: bool) -> bool {
-    if is_64 {
-        return true;
-    }
-    if no_seh {
-        return true;
-    }
+struct LoadCfg {
+    size: usize,
+    se_table: u64,
+    se_count: u64,
+    guard_flags: u32,
+}
+
+fn load_config<Pe: ImageNtHeaders>(file: &PeFile<Pe>, data: &[u8], is_64: bool) -> Option<LoadCfg> {
     let sections = file.section_table();
-    let Some(dir) = file
+    let dir = file
         .data_directories()
-        .get(pe::IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG)
-    else {
-        return false;
-    };
-    let Ok(bytes) = dir.data(data, &sections) else {
-        return false;
-    };
-    match object::pod::from_bytes::<pe::ImageLoadConfigDirectory32>(bytes) {
-        Ok((cfg, _)) => {
-            let size = cfg.size.get(LE) as usize;
-            let need = std::mem::offset_of!(pe::ImageLoadConfigDirectory32, sehandler_count) + 4;
-            size >= need && cfg.sehandler_count.get(LE) > 0
-        }
-        Err(_) => false,
+        .get(pe::IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG)?;
+    let bytes = dir.data(data, &sections).ok()?;
+    if is_64 {
+        let (cfg, _) = object::pod::from_bytes::<pe::ImageLoadConfigDirectory64>(bytes).ok()?;
+        Some(LoadCfg {
+            size: cfg.size.get(LE) as usize,
+            se_table: cfg.sehandler_table.get(LE),
+            se_count: cfg.sehandler_count.get(LE),
+            guard_flags: cfg.guard_flags.get(LE),
+        })
+    } else {
+        let (cfg, _) = object::pod::from_bytes::<pe::ImageLoadConfigDirectory32>(bytes).ok()?;
+        Some(LoadCfg {
+            size: cfg.size.get(LE) as usize,
+            se_table: cfg.sehandler_table.get(LE) as u64,
+            se_count: cfg.sehandler_count.get(LE) as u64,
+            guard_flags: cfg.guard_flags.get(LE),
+        })
     }
 }
 
@@ -73,8 +78,28 @@ fn hardening_typed<Pe: ImageNtHeaders>(
 ) -> Result<Hardening, PeError> {
     let file = PeFile::<Pe>::parse(data).map_err(|e| PeError::malformed(path, e))?;
     let dc = file.nt_headers().optional_header().dll_characteristics();
+    let file_chars = file.nt_headers().file_header().characteristics.get(LE);
     let has = |flag: u16| dc & flag != 0;
-    let seh = safe_seh(&file, data, is_64, has(pe::IMAGE_DLLCHARACTERISTICS_NO_SEH));
+    let relocs_stripped = file_chars & pe::IMAGE_FILE_RELOCS_STRIPPED != 0;
+    let lc = load_config(&file, data, is_64);
+    let se_off = std::mem::offset_of!(pe::ImageLoadConfigDirectory32, sehandler_count) + 4;
+    let seh = if is_64 {
+        true
+    } else {
+        has(pe::IMAGE_DLLCHARACTERISTICS_NO_SEH)
+            || lc
+                .as_ref()
+                .is_some_and(|c| c.size >= se_off && c.se_table != 0 && c.se_count > 0)
+    };
+    let gf_off = if is_64 {
+        std::mem::offset_of!(pe::ImageLoadConfigDirectory64, guard_flags) + 4
+    } else {
+        std::mem::offset_of!(pe::ImageLoadConfigDirectory32, guard_flags) + 4
+    };
+    let cfg = has(pe::IMAGE_DLLCHARACTERISTICS_GUARD_CF)
+        && lc.as_ref().is_some_and(|c| {
+            c.size >= gf_off && c.guard_flags & pe::IMAGE_GUARD_CF_INSTRUMENTED != 0
+        });
     let signed = file
         .data_directories()
         .get(pe::IMAGE_DIRECTORY_ENTRY_SECURITY)
@@ -98,10 +123,10 @@ fn hardening_typed<Pe: ImageNtHeaders>(
         })
         .unwrap_or(false);
     Ok(Hardening {
-        aslr: has(pe::IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE),
-        high_entropy_va: has(pe::IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA),
+        aslr: has(pe::IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE) && !relocs_stripped,
+        high_entropy_va: is_64 && has(pe::IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA),
         dep: has(pe::IMAGE_DLLCHARACTERISTICS_NX_COMPAT),
-        cfg: has(pe::IMAGE_DLLCHARACTERISTICS_GUARD_CF),
+        cfg,
         force_integrity: has(pe::IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY),
         seh,
         signed,
