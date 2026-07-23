@@ -8,6 +8,7 @@ use crate::error::{Error, Result};
 
 const MAX_WINRM_BYTES: usize = 32 * 1024 * 1024;
 const MAX_RECEIVE_OUTPUT: usize = 64 * 1024 * 1024;
+const MAX_UPLOAD_BYTES: u64 = 512 * 1024 * 1024;
 
 fn drain_capped(mut reader: impl Read + Send + 'static, cap: usize) -> mpsc::Receiver<Vec<u8>> {
     let (tx, rx) = mpsc::channel();
@@ -349,6 +350,16 @@ pub fn run_on_host(
             true,
         )?;
         for (local, name) in &plan.uploads {
+            let meta = std::fs::metadata(local).map_err(|e| Error::io(local.clone(), e))?;
+            if meta.len() > MAX_UPLOAD_BYTES {
+                return Err(Error::io(
+                    local.clone(),
+                    std::io::Error::other(format!(
+                        "artifact is {} bytes, exceeds upload limit of {MAX_UPLOAD_BYTES} bytes",
+                        meta.len()
+                    )),
+                ));
+            }
             let bytes = std::fs::read(local).map_err(|e| Error::io(local.clone(), e))?;
             winrm.upload(&shell, &format!("{remote_dir}\\{name}"), &bytes)?;
         }

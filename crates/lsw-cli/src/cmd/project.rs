@@ -27,7 +27,10 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
             force,
             expose_home,
         } => {
-            println!("Creating environment '{name}' (this initializes a Wine prefix)...");
+            let json = format == Format::Json;
+            if !json {
+                println!("Creating environment '{name}' (this initializes a Wine prefix)...");
+            }
             let report = lsw_core::env_create(
                 dirs,
                 &EnvCreateOptions {
@@ -40,14 +43,17 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
                 },
             )?;
             let m = &report.environment.manifest;
-            println!("Environment '{name}' ready");
-            println!("  arch      {}", m.target_arch);
-            println!(
-                "  toolchain {} {}",
-                m.toolchain.provider, m.toolchain.version
-            );
-            println!("  runtime   {} {}", m.runtime.provider, m.runtime.version);
-            println!("  probe     {}", report.probe.detail);
+            if !json {
+                println!("Environment '{name}' ready");
+                println!("  arch      {}", m.target_arch);
+                println!(
+                    "  toolchain {} {}",
+                    m.toolchain.provider, m.toolchain.version
+                );
+                println!("  runtime   {} {}", m.runtime.provider, m.runtime.version);
+                println!("  probe     {}", report.probe.detail);
+            }
+            let mut activated = None;
             if let Ok(mut p) = project() {
                 let active_missing = match &p.manifest.environment.name {
                     None => true,
@@ -58,11 +64,28 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
                 };
                 if active_missing {
                     lsw_core::use_environment(dirs, &mut p, name)?;
-                    println!(
-                        "Project '{}' now uses environment '{name}'",
-                        p.manifest.project.name
-                    );
+                    activated = Some(p.manifest.project.name.clone());
+                    if !json {
+                        println!(
+                            "Project '{}' now uses environment '{name}'",
+                            activated.as_deref().unwrap_or_default()
+                        );
+                    }
                 }
+            }
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "name": name,
+                        "arch": m.target_arch.to_string(),
+                        "toolchain": format!("{} {}", m.toolchain.provider, m.toolchain.version),
+                        "runtime": format!("{} {}", m.runtime.provider, m.runtime.version),
+                        "probe": report.probe.detail,
+                        "activated_for": activated,
+                    }))
+                    .expect("serializes")
+                );
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -106,27 +129,61 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
 
         EnvCmd::Remove { name } => {
             lsw_core::env_remove(dirs, name)?;
-            println!("Removed environment '{name}'");
+            if format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({ "removed": name }))
+                        .expect("serializes")
+                );
+            } else {
+                println!("Removed environment '{name}'");
+            }
             Ok(ExitCode::SUCCESS)
         }
 
         EnvCmd::Clone { src, dst, force } => {
             let env = lsw_core::clone_env(dirs, src, dst, *force)?;
-            println!("Cloned environment '{src}' to '{}'", env.name);
+            if format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "cloned": src,
+                        "to": env.name,
+                    }))
+                    .expect("serializes")
+                );
+            } else {
+                println!("Cloned environment '{src}' to '{}'", env.name);
+            }
             Ok(ExitCode::SUCCESS)
         }
 
         EnvCmd::Restore { name } => {
+            let json = format == Format::Json;
             let p = project()?;
-            println!("Restoring environment '{name}' from lsw.lock...");
+            if !json {
+                println!("Restoring environment '{name}' from lsw.lock...");
+            }
             let report = lsw_core::env_restore(dirs, &p, name)?;
             let m = &report.environment.manifest;
-            println!("Environment '{name}' restored and verified against lsw.lock");
-            println!("  arch      {}", m.target_arch);
-            println!(
-                "  toolchain {} {}",
-                m.toolchain.provider, m.toolchain.version
-            );
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "restored": name,
+                        "arch": m.target_arch.to_string(),
+                        "toolchain": format!("{} {}", m.toolchain.provider, m.toolchain.version),
+                    }))
+                    .expect("serializes")
+                );
+            } else {
+                println!("Environment '{name}' restored and verified against lsw.lock");
+                println!("  arch      {}", m.target_arch);
+                println!(
+                    "  toolchain {} {}",
+                    m.toolchain.provider, m.toolchain.version
+                );
+            }
             Ok(ExitCode::SUCCESS)
         }
     }

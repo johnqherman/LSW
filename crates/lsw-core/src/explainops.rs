@@ -249,7 +249,7 @@ const TABLE: &[Explanation] = &[
     Explanation {
         code: "LSW2021",
         summary: "an unsupported verification transport was configured",
-        hint: "set transport = \"ssh\" in [verify]; only ssh is implemented",
+        hint: "set transport to \"ssh\", \"winrm\", or \"https\" in [verify]",
     },
     Explanation {
         code: "LSW2022",
