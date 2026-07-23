@@ -113,6 +113,7 @@ pub(crate) fn sandbox_base_env() -> Vec<(String, String)> {
         "XAUTHORITY",
         "WAYLAND_DISPLAY",
         "XDG_RUNTIME_DIR",
+        "QEMU_LD_PREFIX",
     ];
     let mut out = Vec::new();
     for key in ALLOW {

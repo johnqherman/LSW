@@ -118,7 +118,9 @@ fn ensure_signing_identity(publisher: &str) -> Result<PathBuf> {
     let msix_dir = dirs.data.join("msix");
     std::fs::create_dir_all(&msix_dir).map_err(|e| Error::io(msix_dir.clone(), e))?;
     let pfx = msix_dir.join("signing.pfx");
-    if pfx.is_file() {
+    let key = msix_dir.join("signing.key.pem");
+    let cert = msix_dir.join("signing.cert.pem");
+    if pfx.is_file() && cert_still_valid(&cert) {
         return Ok(pfx);
     }
     if which("openssl").is_none() {
@@ -127,8 +129,7 @@ fn ensure_signing_identity(publisher: &str) -> Result<PathBuf> {
             fix: "install openssl to generate a signing certificate".into(),
         });
     }
-    let key = msix_dir.join("signing.key.pem");
-    let cert = msix_dir.join("signing.cert.pem");
+    let _ = std::fs::remove_file(&pfx);
     run_openssl(&[
         "req",
         "-x509",
@@ -159,6 +160,21 @@ fn ensure_signing_identity(publisher: &str) -> Result<PathBuf> {
         "pass:lsw",
     ])?;
     Ok(pfx)
+}
+
+fn cert_still_valid(cert: &Path) -> bool {
+    if !cert.is_file() {
+        return false;
+    }
+    if which("openssl").is_none() {
+        return true;
+    }
+    std::process::Command::new("openssl")
+        .args(["x509", "-checkend", "2592000", "-noout", "-in"])
+        .arg(cert)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 fn run_openssl(args: &[&str]) -> Result<()> {
