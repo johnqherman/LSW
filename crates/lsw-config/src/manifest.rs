@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -276,6 +277,23 @@ impl ProjectManifest {
         write_toml(path, self, "lsw.toml")
     }
 
+    pub fn save_new(&self, path: &Path) -> Result<()> {
+        let text = toml::to_string_pretty(self).map_err(|source| ConfigError::Serialize {
+            what: "lsw.toml",
+            source: Box::new(source),
+        })?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|e| ConfigError::write(path, e))?;
+        }
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| ConfigError::write(path, e))?;
+        file.write_all(text.as_bytes())
+            .map_err(|e| ConfigError::write(path, e))
+    }
+
     pub fn discover(start: &Path) -> Result<(PathBuf, Self)> {
         let mut dir = Some(start);
         while let Some(d) = dir {
@@ -307,8 +325,12 @@ pub(crate) fn write_toml<T: Serialize>(path: &Path, value: &T, what: &'static st
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| ConfigError::write(path, e))?;
     }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
     let uniq = format!(
-        "{}.{}",
+        "{}.{nanos}.{}",
         std::process::id(),
         TMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     );
@@ -316,8 +338,22 @@ pub(crate) fn write_toml<T: Serialize>(path: &Path, value: &T, what: &'static st
         Some(ext) => format!("{ext}.{uniq}.tmp"),
         None => format!("{uniq}.tmp"),
     });
-    fs::write(&tmp, text).map_err(|e| ConfigError::write(&tmp, e))?;
-    fs::rename(&tmp, path).map_err(|e| ConfigError::write(path, e))
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp)
+        .map_err(|e| ConfigError::write(&tmp, e))?;
+    if let Err(e) = file.write_all(text.as_bytes()) {
+        drop(file);
+        let _ = fs::remove_file(&tmp);
+        return Err(ConfigError::write(&tmp, e));
+    }
+    drop(file);
+    if let Err(e) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(ConfigError::write(path, e));
+    }
+    Ok(())
 }
 
 static TMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
