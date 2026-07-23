@@ -505,8 +505,19 @@ fn decode_artifact_manifest(bytes: &[u8]) -> Vec<PathBuf> {
 
 fn file_hash(path: &Path) -> Option<String> {
     use sha2::Digest;
-    let bytes = fs::read(path).ok()?;
-    Some(format!("{:x}", sha2::Sha256::digest(&bytes)))
+    use std::io::Read;
+    let file = fs::File::open(path).ok()?;
+    let mut hasher = sha2::Sha256::new();
+    let mut reader = std::io::BufReader::new(file);
+    let mut chunk = [0u8; 65536];
+    loop {
+        let n = reader.read(&mut chunk).ok()?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&chunk[..n]);
+    }
+    Some(format!("{:x}", hasher.finalize()))
 }
 
 fn artifact_hashes(root: &Path) -> std::collections::HashMap<PathBuf, String> {
@@ -536,8 +547,13 @@ fn walk(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        let is_symlink = entry.file_type().map(|t| t.is_symlink()).unwrap_or(true);
-        if !is_symlink && path.is_dir() {
+        let Ok(ftype) = entry.file_type() else {
+            continue;
+        };
+        if ftype.is_symlink() {
+            continue;
+        }
+        if ftype.is_dir() {
             let name = path
                 .file_name()
                 .and_then(|n| n.to_str())
@@ -547,9 +563,10 @@ fn walk(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
                 continue;
             }
             walk(&path, out);
-        } else if path
-            .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("exe") || e.eq_ignore_ascii_case("dll"))
+        } else if ftype.is_file()
+            && path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("exe") || e.eq_ignore_ascii_case("dll"))
         {
             out.push(path);
         }

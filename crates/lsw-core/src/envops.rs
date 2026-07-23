@@ -465,6 +465,14 @@ fn provision_profile(layout: &EnvironmentLayout) -> Result<()> {
 pub fn link_project(env: &Environment, project: &Project) -> Result<PathBuf> {
     validate_name("project", &project.manifest.project.name)?;
     let src_dir = env.layout.src();
+    if let Ok(meta) = fs::symlink_metadata(&src_dir)
+        && meta.file_type().is_symlink()
+    {
+        return Err(Error::InitFailed {
+            path: src_dir.clone(),
+            detail: "prefix src directory is a symlink; refusing to link through it".into(),
+        });
+    }
     fs::create_dir_all(&src_dir).map_err(|e| Error::io(src_dir.clone(), e))?;
     let link = src_dir.join(&project.manifest.project.name);
 
