@@ -221,14 +221,26 @@ fn die_name<R: gimli::Reader>(
         .map(|c| c.into_owned())
 }
 
-fn ref_attr<R: gimli::Reader>(
+enum OriginRef<R: gimli::Reader> {
+    Unit(gimli::UnitOffset<R::Offset>),
+    Info(gimli::DebugInfoOffset<R::Offset>),
+}
+
+fn origin_ref<R: gimli::Reader>(
     entry: &gimli::DebuggingInformationEntry<R>,
-    attr: gimli::DwAt,
-) -> Option<gimli::UnitOffset<R::Offset>> {
-    match entry.attr_value(attr) {
-        Ok(Some(gimli::AttributeValue::UnitRef(offset))) => Some(offset),
-        _ => None,
+) -> Option<OriginRef<R>> {
+    for attr in [gimli::DW_AT_specification, gimli::DW_AT_abstract_origin] {
+        match entry.attr_value(attr) {
+            Ok(Some(gimli::AttributeValue::UnitRef(offset))) => {
+                return Some(OriginRef::Unit(offset));
+            }
+            Ok(Some(gimli::AttributeValue::DebugInfoRef(offset))) => {
+                return Some(OriginRef::Info(offset));
+            }
+            _ => {}
+        }
     }
+    None
 }
 
 fn func_name<R: gimli::Reader>(
@@ -236,19 +248,55 @@ fn func_name<R: gimli::Reader>(
     unit: &gimli::Unit<R>,
     entry: &gimli::DebuggingInformationEntry<R>,
 ) -> Option<String> {
+    func_name_at(dwarf, unit, entry, 0)
+}
+
+fn func_name_at<R: gimli::Reader>(
+    dwarf: &gimli::Dwarf<R>,
+    unit: &gimli::Unit<R>,
+    entry: &gimli::DebuggingInformationEntry<R>,
+    depth: u32,
+) -> Option<String> {
+    if depth > 8 {
+        return None;
+    }
     if let Some(name) = die_name(dwarf, unit, entry) {
         return Some(name);
     }
-    let mut next = ref_attr(entry, gimli::DW_AT_specification)
-        .or_else(|| ref_attr(entry, gimli::DW_AT_abstract_origin));
+    let mut next = origin_ref(entry);
     for _ in 0..4 {
-        let offset = next?;
-        let referenced = unit.entry(offset).ok()?;
-        if let Some(name) = die_name(dwarf, unit, &referenced) {
-            return Some(name);
+        match next? {
+            OriginRef::Unit(offset) => {
+                let referenced = unit.entry(offset).ok()?;
+                if let Some(name) = die_name(dwarf, unit, &referenced) {
+                    return Some(name);
+                }
+                next = origin_ref(&referenced);
+            }
+            OriginRef::Info(offset) => return name_at_debug_info(dwarf, offset, depth + 1),
         }
-        next = ref_attr(&referenced, gimli::DW_AT_specification)
-            .or_else(|| ref_attr(&referenced, gimli::DW_AT_abstract_origin));
+    }
+    None
+}
+
+fn name_at_debug_info<R: gimli::Reader>(
+    dwarf: &gimli::Dwarf<R>,
+    offset: gimli::DebugInfoOffset<R::Offset>,
+    depth: u32,
+) -> Option<String> {
+    if depth > 8 {
+        return None;
+    }
+    let mut units = dwarf.units();
+    while let Ok(Some(header)) = units.next() {
+        let Some(unit_offset) = offset.to_unit_offset(&header) else {
+            continue;
+        };
+        let Ok(unit) = dwarf.unit(header) else {
+            continue;
+        };
+        let entry = unit.entry(unit_offset).ok()?;
+        return func_name_at(dwarf, &unit, &entry, depth + 1);
     }
     None
 }
@@ -273,8 +321,7 @@ fn file_name<R: gimli::Reader>(
     if is_absolute(&path) {
         return Some(path);
     }
-    let dir_index = file.directory_index();
-    let dir = header.directory(dir_index).and_then(|d| {
+    let dir = header.directory(file.directory_index()).and_then(|d| {
         dwarf
             .attr_string(unit, d)
             .ok()?
@@ -284,7 +331,7 @@ fn file_name<R: gimli::Reader>(
     });
     match dir {
         Some(dir) if is_absolute(&dir) => Some(format!("{dir}/{path}")),
-        Some(dir) if dir_index != 0 && !dir.is_empty() => Some(format!("{comp_dir}/{dir}/{path}")),
+        Some(dir) if !dir.is_empty() && dir != comp_dir => Some(format!("{comp_dir}/{dir}/{path}")),
         _ => Some(format!("{comp_dir}/{path}")),
     }
 }
