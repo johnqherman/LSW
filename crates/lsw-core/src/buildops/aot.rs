@@ -244,6 +244,7 @@ pub fn prepare(project: &Project, env: &Environment, tc: &ResolvedToolchain) -> 
          \x20 case \"$a\" in\n\
          \x20 @*)\n\
          \x20   rsp=\"${{a#@}}\"\n\
+         \x20   rm -f \"$rsp.lsw\"\n\
          \x20   sed -E 's#/(NOEXP|NOIMPLIB)([[:space:]]|$)#\\2#g' \"$rsp\" > \"$rsp.lsw\"\n\
          \x20   a=\"@$rsp.lsw\"\n\
          \x20   ;;\n\
