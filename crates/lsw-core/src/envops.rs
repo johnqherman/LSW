@@ -239,6 +239,11 @@ pub fn remove(dirs: &Dirs, name: &str) -> Result<()> {
 pub fn clone_env(dirs: &Dirs, src: &str, dst: &str, force: bool) -> Result<Environment> {
     validate_name("environment", src)?;
     validate_name("environment", dst)?;
+    if src == dst {
+        return Err(Error::EnvironmentExists {
+            name: dst.to_owned(),
+        });
+    }
     Environment::open(dirs, src)?;
     let src_root = dirs.environment(src);
     let dst_root = dirs.environment(dst);
