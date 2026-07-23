@@ -7,7 +7,10 @@ language tools, and start `lsw dap` as a Debug Adapter Protocol backend.
 
 ## VS Code (`vscode/`)
 
-A TypeScript extension. The source is `src/extension.ts`. `tsc` does the type checks. esbuild makes
+A TypeScript extension. It is on the Marketplace as
+[`lsw.lsw`](https://marketplace.visualstudio.com/items?itemName=lsw.lsw).
+To install it, use `code --install-extension lsw.lsw` or the Extensions view.
+The source is `src/extension.ts`. `tsc` does the type checks. esbuild makes
 the bundle `dist/extension.js`. The extension adds the commands
 **LSW: Build / Run / Test / Verify** and **LSW: Configure C/C++ IntelliSense**
 (this writes `.vscode/c_cpp_properties.json` from `lsw ide env`). It also adds
