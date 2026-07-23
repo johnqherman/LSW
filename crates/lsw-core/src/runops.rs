@@ -124,6 +124,7 @@ pub fn run(
     {
         if let Some(pr) = project {
             buildops::check_lock(pr, env)?;
+            crate::envops::link_project(env, pr)?;
         }
         let mut msi_args = vec!["/i".to_owned(), z_drive_path(p)];
         msi_args.extend(args.iter().cloned());
@@ -187,6 +188,7 @@ pub fn run(
         Domain::Windows => {
             if let Some(p) = project {
                 buildops::check_lock(p, env)?;
+                crate::envops::link_project(env, p)?;
             }
             WineRuntime.execute(&ExecutionRequest {
                 program: launch,
@@ -299,7 +301,7 @@ fn windows_cwd(env: &Environment, project: Option<&Project>) -> Option<PathBuf> 
     if rest.is_empty() {
         return Some(env.layout.drive_c());
     }
-    Some(env.layout.drive_c().join(rest.replace('\\', "/")))
+    Some(env.layout.drive_c().join(rest.replace('\\', "/"))).filter(|p| p.is_dir())
 }
 
 fn resolve_program(program: &Path, domain: Domain) -> Result<ResolvedProgram> {
@@ -351,15 +353,33 @@ fn shell_invocation(powershell: bool, dos: Option<&str>) -> (PathBuf, Vec<String
     }
 }
 
+const WINE_BUILTIN_MARKER: &[u8; 16] = b"Wine builtin DLL";
+
+fn is_real_windows_binary(path: &Path) -> bool {
+    use std::io::Read;
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut head = [0u8; 80];
+    if file.read_exact(&mut head).is_err() {
+        return false;
+    }
+    &head[64..80] != WINE_BUILTIN_MARKER
+}
+
 fn has_powershell(env: &Environment) -> bool {
-    env.layout
+    let path = env
+        .layout
         .drive_c()
-        .join("windows/system32/WindowsPowerShell/v1.0/powershell.exe")
-        .is_file()
+        .join("windows/system32/WindowsPowerShell/v1.0/powershell.exe");
+    path.is_file() && is_real_windows_binary(&path)
 }
 
 pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Result<ExitStatus> {
     if windows {
+        if let Some(p) = project {
+            crate::envops::link_project(env, p)?;
+        }
         let dos = project.and_then(|p| crate::envops::mapper(env, p).to_windows(&p.root).ok());
         let (program, args) = shell_invocation(has_powershell(env), dos.as_deref());
         return Ok(WineRuntime.execute(&ExecutionRequest {
@@ -409,6 +429,24 @@ mod tests {
 
         let (_, args) = shell_invocation(false, None);
         assert!(args.is_empty());
+    }
+
+    #[test]
+    fn wine_builtin_stub_is_not_a_real_windows_binary() {
+        let dir = tempfile::tempdir().unwrap();
+        let stub = dir.path().join("powershell.exe");
+        let mut image = vec![0u8; 128];
+        image[..2].copy_from_slice(b"MZ");
+        image[64..80].copy_from_slice(WINE_BUILTIN_MARKER);
+        std::fs::write(&stub, &image).unwrap();
+        assert!(!is_real_windows_binary(&stub));
+
+        let real = dir.path().join("real.exe");
+        image[64..80].copy_from_slice(&[0u8; 16]);
+        std::fs::write(&real, &image).unwrap();
+        assert!(is_real_windows_binary(&real));
+
+        assert!(!is_real_windows_binary(&dir.path().join("missing.exe")));
     }
 
     #[test]
