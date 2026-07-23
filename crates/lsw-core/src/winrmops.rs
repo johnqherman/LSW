@@ -135,12 +135,11 @@ impl Winrm {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| Error::io(std::path::PathBuf::from("curl"), e))?;
-        child
+        let write_res = child
             .stdin
             .take()
             .expect("piped stdin")
-            .write_all(envelope.as_bytes())
-            .map_err(|e| Error::io(std::path::PathBuf::from("curl"), e))?;
+            .write_all(envelope.as_bytes());
         let out_rx = child
             .stdout
             .take()
@@ -152,6 +151,7 @@ impl Winrm {
         let status = child
             .wait()
             .map_err(|e| Error::io(std::path::PathBuf::from("curl"), e))?;
+        write_res.map_err(|e| Error::io(std::path::PathBuf::from("curl"), e))?;
         let stdout = out_rx.and_then(|rx| rx.recv().ok()).unwrap_or_default();
         let stderr = err_rx.and_then(|rx| rx.recv().ok()).unwrap_or_default();
         let body = String::from_utf8_lossy(&stdout).into_owned();

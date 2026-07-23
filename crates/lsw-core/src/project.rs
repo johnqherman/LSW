@@ -246,8 +246,8 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
     let mut created: Vec<PathBuf> = Vec::new();
     let mut created_dirs: Vec<PathBuf> = Vec::new();
     let result: Result<Option<String>> = (|| {
-        ProjectManifest::new(&project_name).save_new(&manifest_path)?;
         created.push(manifest_path.clone());
+        ProjectManifest::new(&project_name).save_new(&manifest_path)?;
         let existing_build = crate::buildops::detect_build_system(&root).map(|s| format!("{s:?}"));
         if existing_build.is_none() {
             let (cmake, main_c) = template_sources(template);

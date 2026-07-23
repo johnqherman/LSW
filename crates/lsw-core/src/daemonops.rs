@@ -159,6 +159,7 @@ fn handle_connection(stream: UnixStream, dirs: &Dirs, running: &Arc<AtomicBool>)
         Ok(w) => w,
         Err(_) => return,
     };
+    let _ = writer.set_write_timeout(Some(CLIENT_IDLE_TIMEOUT));
     const MAX_FRAME: u64 = 1 << 20;
     let mut reader = BufReader::new(stream);
     loop {

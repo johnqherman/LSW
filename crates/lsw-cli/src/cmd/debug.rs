@@ -17,6 +17,13 @@ pub(crate) fn debug(
 ) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
     if *native {
+        let cfg = &p.manifest.verify;
+        if cfg.host.is_some() && cfg.transport.as_deref().unwrap_or("ssh") != "ssh" {
+            return Ok(crate::usage_failure(
+                format,
+                "native debugging (backtrace) is only supported over ssh; winrm/https hosts can run binaries with `lsw compat --native` but cannot capture backtraces",
+            ));
+        }
         match lsw_core::verifyops::native_backtrace(&p, program)? {
             None => {
                 return Ok(crate::usage_failure(

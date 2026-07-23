@@ -22,6 +22,7 @@ const RT_ICON_GROUP: u16 = 14;
 const RT_VERSION: u16 = 16;
 const RT_MANIFEST: u16 = 24;
 const MAX_RESOURCE_VISITS: u32 = 100_000;
+const MAX_RESOURCE_DATA: usize = 4 * 1024 * 1024;
 
 pub fn resources(path: &Path) -> Result<Resources, PeError> {
     let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
@@ -85,6 +86,10 @@ fn resources_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Resou
 
     let mut budget: u32 = MAX_RESOURCE_VISITS;
     'types: for type_entry in root.entries {
+        if budget == 0 {
+            break 'types;
+        }
+        budget -= 1;
         let id = match type_entry.name_or_id() {
             ResourceNameOrId::Id(id) => id,
             ResourceNameOrId::Name(_) => continue,
@@ -100,6 +105,10 @@ fn resources_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Resou
             continue;
         };
         for name_entry in names.entries {
+            if budget == 0 {
+                break 'types;
+            }
+            budget -= 1;
             let Ok(Table(langs)) = name_entry.data(dir) else {
                 continue;
             };
@@ -119,6 +128,7 @@ fn resources_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Resou
                 ) else {
                     continue;
                 };
+                let bytes = &bytes[..bytes.len().min(MAX_RESOURCE_DATA)];
                 match id {
                     RT_MANIFEST => parse_manifest(bytes, &mut out),
                     RT_VERSION => parse_version(bytes, &mut out.version),
