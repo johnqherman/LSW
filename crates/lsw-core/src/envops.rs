@@ -382,12 +382,15 @@ pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
     Ok(trimmed)
 }
 
+static BACKUP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn backup_path(root: &Path) -> PathBuf {
     let name = root
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    root.with_file_name(format!(".{name}.lsw-bak-{}", std::process::id()))
+    let uniq = BACKUP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    root.with_file_name(format!(".{name}.lsw-bak-{}-{uniq}", std::process::id()))
 }
 
 struct Replacement {
