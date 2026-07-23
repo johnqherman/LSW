@@ -5,7 +5,12 @@ use crate::error::{Error, Result};
 pub fn github_workflow(project_name: &str) -> String {
     let project_name = format!(
         "\"{}\"",
-        project_name.replace('\\', "\\\\").replace('"', "\\\"")
+        project_name
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+            .replace('\t', "\\t")
     );
     format!(
         r#"name: {project_name}

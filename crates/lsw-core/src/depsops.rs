@@ -44,7 +44,9 @@ fn is_system_dll(name: &str) -> bool {
 fn resolve_dll(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
     let wanted = name.to_ascii_lowercase();
     for dir in dirs {
-        let entries = std::fs::read_dir(dir).ok()?;
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
         for entry in entries.flatten() {
             if entry.file_name().to_string_lossy().to_ascii_lowercase() == wanted {
                 return Some(entry.path());
@@ -373,7 +375,10 @@ pub fn remove(
         return Ok(true);
     }
     let files_manifest = root.join(".lsw").join(format!("{name}.files"));
-    if let Ok(list) = std::fs::read_to_string(&files_manifest) {
+    if let (Ok(list), Ok(canon_root)) = (
+        std::fs::read_to_string(&files_manifest),
+        root.canonicalize(),
+    ) {
         for rel in list.lines() {
             let rel = rel.trim();
             if rel.is_empty() {
@@ -388,6 +393,13 @@ pub fn remove(
                 continue;
             }
             let target = root.join(relp);
+            let within = target
+                .parent()
+                .and_then(|p| p.canonicalize().ok())
+                .is_some_and(|p| p.starts_with(&canon_root));
+            if !within {
+                continue;
+            }
             if let Err(e) = std::fs::remove_file(&target)
                 && e.kind() != std::io::ErrorKind::NotFound
             {

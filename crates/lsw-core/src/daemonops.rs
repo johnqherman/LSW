@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -15,6 +15,7 @@ use crate::error::{Error, Result};
 pub const PROTOCOL_VERSION: u32 = 1;
 
 const CLIENT_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_RESPONSE_BYTES: u64 = 8 * 1024 * 1024;
 
 const ACCEPT_POLL: Duration = Duration::from_millis(100);
 
@@ -233,9 +234,11 @@ impl DaemonClient {
             .flush()
             .map_err(|e| Error::io(self.path.clone(), e))?;
 
+        let _ = self.stream.set_read_timeout(Some(CLIENT_IDLE_TIMEOUT));
         let mut reader = BufReader::new(&self.stream);
         let mut response = String::new();
-        reader
+        (&mut reader)
+            .take(MAX_RESPONSE_BYTES)
             .read_line(&mut response)
             .map_err(|e| Error::io(self.path.clone(), e))?;
 
