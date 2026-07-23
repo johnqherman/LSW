@@ -49,7 +49,8 @@ pub enum Error {
 
     #[error(
         "LSW2007: no build system detected\n\
-         Expected CMakeLists.txt or a [build] command in lsw.toml"
+         Expected CMakeLists.txt, meson.build, build.zig, Cargo.toml, a .csproj/.sln, \
+         build.ninja, a Makefile, or a [build] command in lsw.toml"
     )]
     NoBuildSystem,
 

@@ -93,6 +93,7 @@ const DLL_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
 project({name} C)
 
 add_library({name} SHARED src/main.c)
+set_target_properties({name} PROPERTIES PREFIX "")
 "#;
 
 fn template_sources(template: Template) -> (&'static str, &'static str) {
