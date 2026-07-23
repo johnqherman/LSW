@@ -279,7 +279,7 @@ pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateRe
         &EnvCreateOptions {
             name: name.to_owned(),
             arch: lock.target_arch,
-            toolchain: None,
+            toolchain: Some(lock.toolchain.provider.clone()),
             sdk: None,
             force: true,
             expose_home: false,

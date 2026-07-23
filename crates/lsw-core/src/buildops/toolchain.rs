@@ -93,7 +93,8 @@ pub(crate) fn run_step(
         .collect::<Vec<_>>()
         .join(" ");
     let mut link_flags = tc.link_flags.join(" ");
-    if let Some((include, lib, _bin)) = crate::depsops::dep_dirs(project) {
+    if let Some((include, lib, _bin)) = crate::depsops::dep_dirs(project, env.manifest.target_arch)
+    {
         let include_flag = format!(" -I{}", include.display());
         c_flags.push_str(&include_flag);
         cxx_flags.push_str(&include_flag);

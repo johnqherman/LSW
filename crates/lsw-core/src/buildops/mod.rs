@@ -212,7 +212,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 toolchain_contents,
                 env.layout.prefix().display(),
                 env.manifest.runtime.executable.display(),
-                crate::depsops::dep_dirs(project),
+                crate::depsops::dep_dirs(project, env.manifest.target_arch),
                 ambient_env_fingerprint()
             );
             refresh_stale_cmake_build_dir(&project.root.join("build"), &cmake_config)?;

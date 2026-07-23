@@ -2,13 +2,20 @@ local M = {}
 
 M.config = { path = "lsw" }
 
+local function shquote(s)
+  return "'" .. tostring(s):gsub("'", "'\\''") .. "'"
+end
+
 local function run(args)
-  local cmd = M.config.path .. " " .. table.concat(args, " ")
-  vim.cmd("botright split | terminal " .. cmd)
+  local parts = { shquote(M.config.path) }
+  for _, a in ipairs(args) do
+    parts[#parts + 1] = shquote(a)
+  end
+  vim.cmd("botright split | terminal " .. table.concat(parts, " "))
 end
 
 function M.env()
-  local handle = io.popen(M.config.path .. " --format json ide env")
+  local handle = io.popen(shquote(M.config.path) .. " --format json ide env")
   if not handle then
     return nil
   end

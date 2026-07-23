@@ -190,8 +190,8 @@ fn repo_for(arch: lsw_config::TargetArch) -> Result<(&'static str, &'static str)
     }
 }
 
-fn deps_root(project: &crate::project::Project) -> PathBuf {
-    let arch = format!("{:?}", project.manifest.target.arch).to_lowercase();
+fn deps_root(project: &crate::project::Project, arch: lsw_config::TargetArch) -> PathBuf {
+    let arch = format!("{arch:?}").to_lowercase();
     project.root.join("deps").join(arch)
 }
 
@@ -283,10 +283,11 @@ fn sha256_of(path: &Path) -> Result<String> {
 
 pub fn add(
     project: &crate::project::Project,
+    arch: lsw_config::TargetArch,
     dirs: &lsw_config::Dirs,
     name: &str,
 ) -> Result<PkgRef> {
-    let (repo, prefix) = repo_for(project.manifest.target.arch)?;
+    let (repo, prefix) = repo_for(arch)?;
     let pkg = resolve(dirs, repo, prefix, name)?;
     let cached = dirs.cache.join("msys2").join(repo).join(&pkg.filename);
     if !cached.is_file() {
@@ -304,7 +305,7 @@ pub fn add(
         }
     }
 
-    let root = deps_root(project);
+    let root = deps_root(project, arch);
     std::fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
     let listing = std::process::Command::new("tar")
         .arg("--zstd")
@@ -355,14 +356,18 @@ pub fn add(
     Ok(pkg)
 }
 
-pub fn remove(project: &crate::project::Project, name: &str) -> Result<bool> {
+pub fn remove(
+    project: &crate::project::Project,
+    arch: lsw_config::TargetArch,
+    name: &str,
+) -> Result<bool> {
     let manifest_path = project.root.join("lsw.toml");
     let mut manifest = lsw_config::ProjectManifest::load(&manifest_path)?;
     if manifest.dependencies.remove(name).is_none() {
         return Ok(false);
     }
 
-    let root = deps_root(project);
+    let root = deps_root(project, arch);
     if name.contains('/') || name.contains('\\') || name.contains("..") {
         manifest.save(&manifest_path)?;
         return Ok(true);
@@ -407,11 +412,14 @@ pub fn list(project: &crate::project::Project) -> Vec<InstalledDep> {
         .collect()
 }
 
-pub fn dep_dirs(project: &crate::project::Project) -> Option<(PathBuf, PathBuf, PathBuf)> {
+pub fn dep_dirs(
+    project: &crate::project::Project,
+    arch: lsw_config::TargetArch,
+) -> Option<(PathBuf, PathBuf, PathBuf)> {
     if project.manifest.dependencies.is_empty() {
         return None;
     }
-    let root = deps_root(project);
+    let root = deps_root(project, arch);
     let include = root.join("include");
     let lib = root.join("lib");
     let bin = root.join("bin");

@@ -30,6 +30,13 @@ pub struct SdkImportReport {
     pub files_copied: usize,
 }
 
+fn has_sdk_dir(root: &Path, kind: &str) -> bool {
+    let cap = format!("{}{}", kind[..1].to_uppercase(), &kind[1..]);
+    [root.to_path_buf(), root.join("crt"), root.join("sdk")]
+        .iter()
+        .any(|base| base.join(kind).is_dir() || base.join(&cap).is_dir())
+}
+
 pub fn import(dirs: &Dirs, name: &str, from: &Path, force: bool) -> Result<SdkImportReport> {
     validate_name("sdk", name)?;
     if !from.is_dir() {
@@ -56,8 +63,8 @@ pub fn import(dirs: &Dirs, name: &str, from: &Path, force: bool) -> Result<SdkIm
     let manifest = SdkManifest {
         name: name.to_owned(),
         source: from.to_path_buf(),
-        has_include: root.join("include").is_dir() || root.join("Include").is_dir(),
-        has_lib: root.join("lib").is_dir() || root.join("Lib").is_dir(),
+        has_include: has_sdk_dir(&root, "include"),
+        has_lib: has_sdk_dir(&root, "lib"),
     };
     manifest_save(&manifest, &SdkManifest::path(&root))?;
 
