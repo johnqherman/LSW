@@ -69,3 +69,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
+
+  corpus:
+    name: e2e corpus (wine)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+      - uses: Swatinem/rust-cache@v2
+      - name: install toolchain and runtime
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            wine wine64 mingw-w64 cmake ninja-build msitools wixl clang lld
+      - name: run corpus
+        run: LSW_TEST_E2E=1 cargo test -p lsw-core --test e2e -- --test-threads=1 --nocapture
+        env:
+          WINEDEBUG: fixme-all
