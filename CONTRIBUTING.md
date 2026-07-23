@@ -29,6 +29,17 @@ cargo test --workspace
 cargo deny check          # optional locally; CI runs it
 ```
 
+CI also runs an e2e corpus (`crates/lsw-core/tests/e2e.rs`) that exercises the
+real pipeline - scaffold, Wine prefix, cross-compile, run, package, MSI
+install-verify - across the console/gui/dll templates plus Cargo, .NET, and
+NativeAOT builds. It self-skips unless `LSW_TEST_E2E=1` is set and the needed
+tools (wine, cmake, mingw-w64, and per-test extras like wixl, dotnet, clang,
+lld) are on PATH:
+
+```
+LSW_TEST_E2E=1 cargo test -p lsw-core --test e2e -- --test-threads=1
+```
+
 ## Conventions
 
 Use the style of the module that you change.
