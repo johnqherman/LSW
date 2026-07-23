@@ -22,7 +22,10 @@ pub enum ConfigError {
         what: &'static str,
         source: Box<toml::ser::Error>,
     },
-    #[error("LSW1005: no lsw.toml found in {} or any parent directory", start.display())]
+    #[error(
+        "LSW1005: no lsw.toml found in {} or any parent directory\n\
+         Possible fixes:\n  lsw init  (scaffold a project here)\n  cd into an existing LSW project", start.display()
+    )]
     ProjectNotFound { start: PathBuf },
     #[error("LSW1006: cannot determine home directory")]
     NoHome,
