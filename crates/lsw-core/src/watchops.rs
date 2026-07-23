@@ -79,6 +79,7 @@ pub fn watch(project: &Project, env: &Environment) -> Result<()> {
             && let Some(next) = rebuild(project, env)
         {
             outputs = next;
+            while rx.recv_timeout(Duration::from_millis(500)).is_ok() {}
         }
     }
 }
