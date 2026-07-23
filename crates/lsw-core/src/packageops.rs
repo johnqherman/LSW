@@ -109,7 +109,7 @@ pub fn package(
             let status = Command::new("zip")
                 .args(["-r", "-q"])
                 .arg(&zip_path)
-                .arg(&stem)
+                .arg(format!("./{stem}"))
                 .current_dir(&dist)
                 .status()
                 .map_err(|e| Error::io(zip_path.clone(), e))?;

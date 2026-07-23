@@ -43,11 +43,17 @@ pub fn build_msix(
     }
     std::fs::write(dir.join(logo), minimal_png()).map_err(|e| Error::io(dir.join(logo), e))?;
 
-    let entry = files.iter().find(|f| f.ends_with(".exe")).cloned().ok_or(
-        Error::MsixSign {
+    let entry = files
+        .iter()
+        .find(|f| {
+            std::path::Path::new(f)
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+        })
+        .cloned()
+        .ok_or(Error::MsixSign {
             detail: "MSIX needs an executable; this build produced no .exe (a DLL-only project cannot form a launchable package)".into(),
-        },
-    )?;
+        })?;
     std::fs::write(
         dir.join("AppxManifest.xml"),
         manifest_xml(name, publisher, arch, &entry, logo),
@@ -167,7 +173,7 @@ fn ensure_signing_identity(publisher: &str) -> Result<PathBuf> {
         "3650",
         "-nodes",
         "-subj",
-        &format!("/{}", publisher.replace(", ", "/")),
+        &openssl_subj(publisher),
         "-addext",
         "extendedKeyUsage=codeSigning",
     ])?;
@@ -202,6 +208,29 @@ fn cert_still_valid(cert: &Path) -> bool {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
+}
+
+fn openssl_subj(dn: &str) -> String {
+    let mut out = String::new();
+    for rdn in dn.split(',') {
+        let rdn = rdn.trim();
+        if rdn.is_empty() {
+            continue;
+        }
+        let escape = |s: &str| s.replace('\\', "\\\\").replace('/', "\\/");
+        out.push('/');
+        if let Some((attr, val)) = rdn.split_once('=') {
+            out.push_str(attr.trim());
+            out.push('=');
+            out.push_str(&escape(val));
+        } else {
+            out.push_str(&escape(rdn));
+        }
+    }
+    if out.is_empty() {
+        out.push_str("/CN=LSW");
+    }
+    out
 }
 
 fn run_openssl(args: &[&str]) -> Result<()> {
