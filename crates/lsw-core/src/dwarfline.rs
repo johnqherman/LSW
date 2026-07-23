@@ -97,7 +97,7 @@ impl DebugInfo {
             v.sort_by_key(|(_, a)| *a);
             v.dedup();
         }
-        by_addr.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.is_none().cmp(&a.1.is_none())));
+        by_addr.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.is_none().cmp(&b.1.is_none())));
         by_addr.dedup_by_key(|(a, _)| *a);
         funcs.sort_by_key(|(a, _, _)| *a);
 
@@ -110,17 +110,23 @@ impl DebugInfo {
     }
 
     pub(crate) fn line_to_addr(&self, file: &str, line: u32) -> Option<u64> {
+        let mut best: Option<(usize, u32, u64)> = None;
         for delta in 0..=20 {
-            if let Some(v) = self.lines.get(&(norm(file), line + delta)) {
-                let best = v.iter().map(|(p, _)| suffix_score(p, file)).max()?;
-                return v
-                    .iter()
-                    .filter(|(p, _)| suffix_score(p, file) == best)
-                    .map(|(_, a)| *a)
-                    .min();
+            let Some(v) = self.lines.get(&(norm(file), line + delta)) else {
+                continue;
+            };
+            for (path, addr) in v {
+                let score = suffix_score(path, file);
+                let better = match best {
+                    None => true,
+                    Some((bs, bd, ba)) => score > bs || (score == bs && (delta, *addr) < (bd, ba)),
+                };
+                if better {
+                    best = Some((score, delta, *addr));
+                }
             }
         }
-        None
+        best.map(|(_, _, addr)| addr)
     }
 
     pub(crate) fn addr_to_line(&self, addr: u64) -> Option<(String, u32)> {
@@ -141,6 +147,20 @@ impl DebugInfo {
         let (low, high, name) = self.funcs.get(idx)?;
         if addr >= *low && addr < *high {
             Some(name.clone())
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn func_range(&self, addr: u64) -> Option<(u64, u64)> {
+        let idx = match self.funcs.binary_search_by_key(&addr, |(a, _, _)| *a) {
+            Ok(i) => i,
+            Err(0) => return None,
+            Err(i) => i - 1,
+        };
+        let (low, high, _) = self.funcs.get(idx)?;
+        if addr >= *low && addr < *high {
+            Some((*low, *high))
         } else {
             None
         }
@@ -235,6 +255,26 @@ mod tests {
         };
         assert_eq!(info.line_to_addr("/src/client/util.c", 10), Some(0x2000));
         assert_eq!(info.line_to_addr("/src/server/util.c", 10), Some(0x1000));
+    }
+
+    #[test]
+    fn line_to_addr_ranks_suffix_over_delta() {
+        let info = DebugInfo {
+            image_base: 0,
+            lines: BTreeMap::from([
+                (
+                    ("foo.c".to_owned(), 11),
+                    vec![("/b/foo.c".to_owned(), 0x200)],
+                ),
+                (
+                    ("foo.c".to_owned(), 12),
+                    vec![("/a/foo.c".to_owned(), 0x300)],
+                ),
+            ]),
+            by_addr: Vec::new(),
+            funcs: Vec::new(),
+        };
+        assert_eq!(info.line_to_addr("/a/foo.c", 10), Some(0x300));
     }
 
     #[test]

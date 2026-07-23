@@ -324,25 +324,19 @@ impl<'a> Adapter<'a> {
     }
 
     fn clear_breakpoints_for(&mut self, source: &str) {
-        let norm = |s: &str| {
-            s.replace('\\', "/")
-                .rsplit('/')
-                .next()
-                .unwrap_or(s)
-                .to_lowercase()
-        };
-        let target = norm(source);
-        let mut keep = Vec::new();
-        for bp in std::mem::take(&mut self.breakpoints) {
-            if norm(&bp.source) == target {
-                if bp.verified
-                    && bp.addr != 0
-                    && let Some(conn) = self.conn.as_mut()
-                {
-                    let _ = conn.remove_breakpoint(bp.addr);
-                }
-            } else {
-                keep.push(bp);
+        let norm_path = |s: &str| s.replace('\\', "/").to_lowercase();
+        let target = norm_path(source);
+        let (removed, keep): (Vec<Breakpoint>, Vec<Breakpoint>) =
+            std::mem::take(&mut self.breakpoints)
+                .into_iter()
+                .partition(|bp| norm_path(&bp.source) == target);
+        for bp in removed {
+            if bp.verified
+                && bp.addr != 0
+                && !keep.iter().any(|k| k.verified && k.addr == bp.addr)
+                && let Some(conn) = self.conn.as_mut()
+            {
+                let _ = conn.remove_breakpoint(bp.addr);
             }
         }
         self.breakpoints = keep;
@@ -581,7 +575,8 @@ impl<'a> Adapter<'a> {
     fn source_step(&mut self, step_over: bool, out: &mut Vec<ProtocolMessage>) -> Result<Stop> {
         let start = self.current_line();
         let start_sp = self.current_sp().unwrap_or(0);
-        let mut prev_sp = start_sp;
+        let start_range = self.current_func_range();
+        let mut prev_in_func = true;
         for _ in 0..500_000 {
             let (stop, output) = match self.conn.as_mut() {
                 Some(conn) => conn.resume("s")?,
@@ -592,29 +587,48 @@ impl<'a> Adapter<'a> {
                 return Ok(stop);
             }
             if self.at_user_breakpoint() {
-                break;
+                return Ok(Stop::Signal { signal: 5 });
             }
             let sp = self.current_sp().unwrap_or(start_sp);
-            if step_over && sp < start_sp {
-                if prev_sp >= start_sp
+            let in_func = self.rip_in_range(start_range);
+            if step_over && !in_func && sp < start_sp {
+                if prev_in_func
                     && let Some(ret) = self.read_stack_u64(sp)
                     && let Some(stop) = self.finish_call(ret, start_sp, out)?
                 {
                     return Ok(stop);
                 }
-                prev_sp = self.current_sp().unwrap_or(sp);
+                prev_in_func = self.rip_in_range(start_range);
                 continue;
             }
-            prev_sp = sp;
+            prev_in_func = in_func;
             let now = self.current_line();
             if now.is_some() && now != start {
-                break;
+                return Ok(Stop::Signal { signal: 5 });
             }
             if now.is_none() && sp > start_sp {
-                break;
+                return Ok(Stop::Signal { signal: 5 });
             }
         }
-        Ok(Stop::Signal { signal: 5 })
+        Err(Error::Dap {
+            detail: "single-step limit reached without completing the source step".into(),
+        })
+    }
+
+    fn current_func_range(&mut self) -> Option<(u64, u64)> {
+        let rip = self.current_rip()?;
+        self.info.as_ref()?.func_range(rip.wrapping_sub(self.slide))
+    }
+
+    fn rip_in_range(&mut self, range: Option<(u64, u64)>) -> bool {
+        let Some((low, high)) = range else {
+            return false;
+        };
+        let Some(rip) = self.current_rip() else {
+            return false;
+        };
+        let file_addr = rip.wrapping_sub(self.slide);
+        file_addr >= low && file_addr < high
     }
 
     fn finish_call(
@@ -781,6 +795,19 @@ impl<'a> Adapter<'a> {
     }
 
     fn launch_backend(&mut self, program: &Path) -> Result<()> {
+        self.shutdown();
+        self.info = None;
+        self.slide = 0;
+        self.exited = false;
+        self.breakpoints.clear();
+        let result = self.spawn_backend(program);
+        if result.is_err() {
+            self.shutdown();
+        }
+        result
+    }
+
+    fn spawn_backend(&mut self, program: &Path) -> Result<()> {
         if !program.is_file() {
             return Err(Error::NotExecutable {
                 program: program.to_path_buf(),

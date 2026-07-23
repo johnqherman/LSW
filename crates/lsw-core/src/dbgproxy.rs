@@ -1,7 +1,10 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::time::Duration;
 
 use crate::error::{Error, Result};
+
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 
 fn dap(detail: impl Into<String>) -> Error {
     Error::Dap {
@@ -91,6 +94,10 @@ impl RspConn {
         })
     }
 
+    fn set_timeout(&self, d: Option<Duration>) {
+        let _ = self.stream.set_read_timeout(d);
+    }
+
     fn read_byte(&mut self) -> Result<u8> {
         let mut b = [0u8; 1];
         self.stream
@@ -154,6 +161,7 @@ impl RspConn {
     }
 
     pub(crate) fn command(&mut self, cmd: &str) -> Result<Vec<u8>> {
+        self.set_timeout(Some(COMMAND_TIMEOUT));
         self.send(cmd.as_bytes())?;
         loop {
             let reply = self.recv()?;
@@ -165,7 +173,9 @@ impl RspConn {
     }
 
     pub(crate) fn resume(&mut self, cmd: &str) -> Result<(Stop, String)> {
+        self.set_timeout(Some(COMMAND_TIMEOUT));
         self.send(cmd.as_bytes())?;
+        self.set_timeout(None);
         let mut output = String::new();
         loop {
             let reply = self.recv()?;
