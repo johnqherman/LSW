@@ -266,7 +266,33 @@ impl<'a> Adapter<'a> {
             .get("stopOnEntry")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        match self.launch_backend(Path::new(program)) {
+        let args: Vec<String> = req
+            .arguments
+            .get("args")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_owned()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let cwd = req
+            .arguments
+            .get("cwd")
+            .and_then(|v| v.as_str())
+            .map(PathBuf::from);
+        let env: Vec<(String, String)> = req
+            .arguments
+            .get("env")
+            .and_then(|v| v.as_object())
+            .map(|m| {
+                m.iter()
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_owned())))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let program = program.to_owned();
+        match self.launch_backend(Path::new(&program), &args, cwd.as_deref(), &env) {
             Ok(()) => {
                 let response = self.success_response(req, serde_json::Value::Null);
                 let process = self.event(
@@ -915,20 +941,32 @@ impl<'a> Adapter<'a> {
         }
     }
 
-    fn launch_backend(&mut self, program: &Path) -> Result<()> {
+    fn launch_backend(
+        &mut self,
+        program: &Path,
+        args: &[String],
+        cwd: Option<&Path>,
+        env: &[(String, String)],
+    ) -> Result<()> {
         self.shutdown();
         self.info = None;
         self.slide = 0;
         self.exited = false;
         self.breakpoints.clear();
-        let result = self.spawn_backend(program);
+        let result = self.spawn_backend(program, args, cwd, env);
         if result.is_err() {
             self.shutdown();
         }
         result
     }
 
-    fn spawn_backend(&mut self, program: &Path) -> Result<()> {
+    fn spawn_backend(
+        &mut self,
+        program: &Path,
+        args: &[String],
+        cwd: Option<&Path>,
+        env: &[(String, String)],
+    ) -> Result<()> {
         if !program.is_file() {
             return Err(Error::NotExecutable {
                 program: program.to_path_buf(),
@@ -945,13 +983,20 @@ impl<'a> Adapter<'a> {
         let win_path = z_drive_path(&program);
         let mut command = Command::new(winedbg);
         lsw_runtime::scrub_wine_env(&mut command);
+        command.args(["--gdb", "--no-start", &win_path]);
+        command.args(args);
+        for (key, value) in env {
+            command.env(key, value);
+        }
         command
-            .args(["--gdb", "--no-start", &win_path])
             .env("WINEPREFIX", self.env.layout.prefix())
             .env("WINEDEBUG", "fixme-all")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
+        if let Some(dir) = cwd.filter(|d| d.is_dir()) {
+            command.current_dir(dir);
+        }
         let mut child = command
             .spawn()
             .map_err(|e| Error::io(PathBuf::from("winedbg"), e))?;
