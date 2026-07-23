@@ -226,13 +226,25 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
         ],
     });
 
-    sections.push(Section {
-        name: "Native Windows".into(),
-        rows: vec![row(
+    let verify_row = match project.map(|p| &p.manifest.verify) {
+        Some(v) if v.host.is_some() => {
+            let host = v.host.as_deref().unwrap_or("");
+            let transport = v.transport.as_deref().unwrap_or("ssh");
+            row(
+                "Verification host",
+                format!("{host} (transport: {transport})"),
+                Status::Ok,
+            )
+        }
+        _ => row(
             "Verification host",
             "not configured (local compatibility results only)",
             Status::Warn,
-        )],
+        ),
+    };
+    sections.push(Section {
+        name: "Native Windows".into(),
+        rows: vec![verify_row],
     });
 
     let healthy = !sections

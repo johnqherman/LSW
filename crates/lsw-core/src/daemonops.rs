@@ -18,6 +18,15 @@ const CLIENT_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_RESPONSE_BYTES: u64 = 8 * 1024 * 1024;
 
 const ACCEPT_POLL: Duration = Duration::from_millis(100);
+const MAX_CONNECTIONS: usize = 64;
+
+struct ActiveGuard(Arc<std::sync::atomic::AtomicUsize>);
+
+impl Drop for ActiveGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 
 pub fn socket_path(dirs: &Dirs) -> PathBuf {
     match std::env::var_os("XDG_RUNTIME_DIR") {
@@ -94,13 +103,23 @@ fn run_accept_loop(listener: UnixListener, path: &Path, dirs: &Dirs) -> Result<(
         .map_err(|e| Error::io(path.to_path_buf(), e))?;
 
     let running = Arc::new(AtomicBool::new(true));
+    let active = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     while running.load(Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
+                if active.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
+                    drop(stream);
+                    continue;
+                }
                 let _ = stream.set_read_timeout(Some(CLIENT_IDLE_TIMEOUT));
+                active.fetch_add(1, Ordering::SeqCst);
                 let dirs = dirs.clone();
                 let running = Arc::clone(&running);
-                std::thread::spawn(move || handle_connection(stream, &dirs, &running));
+                let active = Arc::clone(&active);
+                std::thread::spawn(move || {
+                    let _guard = ActiveGuard(active);
+                    handle_connection(stream, &dirs, &running);
+                });
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(ACCEPT_POLL);
