@@ -45,13 +45,15 @@ fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
     let mut descriptors = table
         .descriptors()
         .map_err(|e| PeError::malformed(path, e))?;
+    let mut visited = 0usize;
     while let Some(descriptor) = descriptors
         .next()
         .map_err(|e| PeError::malformed(path, e))?
     {
-        if dlls.len() >= MAX_NAMES {
+        if dlls.len() >= MAX_NAMES || visited >= MAX_NAMES {
             break;
         }
+        visited += 1;
         let raw = table
             .name(descriptor.name.get(LE))
             .map_err(|e| PeError::malformed(path, e))?;
@@ -137,13 +139,15 @@ fn imported_symbols_typed<Pe: ImageNtHeaders>(
     let mut descriptors = table
         .descriptors()
         .map_err(|e| PeError::malformed(path, e))?;
+    let mut visited = 0usize;
     while let Some(descriptor) = descriptors
         .next()
         .map_err(|e| PeError::malformed(path, e))?
     {
-        if out.len() >= MAX_NAMES {
+        if out.len() >= MAX_NAMES || visited >= MAX_NAMES {
             break;
         }
+        visited += 1;
         let dll = decode_name(
             table
                 .name(descriptor.name.get(LE))
