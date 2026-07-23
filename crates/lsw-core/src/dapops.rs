@@ -281,13 +281,19 @@ impl<'a> Adapter<'a> {
             .get("cwd")
             .and_then(|v| v.as_str())
             .map(PathBuf::from);
-        let env: Vec<(String, String)> = req
+        let env: Vec<(String, Option<String>)> = req
             .arguments
             .get("env")
             .and_then(|v| v.as_object())
             .map(|m| {
                 m.iter()
-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_owned())))
+                    .filter_map(|(k, v)| {
+                        if v.is_null() {
+                            Some((k.clone(), None))
+                        } else {
+                            v.as_str().map(|s| (k.clone(), Some(s.to_owned())))
+                        }
+                    })
                     .collect()
             })
             .unwrap_or_default();
@@ -946,7 +952,7 @@ impl<'a> Adapter<'a> {
         program: &Path,
         args: &[String],
         cwd: Option<&Path>,
-        env: &[(String, String)],
+        env: &[(String, Option<String>)],
     ) -> Result<()> {
         self.shutdown();
         self.info = None;
@@ -965,12 +971,19 @@ impl<'a> Adapter<'a> {
         program: &Path,
         args: &[String],
         cwd: Option<&Path>,
-        env: &[(String, String)],
+        env: &[(String, Option<String>)],
     ) -> Result<()> {
         if !program.is_file() {
             return Err(Error::NotExecutable {
                 program: program.to_path_buf(),
                 detail: "file not found".into(),
+            });
+        }
+        if let Some(dir) = cwd
+            && !dir.is_dir()
+        {
+            return Err(Error::Dap {
+                detail: format!("requested cwd '{}' is not a directory", dir.display()),
             });
         }
         let program =
@@ -986,7 +999,14 @@ impl<'a> Adapter<'a> {
         command.args(["--gdb", "--no-start", &win_path]);
         command.args(args);
         for (key, value) in env {
-            command.env(key, value);
+            match value {
+                Some(v) => {
+                    command.env(key, v);
+                }
+                None => {
+                    command.env_remove(key);
+                }
+            }
         }
         command
             .env("WINEPREFIX", self.env.layout.prefix())
@@ -994,7 +1014,7 @@ impl<'a> Adapter<'a> {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
-        if let Some(dir) = cwd.filter(|d| d.is_dir()) {
+        if let Some(dir) = cwd {
             command.current_dir(dir);
         }
         let mut child = command
