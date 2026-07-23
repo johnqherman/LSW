@@ -69,7 +69,10 @@ fn sandbox_spec(
                 .map(|p| {
                     (
                         p.manifest.sandbox.cpu_seconds,
-                        p.manifest.sandbox.memory_mb.map(|mb| mb * 1024 * 1024),
+                        p.manifest
+                            .sandbox
+                            .memory_mb
+                            .map(|mb| mb.saturating_mul(1024 * 1024)),
                     )
                 })
                 .unwrap_or((None, None));
