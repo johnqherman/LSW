@@ -54,6 +54,7 @@ pub fn build_msix(
     let unsigned = dist.join(format!("{stem}.unsigned.msix"));
     let _ = std::fs::remove_file(&unsigned);
     let mut zip_args = vec![
+        "-q".to_owned(),
         "-X".to_owned(),
         "-r".to_owned(),
         std::path::absolute(&unsigned)

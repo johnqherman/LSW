@@ -43,18 +43,19 @@ pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
                 println!("  Runtime execution {}", mark(report.runtime_execution));
                 println!("  Native validation {}", mark(report.native_validation));
             }
-            let broken = [
+            let healthy = [
                 report.compiler_target,
                 report.linker,
                 report.crt,
                 report.windows_imports,
                 report.runtime_execution,
             ]
-            .contains(&lsw_core::rustops::Check::Missing);
-            Ok(if broken {
-                ExitCode::FAILURE
-            } else {
+            .iter()
+            .all(|c| *c == lsw_core::rustops::Check::Ok);
+            Ok(if healthy {
                 ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
             })
         }
     }
@@ -106,17 +107,18 @@ pub(crate) fn dotnet(op: &DotnetCmd, dirs: &Dirs, format: Format) -> lsw_core::R
                 println!("  NativeAOT         {}", mark(report.native_aot));
                 println!("  Native validation {}", mark(report.native_validation));
             }
-            let broken = [
+            let healthy = [
                 report.sdk,
                 report.runtime_identifier,
                 report.self_contained,
                 report.runtime_execution,
             ]
-            .contains(&lsw_core::dotnetops::Check::Missing);
-            Ok(if broken {
-                ExitCode::FAILURE
-            } else {
+            .iter()
+            .all(|c| *c == lsw_core::dotnetops::Check::Ok);
+            Ok(if healthy {
                 ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
             })
         }
     }

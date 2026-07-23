@@ -38,10 +38,17 @@ pub(crate) fn package(
         None
     };
     if format == Format::Json {
+        let opt_path = |p: &Option<PathBuf>| p.as_ref().map(|x| x.display().to_string());
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
-                "package": report,
+                "package": {
+                    "directory": report.directory.display().to_string(),
+                    "zip": opt_path(&report.zip),
+                    "msi": opt_path(&report.msi),
+                    "msix": opt_path(&report.msix),
+                    "files": report.files,
+                },
                 "verified": verified.map(|c| serde_json::json!({
                     "files": c.files.len(),
                     "install_dir": c.install_dir.display().to_string(),
