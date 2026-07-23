@@ -154,7 +154,10 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
     }
     let mut commands = Vec::new();
     let mut artifact_dir = project.root.join("build");
-    let flat_layout = matches!(system, BuildSystem::Make | BuildSystem::Ninja);
+    let flat_layout = matches!(
+        system,
+        BuildSystem::Make | BuildSystem::Ninja | BuildSystem::Explicit
+    );
     let pre_build = if flat_layout {
         artifact_hashes(&project.root)
     } else {
@@ -164,6 +167,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
         BuildSystem::Explicit => {
             let spec = explicit.ok_or(Error::NoBuildSystem)?;
             run_step(project, env, &tc, &spec.command, &mut commands)?;
+            artifact_dir = project.root.clone();
         }
         BuildSystem::Cargo => {
             let triple = env.manifest.target_arch.rust_gnu_triple().ok_or_else(|| {
@@ -339,16 +343,10 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             .collect();
         if !touched.is_empty() {
             artifacts = touched;
-            let recorded = artifacts
-                .iter()
-                .map(|p| p.to_string_lossy().into_owned())
-                .collect::<Vec<_>>()
-                .join("\n");
-            let _ = fs::write(&manifest, recorded);
-        } else if let Ok(recorded) = fs::read_to_string(&manifest) {
-            let remembered: Vec<PathBuf> = recorded
-                .lines()
-                .map(PathBuf::from)
+            let _ = fs::write(&manifest, encode_artifact_manifest(&artifacts));
+        } else if let Ok(recorded) = fs::read(&manifest) {
+            let remembered: Vec<PathBuf> = decode_artifact_manifest(&recorded)
+                .into_iter()
                 .filter(|rel| project.root.join(rel).is_file())
                 .collect();
             if !remembered.is_empty() {
@@ -436,6 +434,25 @@ fn write_cmake_toolchain_marker(build_dir: &Path, config: &str) {
         build_dir.join(".lsw-toolchain"),
         cmake_config_fingerprint(config),
     );
+}
+
+fn encode_artifact_manifest(artifacts: &[PathBuf]) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+    let mut out = Vec::new();
+    for p in artifacts {
+        out.extend_from_slice(p.as_os_str().as_bytes());
+        out.push(0);
+    }
+    out
+}
+
+fn decode_artifact_manifest(bytes: &[u8]) -> Vec<PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+    bytes
+        .split(|b| *b == 0)
+        .filter(|s| !s.is_empty())
+        .map(|s| PathBuf::from(std::ffi::OsStr::from_bytes(s)))
+        .collect()
 }
 
 fn file_hash(path: &Path) -> Option<String> {
