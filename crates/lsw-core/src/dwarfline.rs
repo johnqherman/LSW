@@ -96,7 +96,7 @@ impl DebugInfo {
                 let Some(line) = row.line() else { continue };
                 let file = row
                     .file(header)
-                    .and_then(|f| file_name(&dwarf, &unit, f, &comp_dir))
+                    .and_then(|f| file_name(&dwarf, &unit, header, f, &comp_dir))
                     .unwrap_or_default();
                 let addr = row.address();
                 let line = line.get() as u32;
@@ -195,29 +195,72 @@ fn collect_functions<R: gimli::Reader>(
         if entry.tag() != gimli::DW_TAG_subprogram {
             continue;
         }
-        let low = match entry.attr_value(gimli::DW_AT_low_pc) {
-            Ok(Some(gimli::AttributeValue::Addr(a))) => a,
-            _ => continue,
+        let name = func_name(dwarf, unit, entry).unwrap_or_else(|| "<anonymous>".to_owned());
+        let Ok(mut ranges) = dwarf.die_ranges(unit, entry) else {
+            continue;
         };
-        let high = match entry.attr_value(gimli::DW_AT_high_pc) {
-            Ok(Some(gimli::AttributeValue::Addr(a))) => a,
-            Ok(Some(gimli::AttributeValue::Udata(n))) => low.saturating_add(n),
-            _ => low.saturating_add(1),
-        };
-        let name = entry
-            .attr(gimli::DW_AT_name)
-            .ok()
-            .flatten()
-            .and_then(|a| dwarf.attr_string(unit, a.value()).ok())
-            .and_then(|s| s.to_string_lossy().ok().map(|c| c.into_owned()))
-            .unwrap_or_else(|| "<anonymous>".to_owned());
-        out.push((low, high, name));
+        while let Ok(Some(range)) = ranges.next() {
+            if range.end > range.begin {
+                out.push((range.begin, range.end, name.clone()));
+            }
+        }
     }
+}
+
+fn die_name<R: gimli::Reader>(
+    dwarf: &gimli::Dwarf<R>,
+    unit: &gimli::Unit<R>,
+    entry: &gimli::DebuggingInformationEntry<R>,
+) -> Option<String> {
+    let attr = entry.attr(gimli::DW_AT_name).ok().flatten()?;
+    dwarf
+        .attr_string(unit, attr.value())
+        .ok()?
+        .to_string_lossy()
+        .ok()
+        .map(|c| c.into_owned())
+}
+
+fn ref_attr<R: gimli::Reader>(
+    entry: &gimli::DebuggingInformationEntry<R>,
+    attr: gimli::DwAt,
+) -> Option<gimli::UnitOffset<R::Offset>> {
+    match entry.attr_value(attr) {
+        Ok(Some(gimli::AttributeValue::UnitRef(offset))) => Some(offset),
+        _ => None,
+    }
+}
+
+fn func_name<R: gimli::Reader>(
+    dwarf: &gimli::Dwarf<R>,
+    unit: &gimli::Unit<R>,
+    entry: &gimli::DebuggingInformationEntry<R>,
+) -> Option<String> {
+    if let Some(name) = die_name(dwarf, unit, entry) {
+        return Some(name);
+    }
+    let mut next = ref_attr(entry, gimli::DW_AT_specification)
+        .or_else(|| ref_attr(entry, gimli::DW_AT_abstract_origin));
+    for _ in 0..4 {
+        let offset = next?;
+        let referenced = unit.entry(offset).ok()?;
+        if let Some(name) = die_name(dwarf, unit, &referenced) {
+            return Some(name);
+        }
+        next = ref_attr(&referenced, gimli::DW_AT_specification)
+            .or_else(|| ref_attr(&referenced, gimli::DW_AT_abstract_origin));
+    }
+    None
+}
+
+fn is_absolute(path: &str) -> bool {
+    path.starts_with('/') || path.contains(":\\") || path.contains(":/")
 }
 
 fn file_name<R: gimli::Reader>(
     dwarf: &gimli::Dwarf<R>,
     unit: &gimli::Unit<R>,
+    header: &gimli::LineProgramHeader<R>,
     file: &gimli::FileEntry<R>,
     comp_dir: &str,
 ) -> Option<String> {
@@ -227,10 +270,21 @@ fn file_name<R: gimli::Reader>(
         .to_string_lossy()
         .ok()?
         .into_owned();
-    if path.starts_with('/') || path.contains(":\\") || path.contains(":/") {
-        Some(path)
-    } else {
-        Some(format!("{comp_dir}/{path}"))
+    if is_absolute(&path) {
+        return Some(path);
+    }
+    let dir = header.directory(file.directory_index()).and_then(|d| {
+        dwarf
+            .attr_string(unit, d)
+            .ok()?
+            .to_string_lossy()
+            .ok()
+            .map(|c| c.into_owned())
+    });
+    match dir {
+        Some(dir) if is_absolute(&dir) => Some(format!("{dir}/{path}")),
+        Some(dir) if !dir.is_empty() => Some(format!("{comp_dir}/{dir}/{path}")),
+        _ => Some(format!("{comp_dir}/{path}")),
     }
 }
 

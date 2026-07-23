@@ -410,10 +410,15 @@ impl<'a> Adapter<'a> {
         let mut frames = Vec::new();
         for depth in 0..64 {
             let file_addr = rip.wrapping_sub(self.slide);
+            let lookup_addr = if depth == 0 {
+                file_addr
+            } else {
+                file_addr.wrapping_sub(1)
+            };
             let name = self
                 .info
                 .as_ref()
-                .and_then(|i| i.addr_to_func(file_addr))
+                .and_then(|i| i.addr_to_func(lookup_addr))
                 .unwrap_or_else(|| format!("{rip:#x}"));
             let mut frame = serde_json::json!({
                 "id": depth + 1,
@@ -421,7 +426,8 @@ impl<'a> Adapter<'a> {
                 "line": 0,
                 "column": 0,
             });
-            if let Some((file, line)) = self.info.as_ref().and_then(|i| i.addr_to_line(file_addr)) {
+            if let Some((file, line)) = self.info.as_ref().and_then(|i| i.addr_to_line(lookup_addr))
+            {
                 frame["line"] = serde_json::json!(line);
                 frame["source"] = serde_json::json!({
                     "name": Path::new(&file).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| file.clone()),
