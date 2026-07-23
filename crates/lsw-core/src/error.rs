@@ -229,6 +229,9 @@ pub enum Error {
 
     #[error("LSW2041: NativeAOT cross-compilation is unavailable: {detail}")]
     AotUnsupported { detail: String },
+
+    #[error("LSW2042: SDK import from {} failed: {detail}", path.display())]
+    SdkImportFailed { path: PathBuf, detail: String },
 }
 
 impl Error {

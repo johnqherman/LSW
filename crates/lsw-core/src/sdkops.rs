@@ -33,9 +33,9 @@ pub struct SdkImportReport {
 pub fn import(dirs: &Dirs, name: &str, from: &Path, force: bool) -> Result<SdkImportReport> {
     validate_name("sdk", name)?;
     if !from.is_dir() {
-        return Err(Error::InitFailed {
+        return Err(Error::SdkImportFailed {
             path: from.to_path_buf(),
-            detail: "SDK source is not a directory".into(),
+            detail: "source is not a directory".into(),
         });
     }
 

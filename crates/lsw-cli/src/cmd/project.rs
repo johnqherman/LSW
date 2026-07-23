@@ -11,6 +11,9 @@ pub(crate) fn init(name: &Option<String>, template: &TemplateArg) -> lsw_core::R
     for f in &report.created {
         println!("  created {}", f.display());
     }
+    if let Some(system) = &report.existing_build {
+        println!("  detected existing {system} build; template scaffold skipped");
+    }
     Ok(ExitCode::SUCCESS)
 }
 

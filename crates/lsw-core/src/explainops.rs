@@ -351,6 +351,11 @@ const TABLE: &[Explanation] = &[
         summary: "C# NativeAOT cross-compilation prerequisites are missing",
         hint: "needs x86_64 target, clang, lld-link, and a mingw-w64 sysroot; see the error detail",
     },
+    Explanation {
+        code: "LSW2042",
+        summary: "the SDK import failed",
+        hint: "pass --from <dir> pointing at an SDK directory; see the error detail",
+    },
 ];
 
 #[cfg(test)]

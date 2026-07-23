@@ -110,6 +110,7 @@ const TEMPLATE_GITIGNORE: &str = "build/\n";
 pub struct InitReport {
     pub root: PathBuf,
     pub created: Vec<PathBuf>,
+    pub existing_build: Option<String>,
 }
 
 pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<InitReport> {
@@ -148,19 +149,26 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
     ProjectManifest::new(&project_name).save(&manifest_path)?;
     created.push(manifest_path);
 
-    let (cmake, main_c) = template_sources(template);
-    write_file(
-        &root.join("CMakeLists.txt"),
-        &cmake.replace("{name}", &project_name),
-        &mut created,
-    )?;
-    write_file(&root.join("src/main.c"), main_c, &mut created)?;
+    let existing_build = crate::buildops::detect_build_system(&root).map(|s| format!("{s:?}"));
+    if existing_build.is_none() {
+        let (cmake, main_c) = template_sources(template);
+        write_file(
+            &root.join("CMakeLists.txt"),
+            &cmake.replace("{name}", &project_name),
+            &mut created,
+        )?;
+        write_file(&root.join("src/main.c"), main_c, &mut created)?;
+    }
     let gitignore = root.join(".gitignore");
     if !gitignore.exists() {
         write_file(&gitignore, TEMPLATE_GITIGNORE, &mut created)?;
     }
 
-    Ok(InitReport { root, created })
+    Ok(InitReport {
+        root,
+        created,
+        existing_build,
+    })
 }
 
 #[cfg(test)]
