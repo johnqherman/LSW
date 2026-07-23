@@ -153,9 +153,18 @@ pub(crate) fn test(headless: &bool, dirs: &Dirs, format: Format) -> lsw_core::Re
 
 pub(crate) fn shell(windows: &bool, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
-    if !*windows {
+    if *windows {
+        println!(
+            "Entering Windows shell (env: {}); 'exit' or double ctrl+c to leave.",
+            env.name
+        );
+    } else {
         println!("Entering LSW shell (env: {}); 'exit' to leave.", env.name);
     }
     let status = lsw_core::shell(&env, Some(&p), *windows)?;
+    if std::os::unix::process::ExitStatusExt::signal(&status).is_some() {
+        println!();
+        return Ok(ExitCode::SUCCESS);
+    }
     Ok(exit_from_status(status))
 }
