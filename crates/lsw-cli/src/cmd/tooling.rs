@@ -85,16 +85,23 @@ pub(crate) fn man(dir: &Option<PathBuf>) -> lsw_core::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-pub(crate) fn explain(code: &str) -> lsw_core::Result<ExitCode> {
+pub(crate) fn explain(code: &str, format: Format) -> lsw_core::Result<ExitCode> {
     match lsw_core::explainops::explain(code) {
         Some(e) => {
-            println!("{}  {}", e.code, e.summary);
-            println!("  fix: {}", e.hint);
+            if format == Format::Json {
+                println!(
+                    "{}",
+                    serde_json::json!({ "code": e.code, "summary": e.summary, "hint": e.hint })
+                );
+            } else {
+                println!("{}  {}", e.code, e.summary);
+                println!("  fix: {}", e.hint);
+            }
             Ok(ExitCode::SUCCESS)
         }
-        None => {
-            eprintln!("no explanation for '{code}' (try an LSW#### code from an error message)");
-            Ok(ExitCode::FAILURE)
-        }
+        None => Ok(crate::usage_failure(
+            format,
+            &format!("no explanation for '{code}' (try an LSW#### code from an error message)"),
+        )),
     }
 }
