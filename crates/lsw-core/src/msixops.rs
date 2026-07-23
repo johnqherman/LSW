@@ -114,12 +114,14 @@ pub fn authenticode_sign(unsigned: &Path, out: &Path, publisher: &str) -> Result
 }
 
 fn ensure_signing_identity(publisher: &str) -> Result<PathBuf> {
+    use sha2::Digest;
     let dirs = Dirs::resolve()?;
     let msix_dir = dirs.data.join("msix");
     std::fs::create_dir_all(&msix_dir).map_err(|e| Error::io(msix_dir.clone(), e))?;
-    let pfx = msix_dir.join("signing.pfx");
-    let key = msix_dir.join("signing.key.pem");
-    let cert = msix_dir.join("signing.cert.pem");
+    let tag = format!("{:x}", sha2::Sha256::digest(publisher.as_bytes()));
+    let tag = &tag[..16];
+    let pfx = msix_dir.join(format!("signing-{tag}.pfx"));
+    let cert = msix_dir.join(format!("signing-{tag}.cert.pem"));
     if pfx.is_file() && cert_still_valid(&cert) {
         return Ok(pfx);
     }
@@ -129,16 +131,19 @@ fn ensure_signing_identity(publisher: &str) -> Result<PathBuf> {
             fix: "install openssl to generate a signing certificate".into(),
         });
     }
-    let _ = std::fs::remove_file(&pfx);
+    let stamp = std::process::id();
+    let key_tmp = msix_dir.join(format!("signing-{tag}.key.{stamp}.tmp"));
+    let cert_tmp = msix_dir.join(format!("signing-{tag}.cert.{stamp}.tmp"));
+    let pfx_tmp = msix_dir.join(format!("signing-{tag}.pfx.{stamp}.tmp"));
     run_openssl(&[
         "req",
         "-x509",
         "-newkey",
         "rsa:2048",
         "-keyout",
-        &key.display().to_string(),
+        &key_tmp.display().to_string(),
         "-out",
-        &cert.display().to_string(),
+        &cert_tmp.display().to_string(),
         "-days",
         "3650",
         "-nodes",
@@ -151,14 +156,17 @@ fn ensure_signing_identity(publisher: &str) -> Result<PathBuf> {
         "pkcs12",
         "-export",
         "-out",
-        &pfx.display().to_string(),
+        &pfx_tmp.display().to_string(),
         "-inkey",
-        &key.display().to_string(),
+        &key_tmp.display().to_string(),
         "-in",
-        &cert.display().to_string(),
+        &cert_tmp.display().to_string(),
         "-passout",
         "pass:lsw",
     ])?;
+    std::fs::rename(&cert_tmp, &cert).map_err(|e| Error::io(cert.clone(), e))?;
+    std::fs::rename(&pfx_tmp, &pfx).map_err(|e| Error::io(pfx.clone(), e))?;
+    let _ = std::fs::remove_file(&key_tmp);
     Ok(pfx)
 }
 

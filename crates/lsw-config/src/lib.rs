@@ -3,6 +3,7 @@ pub const PROJECT_LOCKFILE: &str = "lsw.lock";
 pub const ENVIRONMENT_MANIFEST: &str = "env.toml";
 
 pub const ENVIRONMENT_FORMAT_VERSION: u32 = 1;
+pub const LOCKFILE_VERSION: u32 = 1;
 
 mod dirs;
 mod error;
