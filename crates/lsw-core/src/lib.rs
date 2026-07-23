@@ -1,3 +1,13 @@
+pub(crate) fn diagnostic_stdio() -> std::process::Stdio {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    let dup = unsafe { libc::dup(std::io::stderr().as_raw_fd()) };
+    if dup < 0 {
+        std::process::Stdio::null()
+    } else {
+        unsafe { std::process::Stdio::from_raw_fd(dup) }
+    }
+}
+
 pub mod auditops;
 pub mod buildops;
 pub mod caseops;

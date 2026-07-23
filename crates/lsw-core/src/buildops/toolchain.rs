@@ -8,16 +8,6 @@ use crate::envops::Environment;
 use crate::error::{Error, Result};
 use crate::project::Project;
 
-fn stderr_stdio() -> std::process::Stdio {
-    use std::os::fd::{AsRawFd, FromRawFd};
-    let dup = unsafe { libc::dup(std::io::stderr().as_raw_fd()) };
-    if dup < 0 {
-        std::process::Stdio::null()
-    } else {
-        unsafe { std::process::Stdio::from_raw_fd(dup) }
-    }
-}
-
 fn win32_winnt(api: &str) -> Option<(&'static str, &'static str)> {
     let v = match api.to_ascii_lowercase().as_str() {
         "winxp" | "xp" => ("0x0501", "0x05010000"),
@@ -110,7 +100,7 @@ pub(crate) fn run_step(
     command
         .args(args)
         .current_dir(&project.root)
-        .stdout(stderr_stdio())
+        .stdout(crate::diagnostic_stdio())
         .env("WINEPREFIX", env.layout.prefix())
         .env("CC", &tc.cc)
         .env("CXX", &tc.cxx)
