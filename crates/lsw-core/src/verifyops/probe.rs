@@ -29,9 +29,7 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
     let imports = lsw_pe::imported_symbols(program).unwrap_or_default();
     let transport = cfg.transport.as_deref().unwrap_or("ssh");
     if transport != "ssh" {
-        return Err(Error::UnsupportedTransport {
-            transport: transport.to_owned(),
-        });
+        return Ok(None);
     }
     if which("ssh").is_none() {
         return Err(Error::ToolMissing {

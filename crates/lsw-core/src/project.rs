@@ -166,6 +166,18 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
         }
     };
 
+    if let Ok(meta) = fs::symlink_metadata(&root)
+        && meta.file_type().is_symlink()
+    {
+        return Err(Error::InitFailed {
+            path: root.clone(),
+            detail: format!(
+                "target '{}' is a symlink; refusing to initialize through it",
+                root.display()
+            ),
+        });
+    }
+
     if named
         && let Ok(mut entries) = fs::read_dir(&root)
         && entries.next().is_some()
@@ -195,6 +207,17 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
     ) -> Result<()> {
         use std::io::Write;
         if let Some(dir) = path.parent() {
+            if let Ok(meta) = fs::symlink_metadata(dir)
+                && meta.file_type().is_symlink()
+            {
+                return Err(Error::InitFailed {
+                    path: dir.to_path_buf(),
+                    detail: format!(
+                        "'{}' is a symlink; refusing to write through it",
+                        dir.display()
+                    ),
+                });
+            }
             if !dir.exists() {
                 created_dirs.push(dir.to_path_buf());
             }
