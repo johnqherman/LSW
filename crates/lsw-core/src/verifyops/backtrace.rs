@@ -112,6 +112,18 @@ pub fn native_backtrace(
         ))
         .output()
         .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    if !out.status.success() {
+        let detail = String::from_utf8_lossy(&out.stderr);
+        let detail = detail.trim();
+        return Err(Error::ProbeFailed {
+            host,
+            detail: if detail.is_empty() {
+                format!("remote cdb exited with {}", out.status)
+            } else {
+                detail.to_owned()
+            },
+        });
+    }
     let stdout = String::from_utf8_lossy(&out.stdout);
     Ok(Some(parse_backtrace(host, &stdout)))
 }
