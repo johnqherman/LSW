@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use lsw_core::{BuildOptions, Dirs};
@@ -46,7 +46,7 @@ pub(crate) fn build(
 }
 
 pub(crate) fn run(
-    program: &Path,
+    program: &Option<PathBuf>,
     args: &[String],
     host: &bool,
     windows: &bool,
@@ -55,11 +55,40 @@ pub(crate) fn run(
     dirs: &Dirs,
 ) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
+    let program = match program {
+        Some(program) => program.clone(),
+        None => {
+            let build = lsw_core::build(&p, &env, &BuildOptions::default())?;
+            let mut exes: Vec<&PathBuf> = build
+                .artifacts
+                .iter()
+                .filter(|a| a.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")))
+                .collect();
+            exes.sort();
+            match exes.as_slice() {
+                [] => {
+                    eprintln!("the build produced no .exe to run; pass a program explicitly");
+                    return Ok(ExitCode::FAILURE);
+                }
+                [only] => {
+                    println!("Running {}", only.display());
+                    (*only).clone()
+                }
+                many => {
+                    eprintln!("the build produced multiple executables; pick one:");
+                    for exe in many {
+                        eprintln!("  lsw run {}", exe.display());
+                    }
+                    return Ok(ExitCode::FAILURE);
+                }
+            }
+        }
+    };
     let domain = domain_from_flags(*host, *windows);
     let report = lsw_core::run(
         &env,
         Some(&p),
-        program,
+        &program,
         args,
         domain,
         sandbox_from(*sandbox),

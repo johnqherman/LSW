@@ -115,7 +115,7 @@ fn dotnet_rid(arch: TargetArch) -> Option<&'static str> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BuildOptions {
     pub system: Option<String>,
     pub update_lock: bool,

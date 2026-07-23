@@ -170,7 +170,13 @@ pub fn list(dirs: &Dirs) -> Result<Vec<EnvSummary>> {
                     arch: env.manifest.target_arch,
                     toolchain: format!(
                         "{} {}",
-                        env.manifest.toolchain.provider, env.manifest.toolchain.version
+                        env.manifest.toolchain.provider,
+                        env.manifest
+                            .toolchain
+                            .version
+                            .split(" (")
+                            .next()
+                            .unwrap_or_default()
                     ),
                     runtime: format!(
                         "{} {}",
