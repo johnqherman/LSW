@@ -175,9 +175,15 @@ pub(crate) fn compat_query(key: &str, dirs: &Dirs, format: Format) -> lsw_core::
                 );
             }
         }
-        None => println!(
-            "{key}: not in the compatibility database yet (run `lsw compat --db <app.exe>`)"
-        ),
+        None => {
+            if format == Format::Json {
+                println!("{}", serde_json::json!({ "key": key, "found": false }));
+            } else {
+                println!(
+                    "{key}: not in the compatibility database yet (run `lsw compat --db <app.exe>`)"
+                );
+            }
+        }
     }
     Ok(ExitCode::SUCCESS)
 }

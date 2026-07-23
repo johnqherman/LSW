@@ -42,8 +42,8 @@ fn main() -> ExitCode {
     }
 }
 
-pub(crate) fn cwd() -> PathBuf {
-    std::env::current_dir().expect("current directory must exist")
+pub(crate) fn cwd() -> lsw_core::Result<PathBuf> {
+    std::env::current_dir().map_err(|e| lsw_core::Error::io(PathBuf::from("."), e))
 }
 
 pub(crate) fn print_dep_tree(node: &lsw_core::depsops::DepNode, depth: usize) {
@@ -61,7 +61,7 @@ pub(crate) fn print_dep_tree(node: &lsw_core::depsops::DepNode, depth: usize) {
 }
 
 pub(crate) fn project() -> lsw_core::Result<Project> {
-    Project::discover(&cwd())
+    Project::discover(&cwd()?)
 }
 
 pub(crate) fn active_env(dirs: &Dirs) -> lsw_core::Result<(Project, lsw_core::Environment)> {
