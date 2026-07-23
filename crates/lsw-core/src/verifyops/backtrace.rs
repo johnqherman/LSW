@@ -141,6 +141,13 @@ fn detect_cdb(host: &str, identity: Option<&str>, paths: &[&str]) -> Result<Opti
         .arg(format!("cmd /c \"{checks}\""))
         .output()
         .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    if !out.status.success() {
+        let detail = String::from_utf8_lossy(&out.stderr);
+        return Err(Error::ProbeFailed {
+            host: host.to_owned(),
+            detail: detail.trim().to_owned(),
+        });
+    }
     let stdout = String::from_utf8_lossy(&out.stdout);
     for (i, path) in paths.iter().enumerate() {
         if stdout.contains(&format!("LSWCDB{i}")) {
