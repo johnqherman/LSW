@@ -307,10 +307,17 @@ pub(crate) fn write_toml<T: Serialize>(path: &Path, value: &T, what: &'static st
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| ConfigError::write(path, e))?;
     }
+    let uniq = format!(
+        "{}.{}",
+        std::process::id(),
+        TMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    );
     let tmp = path.with_extension(match path.extension().and_then(|e| e.to_str()) {
-        Some(ext) => format!("{ext}.tmp"),
-        None => "tmp".to_owned(),
+        Some(ext) => format!("{ext}.{uniq}.tmp"),
+        None => format!("{uniq}.tmp"),
     });
     fs::write(&tmp, text).map_err(|e| ConfigError::write(&tmp, e))?;
     fs::rename(&tmp, path).map_err(|e| ConfigError::write(path, e))
 }
+
+static TMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

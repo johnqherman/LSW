@@ -188,6 +188,12 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
     }
 
     fn write_file(path: &PathBuf, contents: &str, created: &mut Vec<PathBuf>) -> Result<()> {
+        if path.exists() {
+            return Err(Error::InitFailed {
+                path: path.clone(),
+                detail: format!("{} already exists; refusing to overwrite", path.display()),
+            });
+        }
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir).map_err(|e| Error::io(dir.to_path_buf(), e))?;
         }
