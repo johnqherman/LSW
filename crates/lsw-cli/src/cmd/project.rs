@@ -45,6 +45,11 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
             );
             println!("  runtime   {} {}", m.runtime.provider, m.runtime.version);
             println!("  probe     {}", report.probe.detail);
+            if let Ok(p) = project()
+                && p.manifest.environment.name.is_none()
+            {
+                println!("Activate it for this project with: lsw use {name}");
+            }
             Ok(ExitCode::SUCCESS)
         }
 
