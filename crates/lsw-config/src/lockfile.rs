@@ -2,9 +2,10 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::Result;
+use crate::error::{ConfigError, Result};
 use crate::manifest::{read_toml, write_toml};
 use crate::types::TargetArch;
+use crate::{ENVIRONMENT_FORMAT_VERSION, LOCKFILE_VERSION};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -27,7 +28,16 @@ pub struct LockedComponent {
 
 impl Lockfile {
     pub fn load(path: &Path) -> Result<Self> {
-        read_toml(path)
+        let lock: Self = read_toml(path)?;
+        let newer = lock.version.max(lock.environment_format);
+        if lock.version > LOCKFILE_VERSION || lock.environment_format > ENVIRONMENT_FORMAT_VERSION {
+            return Err(ConfigError::UnsupportedFormat {
+                path: path.to_path_buf(),
+                found: newer,
+                supported: LOCKFILE_VERSION.max(ENVIRONMENT_FORMAT_VERSION),
+            });
+        }
+        Ok(lock)
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
