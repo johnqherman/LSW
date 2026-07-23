@@ -26,7 +26,7 @@ fn notify_err(root: &Path, e: notify::Error) -> Error {
     Error::io(root.to_path_buf(), std::io::Error::other(e))
 }
 
-fn rebuild(project: &Project, env: &Environment) -> Vec<PathBuf> {
+fn rebuild(project: &Project, env: &Environment) -> Option<Vec<PathBuf>> {
     let opts = BuildOptions {
         system: None,
         update_lock: false,
@@ -36,15 +36,17 @@ fn rebuild(project: &Project, env: &Environment) -> Vec<PathBuf> {
     match buildops::build(project, env, &opts) {
         Ok(report) => {
             println!("[watch] build ok: {} artifact(s)", report.artifacts.len());
-            report
-                .artifacts
-                .iter()
-                .map(|a| project.root.join(a))
-                .collect()
+            Some(
+                report
+                    .artifacts
+                    .iter()
+                    .map(|a| project.root.join(a))
+                    .collect(),
+            )
         }
         Err(e) => {
             eprintln!("[watch] build failed: {e}");
-            Vec::new()
+            None
         }
     }
 }
@@ -54,7 +56,7 @@ pub fn watch(project: &Project, env: &Environment) -> Result<()> {
         "[watch] watching {} (Ctrl-C to stop)",
         project.root.display()
     );
-    let mut outputs = rebuild(project, env);
+    let mut outputs = rebuild(project, env).unwrap_or_default();
 
     let (tx, rx) = mpsc::channel();
     let mut watcher = notify::recommended_watcher(move |res| {
@@ -73,8 +75,10 @@ pub fn watch(project: &Project, env: &Environment) -> Result<()> {
         while let Ok(next) = rx.recv_timeout(Duration::from_millis(300)) {
             paths.extend(event_paths(next));
         }
-        if is_source_change(&paths, &project.root, &outputs) {
-            outputs = rebuild(project, env);
+        if is_source_change(&paths, &project.root, &outputs)
+            && let Some(next) = rebuild(project, env)
+        {
+            outputs = next;
         }
     }
 }
