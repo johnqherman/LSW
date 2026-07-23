@@ -52,7 +52,7 @@ pub fn set(env: &Environment, key: &str, value: &str, data: &str, kind: &str) ->
             "/v".to_owned(),
             value.to_owned(),
             "/t".to_owned(),
-            kind.to_owned(),
+            reg_type(kind).to_owned(),
             "/d".to_owned(),
             data.to_owned(),
             "/f".to_owned(),
@@ -81,13 +81,7 @@ fn reg_type(kind: &str) -> &'static str {
 pub fn seed(env: &Environment, project: &crate::project::Project) -> Result<usize> {
     let seeds = &project.manifest.registry.seed;
     for entry in seeds {
-        set(
-            env,
-            &entry.key,
-            &entry.name,
-            &entry.value,
-            reg_type(&entry.kind),
-        )?;
+        set(env, &entry.key, &entry.name, &entry.value, &entry.kind)?;
     }
     Ok(seeds.len())
 }

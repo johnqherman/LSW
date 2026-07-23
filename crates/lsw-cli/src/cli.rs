@@ -62,7 +62,8 @@ pub(crate) enum Cmd {
     },
     /// Run an executable (PE via the Windows runtime, ELF natively).
     Run {
-        program: PathBuf,
+        /// Program to run; omit to build and run the project's single executable.
+        program: Option<PathBuf>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
         /// Force the host (Linux) execution domain.
@@ -158,7 +159,7 @@ pub(crate) enum Cmd {
         linux: Option<String>,
     },
     /// Read and write the environment's isolated registry.
-    #[command(subcommand)]
+    #[command(subcommand, alias = "reg")]
     Registry(RegistryCmd),
     /// Debug a Windows binary with winedbg (or its gdb proxy).
     Debug {
