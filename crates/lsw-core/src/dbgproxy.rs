@@ -5,6 +5,8 @@ use std::time::Duration;
 use crate::error::{Error, Result};
 
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
+const MAX_RESUME_OUTPUT: usize = 1 << 20;
+const MAX_PACKET_BYTES: usize = 16 << 20;
 
 fn dap(detail: impl Into<String>) -> Error {
     Error::Dap {
@@ -136,6 +138,9 @@ impl RspConn {
                 if c == b'#' {
                     break;
                 }
+                if raw.len() >= MAX_PACKET_BYTES {
+                    return Err(dap("gdb stub sent an oversized packet"));
+                }
                 raw.push(c);
                 if c == b'}' {
                     let esc = self.read_byte()?;
@@ -180,7 +185,9 @@ impl RspConn {
         loop {
             let reply = self.recv()?;
             if let Some(bytes) = output_packet(&reply) {
-                output.push_str(&String::from_utf8_lossy(&bytes));
+                if output.len() < MAX_RESUME_OUTPUT {
+                    output.push_str(&String::from_utf8_lossy(&bytes));
+                }
                 continue;
             }
             let stop = parse_stop(&reply).ok_or_else(|| {

@@ -5,6 +5,8 @@ use object::{Object, ObjectSection};
 
 use crate::error::{Error, Result};
 
+const MAX_LINE_ROWS: usize = 8_000_000;
+
 pub(crate) struct DebugInfo {
     pub image_base: u64,
     lines: BTreeMap<(String, u32), Vec<(String, u64)>>,
@@ -74,6 +76,9 @@ impl DebugInfo {
                 .unwrap_or_default();
             let mut rows = program.rows();
             while let Ok(Some((header, row))) = rows.next_row() {
+                if by_addr.len() >= MAX_LINE_ROWS {
+                    break;
+                }
                 if row.end_sequence() {
                     by_addr.push((row.address(), None));
                     continue;

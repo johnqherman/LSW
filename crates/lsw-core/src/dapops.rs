@@ -271,13 +271,13 @@ impl<'a> Adapter<'a> {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_owned();
-        let requested: Vec<u32> = req
+        let requested: Vec<u64> = req
             .arguments
             .get("breakpoints")
             .and_then(|v| v.as_array())
             .map(|a| {
                 a.iter()
-                    .filter_map(|b| b.get("line").and_then(|l| l.as_u64()).map(|l| l as u32))
+                    .filter_map(|b| b.get("line").and_then(|l| l.as_u64()))
                     .collect()
             })
             .unwrap_or_default();
@@ -285,25 +285,28 @@ impl<'a> Adapter<'a> {
         self.clear_breakpoints_for(&source);
 
         let mut verified = Vec::new();
-        for line in requested {
+        for raw_line in requested {
             let id = self.next_bp_id;
             self.next_bp_id += 1;
-            let addr = self
-                .info
-                .as_ref()
-                .and_then(|i| i.line_to_addr(&source, line))
-                .map(|a| a + self.slide);
+            let addr = u32::try_from(raw_line)
+                .ok()
+                .and_then(|line| {
+                    self.info
+                        .as_ref()
+                        .and_then(|i| i.line_to_addr(&source, line))
+                })
+                .map(|a| a.wrapping_add(self.slide));
             let mut ok = false;
-            let mut resolved_line = line;
+            let mut resolved_line = raw_line;
             if let (Some(addr), Some(conn)) = (addr, self.conn.as_mut()) {
                 ok = conn.set_breakpoint(addr).is_ok();
                 if ok
                     && let Some((_, l)) = self
                         .info
                         .as_ref()
-                        .and_then(|i| i.addr_to_line(addr - self.slide))
+                        .and_then(|i| i.addr_to_line(addr.wrapping_sub(self.slide)))
                 {
-                    resolved_line = l;
+                    resolved_line = u64::from(l);
                 }
             }
             self.breakpoints.push(Breakpoint {
@@ -577,6 +580,7 @@ impl<'a> Adapter<'a> {
         let start_sp = self.current_sp().unwrap_or(0);
         let start_range = self.current_func_range();
         let mut prev_in_func = true;
+        let mut prev_sp = start_sp;
         for _ in 0..500_000 {
             let (stop, output) = match self.conn.as_mut() {
                 Some(conn) => conn.resume("s")?,
@@ -594,8 +598,9 @@ impl<'a> Adapter<'a> {
             let at_entry = start_range
                 .zip(self.current_rip())
                 .is_some_and(|((low, _), rip)| rip.wrapping_sub(self.slide) == low);
+            let recursive_call = at_entry && sp < prev_sp;
             let is_call =
-                step_over && start_range.is_some() && sp < start_sp && (!in_func || at_entry);
+                step_over && start_range.is_some() && sp < start_sp && (!in_func || recursive_call);
             if is_call {
                 if prev_in_func
                     && let Some(ret) = self.read_stack_u64(sp)
@@ -604,9 +609,11 @@ impl<'a> Adapter<'a> {
                     return Ok(stop);
                 }
                 prev_in_func = self.rip_in_range(start_range);
+                prev_sp = self.current_sp().unwrap_or(sp);
                 continue;
             }
             prev_in_func = in_func;
+            prev_sp = sp;
             let now = self.current_line();
             if now.is_some() && now != start {
                 return Ok(Stop::Signal { signal: 5 });
