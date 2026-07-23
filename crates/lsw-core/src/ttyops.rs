@@ -45,11 +45,6 @@ impl RawModeGuard {
             if libc::tcgetattr(0, &mut original) != 0 {
                 return None;
             }
-            let mut raw = original;
-            libc::cfmakeraw(&mut raw);
-            if libc::tcsetattr(0, libc::TCSANOW, &raw) != 0 {
-                return None;
-            }
             let saved = Box::into_raw(Box::new(original));
             TERMIOS_RESTORE.store(saved, Ordering::Release);
             let mut action: libc::sigaction = std::mem::zeroed();
@@ -58,6 +53,17 @@ impl RawModeGuard {
             let mut prev_hup: libc::sigaction = std::mem::zeroed();
             libc::sigaction(libc::SIGTERM, &action, &mut prev_term);
             libc::sigaction(libc::SIGHUP, &action, &mut prev_hup);
+            let mut raw = original;
+            libc::cfmakeraw(&mut raw);
+            if libc::tcsetattr(0, libc::TCSANOW, &raw) != 0 {
+                libc::sigaction(libc::SIGTERM, &prev_term, std::ptr::null_mut());
+                libc::sigaction(libc::SIGHUP, &prev_hup, std::ptr::null_mut());
+                let saved = TERMIOS_RESTORE.swap(std::ptr::null_mut(), Ordering::AcqRel);
+                if !saved.is_null() {
+                    drop(Box::from_raw(saved));
+                }
+                return None;
+            }
             Some(RawModeGuard {
                 original,
                 prev_term,
