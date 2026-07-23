@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 const SKIP_DIRS: &[&str] = &[
@@ -31,16 +32,18 @@ fn scan(dir: &Path, root: &Path, out: &mut Vec<CaseHazard>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
-    let mut folded: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut folded: BTreeMap<Vec<u8>, Vec<String>> = BTreeMap::new();
     let mut subdirs = Vec::new();
     for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
+        let raw = entry.file_name();
+        let key = match raw.to_str() {
+            Some(s) => s.to_lowercase().into_bytes(),
+            None => raw.as_bytes().to_vec(),
+        };
+        let name = raw.to_string_lossy().into_owned();
         let path = entry.path();
         let is_dir = path.is_dir();
-        folded
-            .entry(name.to_lowercase())
-            .or_default()
-            .push(name.clone());
+        folded.entry(key).or_default().push(name.clone());
         if is_dir && !path.is_symlink() && !SKIP_DIRS.contains(&name.as_str()) {
             subdirs.push(path);
         }

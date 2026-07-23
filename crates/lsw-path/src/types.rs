@@ -19,11 +19,13 @@ impl PathMapper {
     pub fn new(mappings: Vec<Mapping>) -> Self {
         let mut mappings: Vec<Mapping> = mappings
             .into_iter()
-            .map(|mut m| {
-                if let Ok((drive, comps)) = parse_windows(&m.windows) {
-                    m.windows = render_windows(drive, &comps);
+            .filter_map(|mut m| {
+                let (drive, comps) = parse_windows(&m.windows).ok()?;
+                if comps.iter().any(|c| *c == "." || *c == "..") {
+                    return None;
                 }
-                m
+                m.windows = render_windows(drive, &comps);
+                Some(m)
             })
             .collect();
         mappings.sort_by(|a, b| {
