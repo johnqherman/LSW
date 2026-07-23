@@ -321,7 +321,8 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             let cross_file = env.layout.root.join("meson-cross.ini");
             write_meson_cross_file(&cross_file, &tc, env.manifest.target_arch)
                 .map_err(|e| Error::io(cross_file.clone(), e))?;
-            let cross_hash = file_hash(&cross_file);
+            let (mc, mcxx, mlink) = toolchain::effective_flags(project, env, &tc);
+            let cross_hash = file_hash(&cross_file).map(|h| format!("{h}\n{mc}\n{mcxx}\n{mlink}"));
             let configured = project.root.join("build").join("meson-info").is_dir();
             let fp_path = project.root.join("build").join(".lsw-meson-cross");
             let fp_match = configured
@@ -613,7 +614,7 @@ fn deploy_runtime_dlls(
                 if !done.insert(target.clone()) {
                     continue;
                 }
-                if !target.exists() {
+                if fs::symlink_metadata(&target).is_err() {
                     fs::copy(src, &target).map_err(|e| Error::io(target.clone(), e))?;
                 }
                 if let Ok(rel) = target.strip_prefix(project_root) {

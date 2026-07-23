@@ -14,6 +14,7 @@ const PREFIX: &str = "lsw-provider-";
 const MAX_LINE_BYTES: u64 = 1024 * 1024;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_PENDING_RESPONSES: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Handshake {
@@ -59,7 +60,7 @@ impl Plugin {
         let stdin = child.stdin.take().expect("piped stdin");
         let stdout = child.stdout.take().expect("piped stdout");
 
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = std::sync::mpsc::sync_channel(MAX_PENDING_RESPONSES);
         let reader = std::thread::spawn(move || {
             let mut buf = BufReader::new(stdout);
             loop {
@@ -122,6 +123,12 @@ impl Plugin {
         let request = Request { id, method, params };
         let mut line = serde_json::to_string(&request).expect("request serializes");
         line.push('\n');
+        if line.len() as u64 > MAX_LINE_BYTES {
+            return Err(plugin_err(
+                &self.name,
+                format!("request exceeds {MAX_LINE_BYTES}-byte limit"),
+            ));
+        }
         {
             let stdin = self
                 .stdin

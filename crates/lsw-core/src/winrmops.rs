@@ -350,17 +350,20 @@ pub fn run_on_host(
             true,
         )?;
         for (local, name) in &plan.uploads {
-            let meta = std::fs::metadata(local).map_err(|e| Error::io(local.clone(), e))?;
-            if meta.len() > MAX_UPLOAD_BYTES {
+            use std::io::Read;
+            let file = std::fs::File::open(local).map_err(|e| Error::io(local.clone(), e))?;
+            let mut bytes = Vec::new();
+            file.take(MAX_UPLOAD_BYTES + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|e| Error::io(local.clone(), e))?;
+            if bytes.len() as u64 > MAX_UPLOAD_BYTES {
                 return Err(Error::io(
                     local.clone(),
                     std::io::Error::other(format!(
-                        "artifact is {} bytes, exceeds upload limit of {MAX_UPLOAD_BYTES} bytes",
-                        meta.len()
+                        "artifact exceeds upload limit of {MAX_UPLOAD_BYTES} bytes"
                     )),
                 ));
             }
-            let bytes = std::fs::read(local).map_err(|e| Error::io(local.clone(), e))?;
             winrm.upload(&shell, &format!("{remote_dir}\\{name}"), &bytes)?;
         }
         let mut results = Vec::new();

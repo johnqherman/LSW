@@ -21,6 +21,7 @@ pub struct Resources {
 const RT_ICON_GROUP: u16 = 14;
 const RT_VERSION: u16 = 16;
 const RT_MANIFEST: u16 = 24;
+const MAX_RESOURCE_VISITS: u32 = 100_000;
 
 pub fn resources(path: &Path) -> Result<Resources, PeError> {
     let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
@@ -82,7 +83,8 @@ fn resources_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Resou
     };
     let root = dir.root().map_err(|e| PeError::malformed(path, e))?;
 
-    for type_entry in root.entries {
+    let mut budget: u32 = MAX_RESOURCE_VISITS;
+    'types: for type_entry in root.entries {
         let id = match type_entry.name_or_id() {
             ResourceNameOrId::Id(id) => id,
             ResourceNameOrId::Name(_) => continue,
@@ -102,6 +104,10 @@ fn resources_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Resou
                 continue;
             };
             for lang_entry in langs.entries {
+                if budget == 0 {
+                    break 'types;
+                }
+                budget -= 1;
                 let Ok(Data(entry)) = lang_entry.data(dir) else {
                     continue;
                 };

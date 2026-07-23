@@ -6,6 +6,8 @@ use serde::Serialize;
 use crate::envops::Environment;
 use crate::error::{Error, Result};
 
+const MAX_LISTING_BYTES: u64 = 64 * 1024 * 1024;
+
 const SYSTEM_DLLS: &[&str] = &[
     "kernel32.dll",
     "kernelbase.dll",
@@ -317,6 +319,7 @@ pub fn add(
     dirs: &lsw_config::Dirs,
     name: &str,
 ) -> Result<PkgRef> {
+    use std::io::Read;
     let (repo, prefix) = repo_for(arch)?;
     let pkg = resolve(dirs, repo, prefix, name)?;
     if !is_safe_filename(&pkg.filename) {
@@ -343,19 +346,38 @@ pub fn add(
 
     let root = deps_root(project, arch);
     std::fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
-    let listing = std::process::Command::new("tar")
+    let mut listing_child = std::process::Command::new("tar")
         .arg("--zstd")
         .arg("-tf")
         .arg(&cached)
-        .output()
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|e| Error::io(PathBuf::from("tar"), e))?;
-    if !listing.status.success() {
+    let mut stdout = listing_child.stdout.take().expect("piped stdout");
+    let mut captured = Vec::new();
+    (&mut stdout)
+        .take(MAX_LISTING_BYTES + 1)
+        .read_to_end(&mut captured)
+        .map_err(|e| Error::io(PathBuf::from("tar"), e))?;
+    let too_big = captured.len() as u64 > MAX_LISTING_BYTES;
+    let _ = std::io::copy(&mut stdout, &mut std::io::sink());
+    let listing_status = listing_child
+        .wait()
+        .map_err(|e| Error::io(PathBuf::from("tar"), e))?;
+    if too_big {
         return Err(Error::ExtractFailed {
             name: name.to_owned(),
-            detail: String::from_utf8_lossy(&listing.stderr).trim().to_owned(),
+            detail: format!("archive listing exceeds {MAX_LISTING_BYTES}-byte limit"),
         });
     }
-    let files: Vec<String> = String::from_utf8_lossy(&listing.stdout)
+    if !listing_status.success() {
+        return Err(Error::ExtractFailed {
+            name: name.to_owned(),
+            detail: "listing archive contents failed".to_owned(),
+        });
+    }
+    let files: Vec<String> = String::from_utf8_lossy(&captured)
         .lines()
         .filter_map(|l| l.trim().split_once('/').map(|(_, rest)| rest.to_owned()))
         .filter(|p| !p.is_empty() && !p.ends_with('/'))
