@@ -23,6 +23,11 @@ impl PathMapper {
                         let part = part.to_str().ok_or_else(|| PathError::NonUtf8 {
                             path: path.to_path_buf(),
                         })?;
+                        if part.contains('\\') {
+                            return Err(PathError::Unmapped {
+                                path: path.to_string_lossy().into_owned(),
+                            });
+                        }
                         comps.push(part.to_owned());
                     }
                     Component::CurDir => {}

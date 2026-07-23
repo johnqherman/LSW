@@ -38,7 +38,7 @@ fn scan(dir: &Path, root: &Path, out: &mut Vec<CaseHazard>) {
         let path = entry.path();
         let is_dir = path.is_dir();
         folded
-            .entry(name.to_ascii_lowercase())
+            .entry(name.to_lowercase())
             .or_default()
             .push(name.clone());
         if is_dir && !path.is_symlink() && !SKIP_DIRS.contains(&name.as_str()) {
