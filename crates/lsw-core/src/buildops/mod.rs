@@ -188,13 +188,14 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 env.manifest.target_arch,
             )
             .map_err(|e| Error::io(toolchain_file.clone(), e))?;
-            refresh_stale_cmake_build_dir(&project.root.join("build"), &tc)?;
 
             let generator = if which("ninja").is_some() {
                 Some("Ninja")
             } else {
                 None
             };
+            let cmake_config = format!("{tc:?}|generator={generator:?}");
+            refresh_stale_cmake_build_dir(&project.root.join("build"), &cmake_config)?;
             let mut configure = vec![
                 "cmake".to_owned(),
                 "-S".to_owned(),
@@ -220,7 +221,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 &["cmake".to_owned(), "--build".to_owned(), "build".to_owned()],
                 &mut commands,
             )?;
-            write_cmake_toolchain_marker(&project.root.join("build"), &tc);
+            write_cmake_toolchain_marker(&project.root.join("build"), &cmake_config);
         }
         BuildSystem::Make => {
             run_step(project, env, &tc, &["make".to_owned()], &mut commands)?;
@@ -345,15 +346,16 @@ fn verify_artifacts_are_pe(project: &Project, artifacts: &[PathBuf]) -> Result<(
     Ok(())
 }
 
-fn refresh_stale_cmake_build_dir(
-    build_dir: &Path,
-    tc: &lsw_config::ResolvedToolchain,
-) -> Result<()> {
+fn cmake_config_fingerprint(config: &str) -> String {
     use sha2::Digest;
+    format!("{:x}", sha2::Sha256::digest(config.as_bytes()))
+}
+
+fn refresh_stale_cmake_build_dir(build_dir: &Path, config: &str) -> Result<()> {
     if !build_dir.join("CMakeCache.txt").is_file() {
         return Ok(());
     }
-    let fingerprint = format!("{:x}", sha2::Sha256::digest(format!("{tc:?}").as_bytes()));
+    let fingerprint = cmake_config_fingerprint(config);
     let marker = build_dir.join(".lsw-toolchain");
     if fs::read_to_string(&marker).is_ok_and(|m| m.trim() == fingerprint) {
         return Ok(());
@@ -364,11 +366,12 @@ fn refresh_stale_cmake_build_dir(
     Ok(())
 }
 
-fn write_cmake_toolchain_marker(build_dir: &Path, tc: &lsw_config::ResolvedToolchain) {
-    use sha2::Digest;
-    let fingerprint = format!("{:x}", sha2::Sha256::digest(format!("{tc:?}").as_bytes()));
+fn write_cmake_toolchain_marker(build_dir: &Path, config: &str) {
     let _ = fs::create_dir_all(build_dir);
-    let _ = fs::write(build_dir.join(".lsw-toolchain"), fingerprint);
+    let _ = fs::write(
+        build_dir.join(".lsw-toolchain"),
+        cmake_config_fingerprint(config),
+    );
 }
 
 fn find_artifacts(build_dir: &std::path::Path, project_root: &std::path::Path) -> Vec<PathBuf> {

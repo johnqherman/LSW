@@ -51,7 +51,10 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
             if let Ok(mut p) = project() {
                 let active_missing = match &p.manifest.environment.name {
                     None => true,
-                    Some(active) => lsw_core::envops::Environment::open(dirs, active).is_err(),
+                    Some(active) => matches!(
+                        lsw_core::envops::Environment::open(dirs, active),
+                        Err(lsw_core::Error::EnvironmentNotFound { .. })
+                    ),
                 };
                 if active_missing {
                     lsw_core::use_environment(dirs, &mut p, name)?;

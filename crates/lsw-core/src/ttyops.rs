@@ -47,7 +47,9 @@ impl Drop for RawModeGuard {
     }
 }
 
-struct WinchGuard;
+struct WinchGuard {
+    previous: libc::sigaction,
+}
 
 impl WinchGuard {
     fn install() -> Self {
@@ -56,16 +58,17 @@ impl WinchGuard {
             action.sa_sigaction = on_winch as extern "C" fn(libc::c_int) as usize;
             action.sa_flags = libc::SA_RESTART;
             libc::sigemptyset(&mut action.sa_mask);
-            libc::sigaction(libc::SIGWINCH, &action, std::ptr::null_mut());
+            let mut previous: libc::sigaction = std::mem::zeroed();
+            libc::sigaction(libc::SIGWINCH, &action, &mut previous);
+            WinchGuard { previous }
         }
-        WinchGuard
     }
 }
 
 impl Drop for WinchGuard {
     fn drop(&mut self) {
         unsafe {
-            libc::signal(libc::SIGWINCH, libc::SIG_DFL);
+            libc::sigaction(libc::SIGWINCH, &self.previous, std::ptr::null_mut());
         }
     }
 }

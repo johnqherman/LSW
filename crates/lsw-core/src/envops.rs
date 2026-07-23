@@ -137,13 +137,18 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\RunServices",
         Some("winemenubuilder"),
     );
-    let _ = crate::registryops::set(
+    if let Err(e) = crate::registryops::set(
         &environment,
         "HKLM\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug",
         "Debugger",
         "false",
         "string",
-    );
+    ) {
+        tracing::warn!(
+            error = %e,
+            "could not disable AeDebug; crashing Windows processes may hang in winedbg (set [runtime] under WINEDEBUG or rerun `lsw env create --force`)"
+        );
+    }
 
     Ok(EnvCreateReport { environment, probe })
 }
