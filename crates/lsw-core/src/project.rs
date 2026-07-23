@@ -113,9 +113,28 @@ pub struct InitReport {
     pub existing_build: Option<String>,
 }
 
+fn sanitize_project_name(raw: &str) -> String {
+    let cleaned: String = raw
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let trimmed = cleaned.trim_matches('-');
+    if trimmed.is_empty() {
+        "project".to_owned()
+    } else {
+        trimmed.to_owned()
+    }
+}
+
 pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<InitReport> {
     let (root, project_name) = match name {
-        Some(n) => (parent.join(n), n.to_owned()),
+        Some(n) => (parent.join(n), sanitize_project_name(n)),
         None => {
             let n = parent
                 .file_name()
@@ -124,7 +143,7 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
                     path: parent.to_path_buf(),
                     detail: "cannot derive a project name from this directory".into(),
                 })?;
-            (parent.to_path_buf(), n)
+            (parent.to_path_buf(), sanitize_project_name(&n))
         }
     };
 
