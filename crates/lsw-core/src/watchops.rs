@@ -10,22 +10,15 @@ use crate::error::{Error, Result};
 use crate::project::Project;
 
 const IGNORED_TOP_DIRS: &[&str] = &["build", "target", ".git", "dist"];
-const IGNORED_EXTS: &[&str] = &[
-    "exe", "dll", "o", "obj", "lib", "a", "pdb", "ilk", "exp", "msi", "msix", "zip", "res",
-];
 
-fn is_source_change(paths: &[PathBuf], root: &Path) -> bool {
+fn is_source_change(paths: &[PathBuf], root: &Path, outputs: &[PathBuf]) -> bool {
     paths.iter().any(|p| {
         let rel = p.strip_prefix(root).unwrap_or(p);
         let first = rel.components().next().and_then(|c| c.as_os_str().to_str());
         if first.is_some_and(|f| IGNORED_TOP_DIRS.contains(&f)) {
             return false;
         }
-        let ext = p
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_ascii_lowercase());
-        !ext.is_some_and(|e| IGNORED_EXTS.contains(&e.as_str()))
+        !outputs.iter().any(|o| o == p)
     })
 }
 
@@ -33,7 +26,7 @@ fn notify_err(root: &Path, e: notify::Error) -> Error {
     Error::io(root.to_path_buf(), std::io::Error::other(e))
 }
 
-fn rebuild(project: &Project, env: &Environment) {
+fn rebuild(project: &Project, env: &Environment) -> Vec<PathBuf> {
     let opts = BuildOptions {
         system: None,
         update_lock: false,
@@ -43,8 +36,16 @@ fn rebuild(project: &Project, env: &Environment) {
     match buildops::build(project, env, &opts) {
         Ok(report) => {
             println!("[watch] build ok: {} artifact(s)", report.artifacts.len());
+            report
+                .artifacts
+                .iter()
+                .map(|a| project.root.join(a))
+                .collect()
         }
-        Err(e) => eprintln!("[watch] build failed: {e}"),
+        Err(e) => {
+            eprintln!("[watch] build failed: {e}");
+            Vec::new()
+        }
     }
 }
 
@@ -53,7 +54,7 @@ pub fn watch(project: &Project, env: &Environment) -> Result<()> {
         "[watch] watching {} (Ctrl-C to stop)",
         project.root.display()
     );
-    rebuild(project, env);
+    let mut outputs = rebuild(project, env);
 
     let (tx, rx) = mpsc::channel();
     let mut watcher = notify::recommended_watcher(move |res| {
@@ -72,8 +73,8 @@ pub fn watch(project: &Project, env: &Environment) -> Result<()> {
         while let Ok(next) = rx.recv_timeout(Duration::from_millis(300)) {
             paths.extend(event_paths(next));
         }
-        if is_source_change(&paths, &project.root) {
-            rebuild(project, env);
+        if is_source_change(&paths, &project.root, &outputs) {
+            outputs = rebuild(project, env);
         }
     }
 }
@@ -89,27 +90,43 @@ mod tests {
     #[test]
     fn is_source_change_ignores_build_outputs() {
         let root = Path::new("/proj");
-        assert!(is_source_change(&[PathBuf::from("/proj/src/main.c")], root));
+        let outputs = vec![
+            PathBuf::from("/proj/app.exe"),
+            PathBuf::from("/proj/foo.dll"),
+        ];
+        assert!(is_source_change(
+            &[PathBuf::from("/proj/src/main.c")],
+            root,
+            &outputs
+        ));
         assert!(!is_source_change(
             &[
                 PathBuf::from("/proj/build/main.exe"),
                 PathBuf::from("/proj/target/x/app.exe"),
             ],
-            root
+            root,
+            &outputs
         ));
         assert!(is_source_change(
             &[
                 PathBuf::from("/proj/build/x.o"),
                 PathBuf::from("/proj/CMakeLists.txt"),
             ],
-            root
+            root,
+            &outputs
         ));
         assert!(!is_source_change(
             &[
                 PathBuf::from("/proj/app.exe"),
                 PathBuf::from("/proj/foo.dll")
             ],
-            root
+            root,
+            &outputs
+        ));
+        assert!(is_source_change(
+            &[PathBuf::from("/proj/vendor/foo.lib")],
+            root,
+            &outputs
         ));
     }
 }

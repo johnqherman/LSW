@@ -10,6 +10,19 @@ interface IdeEnv {
   defines?: string[];
 }
 
+function intelliSenseMode(target?: string): string {
+  const t = target ?? "";
+  let arch = "x64";
+  if (t.startsWith("aarch64") || t.startsWith("arm64")) {
+    arch = "arm64";
+  } else if (t.startsWith("armv7") || t.startsWith("arm")) {
+    arch = "arm";
+  } else if (t.startsWith("i686") || t.startsWith("i386")) {
+    arch = "x86";
+  }
+  return `windows-clang-${arch}`;
+}
+
 function lswPath(): string {
   return vscode.workspace.getConfiguration("lsw").get<string>("path", "lsw");
 }
@@ -47,7 +60,7 @@ function configureIntelliSense(): void {
           compilerPath: env.compiler ?? "",
           includePath: (env.includePaths ?? []).concat(["${workspaceFolder}/**"]),
           defines: env.defines ?? [],
-          intelliSenseMode: "linux-clang-x64"
+          intelliSenseMode: intelliSenseMode(env.target)
         }
       ]
     };
