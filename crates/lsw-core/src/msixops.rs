@@ -31,11 +31,11 @@ pub fn build_msix(
     let logo = "logo.png";
     std::fs::write(dir.join(logo), minimal_png()).map_err(|e| Error::io(dir.join(logo), e))?;
 
-    let entry = files
-        .iter()
-        .find(|f| f.ends_with(".exe"))
-        .cloned()
-        .unwrap_or_else(|| files.first().cloned().unwrap_or_default());
+    let entry = files.iter().find(|f| f.ends_with(".exe")).cloned().ok_or(
+        Error::MsixSign {
+            detail: "MSIX needs an executable; this build produced no .exe (a DLL-only project cannot form a launchable package)".into(),
+        },
+    )?;
     std::fs::write(
         dir.join("AppxManifest.xml"),
         manifest_xml(name, publisher, arch, &entry, logo),
@@ -186,9 +186,9 @@ fn minimal_png() -> Vec<u8> {
 
 fn manifest_xml(name: &str, publisher: &str, arch: TargetArch, entry: &str, logo: &str) -> String {
     let proc_arch = match arch {
-        TargetArch::X86_64 | TargetArch::Arm64Ec => "x64",
+        TargetArch::X86_64 => "x64",
         TargetArch::X86 => "x86",
-        TargetArch::Aarch64 => "arm64",
+        TargetArch::Aarch64 | TargetArch::Arm64Ec => "arm64",
         TargetArch::Armv7 => "arm",
     };
     let ident = sanitize_identity(name);

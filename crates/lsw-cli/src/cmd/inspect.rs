@@ -244,8 +244,8 @@ pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
         }
 
         DepsCmd::Add { name } => {
-            let (p, _env) = active_env(dirs)?;
-            let pkg = lsw_core::depsops::add(&p, dirs, name)?;
+            let (p, env) = active_env(dirs)?;
+            let pkg = lsw_core::depsops::add(&p, env.manifest.target_arch, dirs, name)?;
             if format == Format::Json {
                 println!(
                     "{}",
@@ -264,8 +264,8 @@ pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
         }
 
         DepsCmd::Remove { name } => {
-            let (p, _env) = active_env(dirs)?;
-            let removed = lsw_core::depsops::remove(&p, name)?;
+            let (p, env) = active_env(dirs)?;
+            let removed = lsw_core::depsops::remove(&p, env.manifest.target_arch, name)?;
             if format == Format::Json {
                 println!(
                     "{}",

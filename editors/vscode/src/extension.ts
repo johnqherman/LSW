@@ -27,10 +27,14 @@ function lswPath(): string {
   return vscode.workspace.getConfiguration("lsw").get<string>("path", "lsw");
 }
 
+function shQuote(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'";
+}
+
 function runInTerminal(args: string[]): void {
   const terminal = vscode.window.createTerminal("LSW");
   terminal.show();
-  terminal.sendText([lswPath(), ...args].join(" "));
+  terminal.sendText([lswPath(), ...args].map(shQuote).join(" "));
 }
 
 function configureIntelliSense(): void {
