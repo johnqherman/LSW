@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -119,6 +120,8 @@ pub struct Adapter<'a> {
     started: bool,
     exited: bool,
     current_thread: i64,
+    frame_threads: HashMap<i64, i64>,
+    next_frame_id: i64,
 }
 
 impl Drop for Adapter<'_> {
@@ -143,6 +146,8 @@ impl<'a> Adapter<'a> {
             started: false,
             exited: false,
             current_thread: 1,
+            frame_threads: HashMap::new(),
+            next_frame_id: 1000,
         }
     }
 
@@ -404,7 +409,7 @@ impl<'a> Adapter<'a> {
         if let Some(conn) = self.conn.as_mut() {
             conn.select_thread(thread_id);
         }
-        let frames = self.build_frames().unwrap_or_default();
+        let frames = self.build_frames(thread_id).unwrap_or_default();
         let total = frames.len();
         Ok(vec![self.success_response(
             req,
@@ -412,7 +417,7 @@ impl<'a> Adapter<'a> {
         )])
     }
 
-    fn build_frames(&mut self) -> Result<Vec<serde_json::Value>> {
+    fn build_frames(&mut self, thread: i64) -> Result<Vec<serde_json::Value>> {
         let Some(conn) = self.conn.as_mut() else {
             return Ok(Vec::new());
         };
@@ -432,8 +437,11 @@ impl<'a> Adapter<'a> {
                 .as_ref()
                 .and_then(|i| i.addr_to_func(lookup_addr))
                 .unwrap_or_else(|| format!("{rip:#x}"));
+            let frame_id = self.next_frame_id;
+            self.next_frame_id += 1;
+            self.frame_threads.insert(frame_id, thread);
             let mut frame = serde_json::json!({
-                "id": depth + 1,
+                "id": frame_id,
                 "name": name,
                 "line": 0,
                 "column": 0,
@@ -469,10 +477,16 @@ impl<'a> Adapter<'a> {
     }
 
     fn handle_scopes(&mut self, req: &ProtocolMessage) -> Result<Vec<ProtocolMessage>> {
+        let frame_id = req
+            .arguments
+            .get("frameId")
+            .and_then(|v| v.as_i64())
+            .filter(|id| self.frame_threads.contains_key(id))
+            .unwrap_or(REGISTERS_REF);
         let scopes = serde_json::json!({
             "scopes": [{
                 "name": "Registers",
-                "variablesReference": REGISTERS_REF,
+                "variablesReference": frame_id,
                 "expensive": false,
             }]
         });
@@ -486,17 +500,26 @@ impl<'a> Adapter<'a> {
             .and_then(|v| v.as_i64())
             .unwrap_or(0);
         let mut variables = Vec::new();
-        if reference == REGISTERS_REF
-            && let Some(conn) = self.conn.as_mut()
-            && let Ok(regs) = conn.read_registers()
-        {
-            for (idx, name) in REGISTER_NAMES.iter().enumerate() {
-                if let Some(value) = amd64::reg(&regs, idx * 8) {
-                    variables.push(serde_json::json!({
-                        "name": name,
-                        "value": format!("{value:#018x}"),
-                        "variablesReference": 0,
-                    }));
+        if reference == REGISTERS_REF || self.frame_threads.contains_key(&reference) {
+            let thread = self
+                .frame_threads
+                .get(&reference)
+                .copied()
+                .unwrap_or(self.current_thread);
+            if let Some(conn) = self.conn.as_mut() {
+                conn.select_thread(thread);
+            }
+            if let Some(conn) = self.conn.as_mut()
+                && let Ok(regs) = conn.read_registers()
+            {
+                for (idx, name) in REGISTER_NAMES.iter().enumerate() {
+                    if let Some(value) = amd64::reg(&regs, idx * 8) {
+                        variables.push(serde_json::json!({
+                            "name": name,
+                            "value": format!("{value:#018x}"),
+                            "variablesReference": 0,
+                        }));
+                    }
                 }
             }
         }
@@ -516,6 +539,7 @@ impl<'a> Adapter<'a> {
                 self.error_response(req, "no live debuggee to control"),
             ]);
         }
+        self.frame_threads.clear();
         let body = match kind {
             ExecKind::Continue => serde_json::json!({ "allThreadsContinued": true }),
             _ => serde_json::Value::Null,
@@ -556,6 +580,15 @@ impl<'a> Adapter<'a> {
             .unwrap_or("")
             .trim()
             .to_lowercase();
+        let thread = req
+            .arguments
+            .get("frameId")
+            .and_then(|v| v.as_i64())
+            .and_then(|id| self.frame_threads.get(&id).copied())
+            .unwrap_or(self.current_thread);
+        if let Some(conn) = self.conn.as_mut() {
+            conn.select_thread(thread);
+        }
         let value = REGISTER_NAMES
             .iter()
             .position(|n| *n == expr)
