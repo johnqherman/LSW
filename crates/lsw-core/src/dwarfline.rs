@@ -6,6 +6,7 @@ use object::{Object, ObjectSection};
 use crate::error::{Error, Result};
 
 const MAX_LINE_ROWS: usize = 8_000_000;
+const MAX_PE_BYTES: u64 = 512 * 1024 * 1024;
 
 pub(crate) struct DebugInfo {
     pub image_base: u64,
@@ -41,6 +42,15 @@ fn suffix_score(candidate: &str, requested: &str) -> usize {
 
 impl DebugInfo {
     pub(crate) fn load(pe: &Path) -> Result<Self> {
+        let len = std::fs::metadata(pe)
+            .map_err(|e| Error::io(pe.to_path_buf(), e))?
+            .len();
+        if len > MAX_PE_BYTES {
+            return Err(dap(format!(
+                "{} is {len} bytes, over the {MAX_PE_BYTES}-byte debug-info limit",
+                pe.display()
+            )));
+        }
         let data = std::fs::read(pe).map_err(|e| Error::io(pe.to_path_buf(), e))?;
         let file = object::File::parse(&*data)
             .map_err(|e| dap(format!("cannot parse {}: {e}", pe.display())))?;
