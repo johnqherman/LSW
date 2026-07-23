@@ -82,7 +82,10 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
                         })
                     })
                     .collect();
-                println!("{}", serde_json::to_string_pretty(&items).expect("serializes"));
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&items).expect("serializes")
+                );
                 return Ok(ExitCode::SUCCESS);
             }
             if envs.is_empty() {

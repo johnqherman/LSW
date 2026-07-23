@@ -134,15 +134,17 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             args,
             relay,
         } => cmd::verify::trace(program, args, relay, &dirs, cli.format),
-        Cmd::Package { target, verify } => cmd::package::package(target, *verify, &dirs),
+        Cmd::Package { target, verify } => {
+            cmd::package::package(target, *verify, &dirs, cli.format)
+        }
         Cmd::Ps { all } => cmd::state::ps(*all, &dirs, cli.format),
         Cmd::Kill { pid, all } => cmd::state::kill(pid, all, &dirs),
         Cmd::Service(op) => cmd::state::service(op, &dirs, cli.format),
         Cmd::Rust(op) => cmd::lang::rust(op, &dirs, cli.format),
         Cmd::Dotnet(op) => cmd::lang::dotnet(op, &dirs, cli.format),
-        Cmd::Daemon(op) => cmd::integration::daemon(op, &dirs),
-        Cmd::Plugin(op) => cmd::integration::plugin(op),
-        Cmd::Sdk(op) => cmd::lang::sdk(op, &dirs),
+        Cmd::Daemon(op) => cmd::integration::daemon(op, &dirs, cli.format),
+        Cmd::Plugin(op) => cmd::integration::plugin(op, cli.format),
+        Cmd::Sdk(op) => cmd::lang::sdk(op, &dirs, cli.format),
         Cmd::Ide(op) => cmd::integration::ide(op, &dirs),
         Cmd::Watch => cmd::tooling::watch(&dirs),
         Cmd::Doctor => cmd::tooling::doctor(&dirs, cli.format),
