@@ -155,6 +155,14 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
 
 /// Honesty marker: local runtime success must never read as
 /// native Windows success.
+pub(crate) fn note_crash(status: &std::process::ExitStatus) {
+    if let Some(code) = status.code()
+        && let Some(reason) = lsw_core::verifyops::crash_reason(code)
+    {
+        eprintln!("[lsw] program crashed: {reason} (exit code {code:#x})");
+    }
+}
+
 pub(crate) fn note_runtime_domain(report: &lsw_core::RunReport) {
     if report.domain == Domain::Windows {
         eprintln!(

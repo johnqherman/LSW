@@ -94,6 +94,7 @@ pub(crate) fn run(
         sandbox_from(*sandbox),
         display_from(*headless),
     )?;
+    crate::note_crash(&report.status);
     note_runtime_domain(&report);
     Ok(exit_from_status(report.status))
 }
@@ -118,6 +119,7 @@ pub(crate) fn exec(
         sandbox_from(*sandbox),
         display_from(*headless),
     )?;
+    crate::note_crash(&report.status);
     note_runtime_domain(&report);
     Ok(exit_from_status(report.status))
 }

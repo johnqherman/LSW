@@ -194,13 +194,19 @@ pub(crate) fn diff(a: &Path, b: &Path, format: Format) -> lsw_core::Result<ExitC
             serde_json::to_string_pretty(&report).expect("serializes")
         );
     } else {
+        let mut any = false;
         for (label, d) in [("imports", &report.imports), ("exports", &report.exports)] {
             for x in &d.added {
                 println!("+ {label} {x}");
+                any = true;
             }
             for x in &d.removed {
                 println!("- {label} {x}");
+                any = true;
             }
+        }
+        if !any {
+            println!("no import/export differences (this compares the PE API surface, not bytes)");
         }
     }
     Ok(ExitCode::SUCCESS)

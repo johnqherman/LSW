@@ -48,14 +48,18 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
             );
             println!("  runtime   {} {}", m.runtime.provider, m.runtime.version);
             println!("  probe     {}", report.probe.detail);
-            if let Ok(mut p) = project()
-                && p.manifest.environment.name.is_none()
-            {
-                lsw_core::use_environment(dirs, &mut p, name)?;
-                println!(
-                    "Project '{}' now uses environment '{name}'",
-                    p.manifest.project.name
-                );
+            if let Ok(mut p) = project() {
+                let active_missing = match &p.manifest.environment.name {
+                    None => true,
+                    Some(active) => lsw_core::envops::Environment::open(dirs, active).is_err(),
+                };
+                if active_missing {
+                    lsw_core::use_environment(dirs, &mut p, name)?;
+                    println!(
+                        "Project '{}' now uses environment '{name}'",
+                        p.manifest.project.name
+                    );
+                }
             }
             Ok(ExitCode::SUCCESS)
         }
