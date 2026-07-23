@@ -2,7 +2,7 @@ use std::process::ExitCode;
 
 use lsw_core::{Dirs, EnvCreateOptions};
 
-use crate::cli::{EnvCmd, TemplateArg};
+use crate::cli::{EnvCmd, Format, TemplateArg};
 use crate::{cwd, project};
 
 pub(crate) fn init(name: &Option<String>, template: &TemplateArg) -> lsw_core::Result<ExitCode> {
@@ -17,7 +17,7 @@ pub(crate) fn init(name: &Option<String>, template: &TemplateArg) -> lsw_core::R
     Ok(ExitCode::SUCCESS)
 }
 
-pub(crate) fn env(op: &EnvCmd, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
+pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     match op {
         EnvCmd::Create {
             name,
@@ -69,6 +69,22 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
 
         EnvCmd::List => {
             let envs = lsw_core::env_list(dirs)?;
+            if format == Format::Json {
+                let items: Vec<_> = envs
+                    .iter()
+                    .map(|e| {
+                        serde_json::json!({
+                            "name": e.name,
+                            "arch": e.arch.to_string(),
+                            "toolchain": e.toolchain,
+                            "runtime": e.runtime,
+                            "healthy": e.healthy,
+                        })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&items).expect("serializes"));
+                return Ok(ExitCode::SUCCESS);
+            }
             if envs.is_empty() {
                 println!("No environments. Create one with: lsw env create <name>");
             }

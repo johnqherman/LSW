@@ -75,7 +75,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
 
     match &cli.command {
         Cmd::Init { name, template } => cmd::project::init(name, template),
-        Cmd::Env(op) => cmd::project::env(op, &dirs),
+        Cmd::Env(op) => cmd::project::env(op, &dirs, cli.format),
         Cmd::Use { name } => cmd::project::use_env(name, &dirs),
         Cmd::Build {
             system,
@@ -112,7 +112,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Ci(op) => cmd::config::ci(op),
         Cmd::Config(op) => cmd::config::config(op, cli.format),
         Cmd::Sign { file, publisher } => cmd::package::sign(file, publisher),
-        Cmd::Path { windows, linux } => cmd::package::path(windows, linux, &dirs),
+        Cmd::Path { windows, linux } => cmd::package::path(windows, linux, &dirs, cli.format),
         Cmd::Registry(op) => cmd::state::registry(op, &dirs),
         Cmd::Debug {
             program,
