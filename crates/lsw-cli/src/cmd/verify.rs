@@ -84,6 +84,7 @@ pub(crate) fn compat(
         Some(lsw_core::verifyops::run_on_host(
             &p,
             std::slice::from_ref(program),
+            args,
         )?)
     } else {
         None

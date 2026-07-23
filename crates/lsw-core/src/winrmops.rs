@@ -271,7 +271,11 @@ fn verifyops_which(program: &str) -> Option<std::path::PathBuf> {
     crate::buildops::which(program)
 }
 
-pub fn run_on_host(project: &Project, artifacts: &[std::path::PathBuf]) -> Result<VerifyReport> {
+pub fn run_on_host(
+    project: &Project,
+    artifacts: &[std::path::PathBuf],
+    args: &[String],
+) -> Result<VerifyReport> {
     let Some(winrm) = Winrm::from_project(project)? else {
         return Ok(VerifyReport {
             status: VerifyStatus::WindowsUnavailable,
@@ -306,9 +310,10 @@ pub fn run_on_host(project: &Project, artifacts: &[std::path::PathBuf]) -> Resul
         }
         let mut results = Vec::new();
         let mut all_passed = true;
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
         for program in &plan.run {
             let (stdout, stderr, exit) =
-                winrm.exec(&shell, &format!("{remote_dir}\\{program}"), &[], true)?;
+                winrm.exec(&shell, &format!("{remote_dir}\\{program}"), &arg_refs, true)?;
             if exit != Some(0) {
                 all_passed = false;
             }
