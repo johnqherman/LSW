@@ -696,12 +696,18 @@ impl<'a> Adapter<'a> {
 
     fn step_out_and_report(&mut self, out: &mut Vec<ProtocolMessage>) -> Result<()> {
         let ret = self.return_address();
+        let has_user_bp =
+            ret.is_some_and(|r| self.breakpoints.iter().any(|b| b.verified && b.addr == r));
         let temp = match (ret, self.conn.as_mut()) {
-            (Some(ret), Some(conn)) if !self.breakpoints.iter().any(|b| b.addr == ret) => {
+            (Some(ret), Some(conn)) if !has_user_bp => {
                 conn.set_breakpoint(ret).is_ok().then_some(ret)
             }
             _ => None,
         };
+        if temp.is_none() && !has_user_bp {
+            self.report_stop(Stop::Signal { signal: 5 }, "step", out);
+            return Ok(());
+        }
         let (stop, output) = {
             let Some(conn) = self.conn.as_mut() else {
                 self.report_stop(Stop::Signal { signal: 5 }, "step", out);
@@ -714,7 +720,12 @@ impl<'a> Adapter<'a> {
             result?
         };
         self.emit_output(&output, out);
-        self.report_stop(stop, "step", out);
+        let reason = if matches!(stop, Stop::Signal { signal: 5 }) && self.at_user_breakpoint() {
+            "breakpoint"
+        } else {
+            "step"
+        };
+        self.report_stop(stop, reason, out);
         Ok(())
     }
 
