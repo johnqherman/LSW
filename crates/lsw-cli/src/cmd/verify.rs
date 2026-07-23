@@ -152,7 +152,17 @@ pub(crate) fn compat(
             }
         }
     }
-    Ok(ExitCode::SUCCESS)
+    match &native {
+        Some(nat)
+            if !matches!(
+                nat.status,
+                lsw_core::verifyops::VerifyStatus::WindowsVerified
+            ) =>
+        {
+            Ok(ExitCode::FAILURE)
+        }
+        _ => Ok(ExitCode::SUCCESS),
+    }
 }
 
 pub(crate) fn compat_query(key: &str, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
