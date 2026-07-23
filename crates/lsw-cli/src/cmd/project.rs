@@ -45,10 +45,14 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
             );
             println!("  runtime   {} {}", m.runtime.provider, m.runtime.version);
             println!("  probe     {}", report.probe.detail);
-            if let Ok(p) = project()
+            if let Ok(mut p) = project()
                 && p.manifest.environment.name.is_none()
             {
-                println!("Activate it for this project with: lsw use {name}");
+                lsw_core::use_environment(dirs, &mut p, name)?;
+                println!(
+                    "Project '{}' now uses environment '{name}'",
+                    p.manifest.project.name
+                );
             }
             Ok(ExitCode::SUCCESS)
         }
