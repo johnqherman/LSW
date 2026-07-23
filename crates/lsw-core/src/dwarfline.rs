@@ -7,8 +7,8 @@ use crate::error::{Error, Result};
 
 pub(crate) struct DebugInfo {
     pub image_base: u64,
-    lines: BTreeMap<(String, u32), Vec<u64>>,
-    by_addr: Vec<(u64, String, u32)>,
+    lines: BTreeMap<(String, u32), Vec<(String, u64)>>,
+    by_addr: Vec<(u64, Option<(String, u32)>)>,
     funcs: Vec<(u64, u64, String)>,
 }
 
@@ -18,6 +18,23 @@ fn norm(path: &str) -> String {
         .file_name()
         .map(|n| n.to_string_lossy().to_lowercase())
         .unwrap_or_else(|| p.to_lowercase())
+}
+
+fn suffix_score(candidate: &str, requested: &str) -> usize {
+    let split = |s: &str| -> Vec<String> {
+        s.replace('\\', "/")
+            .split('/')
+            .filter(|c| !c.is_empty())
+            .map(|c| c.to_lowercase())
+            .collect()
+    };
+    let a = split(candidate);
+    let b = split(requested);
+    a.iter()
+        .rev()
+        .zip(b.iter().rev())
+        .take_while(|(x, y)| x == y)
+        .count()
 }
 
 impl DebugInfo {
@@ -38,8 +55,8 @@ impl DebugInfo {
             gimli::DwarfSections::load(load).map_err(|_: ()| dap("no DWARF sections"))?;
         let dwarf = sections.borrow(|section| gimli::EndianSlice::new(section, endian));
 
-        let mut lines: BTreeMap<(String, u32), Vec<u64>> = BTreeMap::new();
-        let mut by_addr: Vec<(u64, String, u32)> = Vec::new();
+        let mut lines: BTreeMap<(String, u32), Vec<(String, u64)>> = BTreeMap::new();
+        let mut by_addr: Vec<(u64, Option<(String, u32)>)> = Vec::new();
         let mut funcs: Vec<(u64, u64, String)> = Vec::new();
 
         let mut units = dwarf.units();
@@ -58,6 +75,7 @@ impl DebugInfo {
             let mut rows = program.rows();
             while let Ok(Some((header, row))) = rows.next_row() {
                 if row.end_sequence() {
+                    by_addr.push((row.address(), None));
                     continue;
                 }
                 let Some(line) = row.line() else { continue };
@@ -66,19 +84,21 @@ impl DebugInfo {
                     .and_then(|f| file_name(&dwarf, &unit, f, &comp_dir))
                     .unwrap_or_default();
                 let addr = row.address();
+                let line = line.get() as u32;
                 lines
-                    .entry((norm(&file), line.get() as u32))
+                    .entry((norm(&file), line))
                     .or_default()
-                    .push(addr);
-                by_addr.push((addr, file, line.get() as u32));
+                    .push((file.clone(), addr));
+                by_addr.push((addr, Some((file, line))));
             }
         }
 
         for v in lines.values_mut() {
-            v.sort_unstable();
+            v.sort_by_key(|(_, a)| *a);
             v.dedup();
         }
-        by_addr.sort_by_key(|(a, _, _)| *a);
+        by_addr.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.is_none().cmp(&a.1.is_none())));
+        by_addr.dedup_by_key(|(a, _)| *a);
         funcs.sort_by_key(|(a, _, _)| *a);
 
         Ok(Self {
@@ -90,26 +110,26 @@ impl DebugInfo {
     }
 
     pub(crate) fn line_to_addr(&self, file: &str, line: u32) -> Option<u64> {
-        let key = (norm(file), line);
-        if let Some(v) = self.lines.get(&key) {
-            return v.first().copied();
-        }
-        for delta in 1..=20 {
+        for delta in 0..=20 {
             if let Some(v) = self.lines.get(&(norm(file), line + delta)) {
-                return v.first().copied();
+                let best = v.iter().map(|(p, _)| suffix_score(p, file)).max()?;
+                return v
+                    .iter()
+                    .filter(|(p, _)| suffix_score(p, file) == best)
+                    .map(|(_, a)| *a)
+                    .min();
             }
         }
         None
     }
 
     pub(crate) fn addr_to_line(&self, addr: u64) -> Option<(String, u32)> {
-        let idx = match self.by_addr.binary_search_by_key(&addr, |(a, _, _)| *a) {
+        let idx = match self.by_addr.binary_search_by_key(&addr, |(a, _)| *a) {
             Ok(i) => i,
             Err(0) => return None,
             Err(i) => i - 1,
         };
-        let (_, file, line) = self.by_addr.get(idx)?;
-        Some((file.clone(), *line))
+        self.by_addr.get(idx)?.1.clone()
     }
 
     pub(crate) fn addr_to_func(&self, addr: u64) -> Option<String> {
@@ -190,5 +210,47 @@ mod tests {
     fn norm_takes_lowercased_basename() {
         assert_eq!(norm("C:\\src\\Main.c"), "main.c");
         assert_eq!(norm("/home/u/proj/foo.rs"), "foo.rs");
+    }
+
+    #[test]
+    fn suffix_score_prefers_longer_path_match() {
+        assert_eq!(suffix_score("/a/b/util.c", "/x/b/util.c"), 2);
+        assert_eq!(suffix_score("/a/client/util.c", "/z/server/util.c"), 1);
+        assert_eq!(suffix_score("C:\\proj\\main.c", "/proj/main.c"), 2);
+    }
+
+    #[test]
+    fn line_to_addr_disambiguates_same_basename() {
+        let info = DebugInfo {
+            image_base: 0,
+            lines: BTreeMap::from([(
+                ("util.c".to_owned(), 10),
+                vec![
+                    ("/src/client/util.c".to_owned(), 0x2000),
+                    ("/src/server/util.c".to_owned(), 0x1000),
+                ],
+            )]),
+            by_addr: Vec::new(),
+            funcs: Vec::new(),
+        };
+        assert_eq!(info.line_to_addr("/src/client/util.c", 10), Some(0x2000));
+        assert_eq!(info.line_to_addr("/src/server/util.c", 10), Some(0x1000));
+    }
+
+    #[test]
+    fn addr_to_line_respects_sequence_gaps() {
+        let info = DebugInfo {
+            image_base: 0,
+            lines: BTreeMap::new(),
+            by_addr: vec![
+                (0x1000, Some(("a.c".to_owned(), 5))),
+                (0x1010, None),
+                (0x2000, Some(("a.c".to_owned(), 6))),
+            ],
+            funcs: Vec::new(),
+        };
+        assert_eq!(info.addr_to_line(0x1004), Some(("a.c".to_owned(), 5)));
+        assert_eq!(info.addr_to_line(0x1800), None);
+        assert_eq!(info.addr_to_line(0x2004), Some(("a.c".to_owned(), 6)));
     }
 }
