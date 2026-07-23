@@ -141,7 +141,10 @@ fn sanitize_project_name(raw: &str) -> String {
 
 pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<InitReport> {
     let (root, project_name) = match name {
-        Some(n) => (parent.join(n), sanitize_project_name(n)),
+        Some(n) => {
+            let sanitized = sanitize_project_name(n);
+            (parent.join(&sanitized), sanitized)
+        }
         None => {
             let n = parent
                 .file_name()

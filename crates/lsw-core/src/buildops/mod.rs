@@ -195,9 +195,10 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 None
             };
             let cmake_config = format!(
-                "{tc:?}|generator={generator:?}|toolchain={}|emulator={}",
+                "{tc:?}|generator={generator:?}|toolchain={}|emulator={}|deps={:?}",
                 toolchain_file.display(),
-                env.manifest.runtime.executable.display()
+                env.manifest.runtime.executable.display(),
+                crate::depsops::dep_dirs(project)
             );
             refresh_stale_cmake_build_dir(&project.root.join("build"), &cmake_config)?;
             let mut configure = vec![
