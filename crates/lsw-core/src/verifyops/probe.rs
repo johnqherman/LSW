@@ -31,6 +31,7 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
     if transport != "ssh" {
         return Ok(None);
     }
+    super::validate_ssh_host(&host)?;
     if which("ssh").is_none() {
         return Err(Error::ToolMissing {
             tool: "ssh".into(),

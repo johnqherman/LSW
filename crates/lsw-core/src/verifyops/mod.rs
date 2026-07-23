@@ -110,6 +110,7 @@ pub fn run_on_host(
     let transport = cfg.transport.as_deref().unwrap_or("ssh");
     match transport {
         "ssh" => {
+            validate_ssh_host(&host)?;
             for arg in args {
                 validate_windows_name(arg)?;
             }
@@ -179,6 +180,15 @@ pub(crate) fn expand_tilde(path: &str) -> String {
         },
         None => path.to_owned(),
     }
+}
+
+pub(crate) fn validate_ssh_host(host: &str) -> Result<()> {
+    if host.is_empty() || host.starts_with('-') {
+        return Err(Error::UnsafeRemotePath {
+            value: host.to_owned(),
+        });
+    }
+    Ok(())
 }
 
 pub(crate) fn validate_windows_dir(dir: &str) -> Result<()> {

@@ -44,6 +44,7 @@ pub fn native_backtrace(
     if transport != "ssh" {
         return Ok(None);
     }
+    super::validate_ssh_host(&host)?;
     if which("ssh").is_none() {
         return Err(Error::ToolMissing {
             tool: "ssh".into(),
