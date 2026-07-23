@@ -247,6 +247,12 @@ impl DaemonClient {
                 path: self.path.clone(),
                 detail: format!("malformed response: {e}"),
             })?;
+        if value.get("id").and_then(|v| v.as_u64()) != Some(id) {
+            return Err(Error::DaemonUnavailable {
+                path: self.path.clone(),
+                detail: format!("daemon response id mismatch (expected {id})"),
+            });
+        }
         if let Some(err) = value.get("error") {
             let message = err
                 .get("message")

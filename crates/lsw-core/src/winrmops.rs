@@ -1,9 +1,33 @@
-use std::io::Write;
+use std::io::{Read, Write};
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 
 use base64::Engine as _;
 
 use crate::error::{Error, Result};
+
+const MAX_WINRM_BYTES: usize = 32 * 1024 * 1024;
+
+fn drain_capped(mut reader: impl Read + Send + 'static, cap: usize) -> mpsc::Receiver<Vec<u8>> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 8192];
+        loop {
+            match reader.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if buf.len() < cap {
+                        let take = (cap - buf.len()).min(n);
+                        buf.extend_from_slice(&chunk[..take]);
+                    }
+                }
+            }
+        }
+        let _ = tx.send(buf);
+    });
+    rx
+}
 use crate::project::Project;
 use crate::verifyops::{
     self, AgentResult, VerifyReport, VerifyStatus, default_remote_dir, validate_windows_dir,
@@ -92,6 +116,8 @@ impl Winrm {
                 "-k",
                 "--max-time",
                 "180",
+                "--max-filesize",
+                "33554432",
                 "-u",
                 &format!("{}:{}", self.user, self.password),
                 "-X",
@@ -113,14 +139,24 @@ impl Winrm {
             .expect("piped stdin")
             .write_all(envelope.as_bytes())
             .map_err(|e| Error::io(std::path::PathBuf::from("curl"), e))?;
-        let out = child
-            .wait_with_output()
+        let out_rx = child
+            .stdout
+            .take()
+            .map(|s| drain_capped(s, MAX_WINRM_BYTES));
+        let err_rx = child
+            .stderr
+            .take()
+            .map(|s| drain_capped(s, MAX_WINRM_BYTES));
+        let status = child
+            .wait()
             .map_err(|e| Error::io(std::path::PathBuf::from("curl"), e))?;
-        let body = String::from_utf8_lossy(&out.stdout).into_owned();
-        if !out.status.success() && body.is_empty() {
+        let stdout = out_rx.and_then(|rx| rx.recv().ok()).unwrap_or_default();
+        let stderr = err_rx.and_then(|rx| rx.recv().ok()).unwrap_or_default();
+        let body = String::from_utf8_lossy(&stdout).into_owned();
+        if !status.success() && body.is_empty() {
             return Err(Error::ProbeFailed {
                 host: self.addr.clone(),
-                detail: String::from_utf8_lossy(&out.stderr).trim().to_owned(),
+                detail: String::from_utf8_lossy(&stderr).trim().to_owned(),
             });
         }
         Ok(body)
