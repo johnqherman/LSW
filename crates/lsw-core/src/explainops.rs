@@ -179,7 +179,7 @@ const TABLE: &[Explanation] = &[
     Explanation {
         code: "LSW2007",
         summary: "no build system was detected",
-        hint: "add CMakeLists.txt/Cargo.toml/meson.build, or set [build] command in lsw.toml",
+        hint: "add CMakeLists.txt, Cargo.toml, meson.build, build.zig, a .csproj, or set [build] command in lsw.toml",
     },
     Explanation {
         code: "LSW2008",
