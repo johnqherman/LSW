@@ -221,7 +221,11 @@ pub fn run(
     })
 }
 
-pub const WINDOWS_USER: &str = "lsw";
+pub fn windows_user() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("LOGNAME"))
+        .unwrap_or_else(|_| "lsw".to_owned())
+}
 
 fn is_msi(path: &Path) -> bool {
     path.extension()
@@ -261,7 +265,8 @@ fn windows_env(env: &Environment, project: Option<&Project>) -> Vec<(String, Str
     let cpus = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1);
-    let profile = format!("C:\\users\\{WINDOWS_USER}");
+    let user = windows_user();
+    let profile = format!("C:\\users\\{user}");
     let mut vars: Vec<(String, String)> = vec![
         ("TEMP".into(), "C:\\Temp".into()),
         ("TMP".into(), "C:\\Temp".into()),
@@ -272,10 +277,10 @@ fn windows_env(env: &Environment, project: Option<&Project>) -> Vec<(String, Str
         ("ProgramFiles".into(), "C:\\Program Files".into()),
         ("ProgramFiles(x86)".into(), "C:\\Program Files (x86)".into()),
         ("ProgramData".into(), "C:\\ProgramData".into()),
-        ("USERNAME".into(), WINDOWS_USER.into()),
+        ("USERNAME".into(), user.clone()),
         ("USERPROFILE".into(), profile.clone()),
         ("HOMEDRIVE".into(), "C:".into()),
-        ("HOMEPATH".into(), format!("\\users\\{WINDOWS_USER}")),
+        ("HOMEPATH".into(), format!("\\users\\{user}")),
         ("APPDATA".into(), format!("{profile}\\AppData\\Roaming")),
         ("LOCALAPPDATA".into(), format!("{profile}\\AppData\\Local")),
         (
