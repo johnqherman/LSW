@@ -10,12 +10,22 @@ use crate::error::{Error, Result};
 use crate::project::Project;
 
 const IGNORED_TOP_DIRS: &[&str] = &["build", "target", ".git", "dist"];
+const IGNORED_EXTS: &[&str] = &[
+    "exe", "dll", "o", "obj", "lib", "a", "pdb", "ilk", "exp", "msi", "msix", "zip", "res",
+];
 
 fn is_source_change(paths: &[PathBuf], root: &Path) -> bool {
     paths.iter().any(|p| {
         let rel = p.strip_prefix(root).unwrap_or(p);
         let first = rel.components().next().and_then(|c| c.as_os_str().to_str());
-        !first.is_some_and(|f| IGNORED_TOP_DIRS.contains(&f))
+        if first.is_some_and(|f| IGNORED_TOP_DIRS.contains(&f)) {
+            return false;
+        }
+        let ext = p
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase());
+        !ext.is_some_and(|e| IGNORED_EXTS.contains(&e.as_str()))
     })
 }
 
@@ -91,6 +101,13 @@ mod tests {
             &[
                 PathBuf::from("/proj/build/x.o"),
                 PathBuf::from("/proj/CMakeLists.txt"),
+            ],
+            root
+        ));
+        assert!(!is_source_change(
+            &[
+                PathBuf::from("/proj/app.exe"),
+                PathBuf::from("/proj/foo.dll")
             ],
             root
         ));

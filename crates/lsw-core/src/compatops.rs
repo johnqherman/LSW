@@ -69,7 +69,7 @@ const FEATURES: &[Feature] = &[
     },
     Feature {
         name: "Cryptography",
-        markers: &["bcrypt", "crypt32", "advapi32"],
+        markers: &["bcrypt", "crypt32", "ncrypt"],
         local: Support::Yes,
     },
     Feature {
