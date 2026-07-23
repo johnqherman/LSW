@@ -51,6 +51,12 @@ pub fn package(
     );
     let dist = project.root.join("dist");
     let dir = dist.join(&stem);
+    if dir.parent() != Some(dist.as_path()) {
+        return Err(Error::InitFailed {
+            path: dir.clone(),
+            detail: "package output directory escaped dist/".into(),
+        });
+    }
     if dir.exists() {
         fs::remove_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
     }
