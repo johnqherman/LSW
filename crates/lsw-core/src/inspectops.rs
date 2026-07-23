@@ -4,7 +4,7 @@ use std::path::Path;
 use lsw_pe::{BinaryKind, PeInfo};
 
 use crate::envops::Environment;
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 #[derive(Debug)]
 pub struct InspectReport {
@@ -24,11 +24,11 @@ pub struct ImportStatus {
 pub fn inspect(path: &Path, env: Option<&Environment>) -> Result<InspectReport> {
     let info = match lsw_pe::detect(path)? {
         BinaryKind::Pe(info) => info,
-        other => {
-            return Err(Error::NotExecutable {
-                program: path.to_path_buf(),
-                detail: format!("expected a PE binary, found {other:?}"),
-            });
+        _ => {
+            return Err(lsw_pe::PeError::NotPe {
+                path: path.to_path_buf(),
+            }
+            .into());
         }
     };
 
