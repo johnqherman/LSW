@@ -273,7 +273,8 @@ fn file_name<R: gimli::Reader>(
     if is_absolute(&path) {
         return Some(path);
     }
-    let dir = header.directory(file.directory_index()).and_then(|d| {
+    let dir_index = file.directory_index();
+    let dir = header.directory(dir_index).and_then(|d| {
         dwarf
             .attr_string(unit, d)
             .ok()?
@@ -283,7 +284,7 @@ fn file_name<R: gimli::Reader>(
     });
     match dir {
         Some(dir) if is_absolute(&dir) => Some(format!("{dir}/{path}")),
-        Some(dir) if !dir.is_empty() => Some(format!("{comp_dir}/{dir}/{path}")),
+        Some(dir) if dir_index != 0 && !dir.is_empty() => Some(format!("{comp_dir}/{dir}/{path}")),
         _ => Some(format!("{comp_dir}/{path}")),
     }
 }
