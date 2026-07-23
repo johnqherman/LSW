@@ -7,6 +7,7 @@ use base64::Engine as _;
 use crate::error::{Error, Result};
 
 const MAX_WINRM_BYTES: usize = 32 * 1024 * 1024;
+const MAX_RECEIVE_OUTPUT: usize = 64 * 1024 * 1024;
 
 fn drain_capped(mut reader: impl Read + Send + 'static, cap: usize) -> mpsc::Receiver<Vec<u8>> {
     let (tx, rx) = mpsc::channel();
@@ -245,6 +246,13 @@ impl Winrm {
             let resp = self.post(&env)?;
             collect_streams(&resp, "stdout", &mut stdout);
             collect_streams(&resp, "stderr", &mut stderr);
+            if stdout.len().saturating_add(stderr.len()) > MAX_RECEIVE_OUTPUT {
+                return Ok((
+                    String::from_utf8_lossy(&stdout).into_owned(),
+                    String::from_utf8_lossy(&stderr).into_owned(),
+                    None,
+                ));
+            }
             if resp.contains("CommandState/Done") {
                 let exit =
                     extract(&resp, "<rsp:ExitCode>", "<").and_then(|c| c.trim().parse().ok());
