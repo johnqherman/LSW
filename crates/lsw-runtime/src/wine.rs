@@ -46,10 +46,19 @@ pub fn base_env(prefix: &Path) -> Vec<(String, String)> {
     ]
 }
 
+fn host_loader_sensitive(key: &str) -> bool {
+    key.starts_with("LD_") || matches!(key, "GCONV_PATH" | "GETCONF_DIR" | "HOSTALIASES")
+}
+
 pub(crate) fn full_env(prefix: &Path, extra: &[(String, String)]) -> Vec<(String, String)> {
     let mut env = base_env(prefix);
     env.extend(crate::gpu::egl_vendor_pin());
-    env.extend(extra.iter().cloned());
+    env.extend(
+        extra
+            .iter()
+            .filter(|(key, _)| !host_loader_sensitive(key))
+            .cloned(),
+    );
     env
 }
 
