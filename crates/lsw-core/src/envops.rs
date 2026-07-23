@@ -137,6 +137,13 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\RunServices",
         Some("winemenubuilder"),
     );
+    let _ = crate::registryops::set(
+        &environment,
+        "HKLM\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug",
+        "Debugger",
+        "false",
+        "string",
+    );
 
     Ok(EnvCreateReport { environment, probe })
 }
