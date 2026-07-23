@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use lsw_config::{
     Dirs, ENVIRONMENT_FORMAT_VERSION, EnvironmentLayout, EnvironmentManifest, LockedComponent,
@@ -113,9 +113,11 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         None => lsw_toolchain::select(opts.toolchain.as_deref(), opts.arch)?,
     };
 
-    if layout.manifest().is_file() {
-        fs::remove_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
-    }
+    let mut replacement = if layout.manifest().is_file() {
+        Some(Replacement::begin(&root)?)
+    } else {
+        None
+    };
 
     for dir in dirs.managed_dirs() {
         fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
@@ -165,6 +167,9 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         );
     }
 
+    if let Some(r) = replacement.as_mut() {
+        r.commit();
+    }
     Ok(EnvCreateReport { environment, probe })
 }
 
@@ -247,15 +252,16 @@ pub fn clone_env(dirs: &Dirs, src: &str, dst: &str, force: bool) -> Result<Envir
     Environment::open(dirs, src)?;
     let src_root = dirs.environment(src);
     let dst_root = dirs.environment(dst);
-    if dst_root.exists() {
-        if force {
-            fs::remove_dir_all(&dst_root).map_err(|e| Error::io(dst_root.clone(), e))?;
-        } else {
+    let mut replacement = if dst_root.exists() {
+        if !force {
             return Err(Error::EnvironmentExists {
                 name: dst.to_owned(),
             });
         }
-    }
+        Some(Replacement::begin(&dst_root)?)
+    } else {
+        None
+    };
     fs::create_dir_all(&dst_root).map_err(|e| Error::io(dst_root.clone(), e))?;
     let status = std::process::Command::new("cp")
         .arg("--reflink=auto")
@@ -274,7 +280,11 @@ pub fn clone_env(dirs: &Dirs, src: &str, dst: &str, force: bool) -> Result<Envir
     let mut manifest = EnvironmentManifest::load(&layout.manifest())?;
     manifest.name = dst.to_owned();
     manifest.save(&layout.manifest())?;
-    Environment::open(dirs, dst)
+    let opened = Environment::open(dirs, dst)?;
+    if let Some(r) = replacement.as_mut() {
+        r.commit();
+    }
+    Ok(opened)
 }
 
 pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateReport> {
@@ -286,6 +296,12 @@ pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateRe
             name: name.to_owned(),
         });
     }
+    let root = dirs.environment(name);
+    let mut replacement = if root.exists() {
+        Some(Replacement::begin(&root)?)
+    } else {
+        None
+    };
     let report = create(
         dirs,
         &EnvCreateOptions {
@@ -298,6 +314,9 @@ pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateRe
         },
     )?;
     crate::buildops::check_lock(project, &report.environment)?;
+    if let Some(r) = replacement.as_mut() {
+        r.commit();
+    }
     Ok(report)
 }
 
@@ -352,6 +371,7 @@ pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
             } else {
                 udir.join(target)
             };
+            let resolved = lexical_normalize(&resolved);
             if !resolved.starts_with(&drive_c) {
                 fs::remove_file(&link).map_err(|e| Error::io(link.clone(), e))?;
                 fs::create_dir_all(&link).map_err(|e| Error::io(link.clone(), e))?;
@@ -360,6 +380,75 @@ pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
         }
     }
     Ok(trimmed)
+}
+
+fn backup_path(root: &Path) -> PathBuf {
+    let name = root
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    root.with_file_name(format!(".{name}.lsw-bak-{}", std::process::id()))
+}
+
+struct Replacement {
+    root: PathBuf,
+    backup: Option<PathBuf>,
+    committed: bool,
+}
+
+impl Replacement {
+    fn begin(root: &Path) -> Result<Self> {
+        let backup = if root.exists() {
+            let bak = backup_path(root);
+            let _ = fs::remove_dir_all(&bak);
+            fs::rename(root, &bak).map_err(|e| Error::io(root.to_path_buf(), e))?;
+            Some(bak)
+        } else {
+            None
+        };
+        Ok(Self {
+            root: root.to_path_buf(),
+            backup,
+            committed: false,
+        })
+    }
+
+    fn commit(&mut self) {
+        self.committed = true;
+    }
+}
+
+impl Drop for Replacement {
+    fn drop(&mut self) {
+        if self.committed {
+            if let Some(bak) = &self.backup {
+                let _ = fs::remove_dir_all(bak);
+            }
+        } else {
+            let _ = fs::remove_dir_all(&self.root);
+            if let Some(bak) = &self.backup {
+                let _ = fs::rename(bak, &self.root);
+            }
+        }
+    }
+}
+
+fn lexical_normalize(path: &Path) -> PathBuf {
+    let mut out: Vec<Component> = Vec::new();
+    for comp in path.components() {
+        match comp {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if matches!(out.last(), Some(Component::Normal(_))) {
+                    out.pop();
+                } else if !matches!(out.last(), Some(Component::RootDir | Component::Prefix(_))) {
+                    out.push(comp);
+                }
+            }
+            other => out.push(other),
+        }
+    }
+    out.iter().collect()
 }
 
 fn provision_profile(layout: &EnvironmentLayout) -> Result<()> {
