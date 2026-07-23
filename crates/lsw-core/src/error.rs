@@ -139,7 +139,7 @@ pub enum Error {
 
     #[error(
         "LSW2021: unsupported verification transport '{transport}'\n\
-         Only 'ssh' is implemented; set transport = \"ssh\" in [verify]"
+         Supported transports: 'ssh', 'winrm', 'https'; set one in [verify]"
     )]
     UnsupportedTransport { transport: String },
 

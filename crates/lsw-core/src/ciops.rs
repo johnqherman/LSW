@@ -3,15 +3,19 @@ use std::path::{Path, PathBuf};
 use crate::error::{Error, Result};
 
 pub fn github_workflow(project_name: &str) -> String {
-    let project_name = format!(
-        "\"{}\"",
-        project_name
-            .replace('\\', "\\\\")
-            .replace('"', "\\\"")
-            .replace('\n', "\\n")
-            .replace('\r', "\\r")
-            .replace('\t', "\\t")
-    );
+    let escaped: String = project_name
+        .chars()
+        .map(|c| match c {
+            '\\' => "\\\\".to_owned(),
+            '"' => "\\\"".to_owned(),
+            '\n' => "\\n".to_owned(),
+            '\r' => "\\r".to_owned(),
+            '\t' => "\\t".to_owned(),
+            c if (c as u32) < 0x20 => format!("\\u{:04x}", c as u32),
+            c => c.to_string(),
+        })
+        .collect();
+    let project_name = format!("\"{escaped}\"");
     format!(
         r#"name: {project_name}
 

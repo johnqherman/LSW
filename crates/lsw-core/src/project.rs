@@ -187,9 +187,17 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
         });
     }
 
-    fn write_file(path: &PathBuf, contents: &str, created: &mut Vec<PathBuf>) -> Result<()> {
+    fn write_file(
+        path: &PathBuf,
+        contents: &str,
+        created: &mut Vec<PathBuf>,
+        created_dirs: &mut Vec<PathBuf>,
+    ) -> Result<()> {
         use std::io::Write;
         if let Some(dir) = path.parent() {
+            if !dir.exists() {
+                created_dirs.push(dir.to_path_buf());
+            }
             fs::create_dir_all(dir).map_err(|e| Error::io(dir.to_path_buf(), e))?;
         }
         let mut file = fs::OpenOptions::new()
@@ -213,6 +221,7 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
     }
 
     let mut created: Vec<PathBuf> = Vec::new();
+    let mut created_dirs: Vec<PathBuf> = Vec::new();
     let result: Result<Option<String>> = (|| {
         ProjectManifest::new(&project_name).save_new(&manifest_path)?;
         created.push(manifest_path.clone());
@@ -223,12 +232,23 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
                 &root.join("CMakeLists.txt"),
                 &cmake.replace("{name}", &project_name),
                 &mut created,
+                &mut created_dirs,
             )?;
-            write_file(&root.join("src/main.c"), main_c, &mut created)?;
+            write_file(
+                &root.join("src/main.c"),
+                main_c,
+                &mut created,
+                &mut created_dirs,
+            )?;
         }
         let gitignore = root.join(".gitignore");
         if !gitignore.exists() {
-            write_file(&gitignore, TEMPLATE_GITIGNORE, &mut created)?;
+            write_file(
+                &gitignore,
+                TEMPLATE_GITIGNORE,
+                &mut created,
+                &mut created_dirs,
+            )?;
         }
         Ok(existing_build)
     })();
@@ -242,6 +262,9 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
         Err(e) => {
             for path in created.iter().rev() {
                 let _ = fs::remove_file(path);
+            }
+            for dir in created_dirs.iter().rev() {
+                let _ = fs::remove_dir(dir);
             }
             Err(e)
         }

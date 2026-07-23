@@ -113,11 +113,7 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         None => lsw_toolchain::select(opts.toolchain.as_deref(), opts.arch)?,
     };
 
-    let mut replacement = if layout.manifest().is_file() {
-        Some(Replacement::begin(&root)?)
-    } else {
-        None
-    };
+    let mut replacement = Replacement::begin(&root)?;
 
     for dir in dirs.managed_dirs() {
         fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
@@ -167,9 +163,7 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         );
     }
 
-    if let Some(r) = replacement.as_mut() {
-        r.commit();
-    }
+    replacement.commit();
     Ok(EnvCreateReport { environment, probe })
 }
 
@@ -252,16 +246,12 @@ pub fn clone_env(dirs: &Dirs, src: &str, dst: &str, force: bool) -> Result<Envir
     Environment::open(dirs, src)?;
     let src_root = dirs.environment(src);
     let dst_root = dirs.environment(dst);
-    let mut replacement = if dst_root.exists() {
-        if !force {
-            return Err(Error::EnvironmentExists {
-                name: dst.to_owned(),
-            });
-        }
-        Some(Replacement::begin(&dst_root)?)
-    } else {
-        None
-    };
+    if dst_root.exists() && !force {
+        return Err(Error::EnvironmentExists {
+            name: dst.to_owned(),
+        });
+    }
+    let mut replacement = Replacement::begin(&dst_root)?;
     fs::create_dir_all(&dst_root).map_err(|e| Error::io(dst_root.clone(), e))?;
     let status = std::process::Command::new("cp")
         .arg("--reflink=auto")
@@ -281,13 +271,12 @@ pub fn clone_env(dirs: &Dirs, src: &str, dst: &str, force: bool) -> Result<Envir
     manifest.name = dst.to_owned();
     manifest.save(&layout.manifest())?;
     let opened = Environment::open(dirs, dst)?;
-    if let Some(r) = replacement.as_mut() {
-        r.commit();
-    }
+    replacement.commit();
     Ok(opened)
 }
 
 pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateReport> {
+    validate_name("environment", name)?;
     let lock = Lockfile::load(&project.lockfile_path())?;
     let provider = lock.toolchain.provider.clone();
     if !matches!(provider.as_str(), "llvm-mingw" | "mingw-gcc") {
@@ -297,11 +286,7 @@ pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateRe
         });
     }
     let root = dirs.environment(name);
-    let mut replacement = if root.exists() {
-        Some(Replacement::begin(&root)?)
-    } else {
-        None
-    };
+    let mut replacement = Replacement::begin(&root)?;
     let report = create(
         dirs,
         &EnvCreateOptions {
@@ -314,9 +299,7 @@ pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateRe
         },
     )?;
     crate::buildops::check_lock(project, &report.environment)?;
-    if let Some(r) = replacement.as_mut() {
-        r.commit();
-    }
+    replacement.commit();
     Ok(report)
 }
 
@@ -354,7 +337,10 @@ pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
     };
     for user in entries.flatten() {
         let udir = user.path();
-        if !udir.is_dir() {
+        let Ok(meta) = fs::symlink_metadata(&udir) else {
+            continue;
+        };
+        if !meta.is_dir() {
             continue;
         }
         let inner = match fs::read_dir(&udir) {

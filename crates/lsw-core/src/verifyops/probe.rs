@@ -110,7 +110,7 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
         ))
         .output()
         .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
-    if !out.status.success() && out.stdout.is_empty() {
+    if !out.status.success() {
         return Err(Error::ProbeFailed {
             host,
             detail: String::from_utf8_lossy(&out.stderr).trim().to_owned(),
