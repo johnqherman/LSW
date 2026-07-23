@@ -152,6 +152,7 @@ pub fn ensure_target(arch: TargetArch) -> Result<()> {
     }
     let status = Command::new("rustup")
         .args(["target", "add", triple])
+        .stdout(crate::diagnostic_stdio())
         .status()
         .map_err(|e| Error::io(std::path::PathBuf::from("rustup"), e))?;
     if !status.success() {

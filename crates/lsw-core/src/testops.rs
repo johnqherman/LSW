@@ -98,7 +98,7 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
         }
     })?;
 
-    print!("{}", String::from_utf8_lossy(&output.stdout));
+    eprint!("{}", String::from_utf8_lossy(&output.stdout));
     eprint!("{}", String::from_utf8_lossy(&output.stderr));
 
     let (tests_passed, tests_failed) =
