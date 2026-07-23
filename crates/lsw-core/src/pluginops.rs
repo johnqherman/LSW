@@ -194,9 +194,7 @@ impl Drop for Plugin {
             let _ = self.child.kill();
         }
         let _ = self.child.wait();
-        if let Some(reader) = self.reader.take() {
-            let _ = reader.join();
-        }
+        drop(self.reader.take());
     }
 }
 
