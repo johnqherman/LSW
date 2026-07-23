@@ -113,6 +113,11 @@ pub struct InitReport {
     pub existing_build: Option<String>,
 }
 
+const WINDOWS_RESERVED_NAMES: &[&str] = &[
+    "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
+    "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+];
+
 fn sanitize_project_name(raw: &str) -> String {
     let cleaned: String = raw
         .chars()
@@ -126,10 +131,12 @@ fn sanitize_project_name(raw: &str) -> String {
         .collect();
     let trimmed = cleaned.trim_matches('-');
     if trimmed.is_empty() {
-        "project".to_owned()
-    } else {
-        trimmed.to_owned()
+        return "project".to_owned();
     }
+    if WINDOWS_RESERVED_NAMES.contains(&trimmed.to_ascii_lowercase().as_str()) {
+        return format!("{trimmed}-app");
+    }
+    trimmed.to_owned()
 }
 
 pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<InitReport> {

@@ -352,23 +352,11 @@ fn resolve_program(program: &Path, domain: Domain) -> Result<ResolvedProgram> {
     })
 }
 
-fn shell_invocation(powershell: bool, dos: Option<&str>) -> (PathBuf, Vec<String>) {
+fn shell_invocation(powershell: bool) -> (PathBuf, Vec<String>) {
     if powershell {
-        let mut args = vec!["-NoExit".to_owned()];
-        if let Some(dos) = dos {
-            let escaped = dos.replace('\'', "''");
-            args.push("-Command".to_owned());
-            args.push(format!("Set-Location -LiteralPath '{escaped}'"));
-        }
-        (PathBuf::from("powershell.exe"), args)
+        (PathBuf::from("powershell.exe"), vec!["-NoExit".to_owned()])
     } else {
-        let args = dos
-            .map(|dos| {
-                let escaped = dos.replace('"', "");
-                vec!["/k".to_owned(), format!("cd /d \"{escaped}\"")]
-            })
-            .unwrap_or_default();
-        (PathBuf::from("cmd.exe"), args)
+        (PathBuf::from("cmd.exe"), vec!["/k".to_owned()])
     }
 }
 
@@ -397,6 +385,10 @@ fn has_powershell(env: &Environment) -> bool {
 static SHELL_CHILD_PID: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 static LAST_SIGINT_MS: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
 const SIGINT_EXIT_WINDOW_MS: i64 = 2000;
+
+/// Serializes interactive-shell sessions: the signal guards mutate process-global
+/// signal dispositions, so only one session may own them at a time.
+static SHELL_SESSION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 extern "C" fn shell_sigint(_: libc::c_int) {
     use std::sync::atomic::Ordering;
@@ -461,13 +453,15 @@ fn wait_interactive(mut child: std::process::Child) -> std::io::Result<ExitStatu
 }
 
 pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Result<ExitStatus> {
+    let _session = SHELL_SESSION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let _guard = ShellSignalGuard::install();
     if windows {
         if let Some(p) = project {
             crate::envops::link_project(env, p)?;
         }
-        let dos = project.and_then(|p| crate::envops::mapper(env, p).to_windows(&p.root).ok());
-        let (program, args) = shell_invocation(has_powershell(env), dos.as_deref());
+        let (program, args) = shell_invocation(has_powershell(env));
         let request = ExecutionRequest {
             program: program.clone(),
             args,
@@ -514,31 +508,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shell_invocation_prefers_powershell_when_present() {
-        let (prog, args) = shell_invocation(true, Some("C:\\src\\demo"));
+    fn shell_invocation_carries_no_untrusted_path() {
+        let (prog, args) = shell_invocation(true);
         assert_eq!(prog, PathBuf::from("powershell.exe"));
-        assert_eq!(args[0], "-NoExit");
-        assert!(args.last().unwrap().contains("Set-Location"));
-        assert!(args.last().unwrap().contains("C:\\src\\demo"));
+        assert_eq!(args, vec!["-NoExit"]);
 
-        let (prog, args) = shell_invocation(false, Some("C:\\src\\demo"));
+        let (prog, args) = shell_invocation(false);
         assert_eq!(prog, PathBuf::from("cmd.exe"));
-        assert_eq!(args, vec!["/k", "cd /d \"C:\\src\\demo\""]);
-
-        let (_, args) = shell_invocation(false, None);
-        assert!(args.is_empty());
-    }
-
-    #[test]
-    fn shell_invocation_neutralizes_injection() {
-        let evil = "C:\\src\\a'; Remove-Item C:\\ ; '";
-        let (_, args) = shell_invocation(true, Some(evil));
-        assert!(args.last().unwrap().contains("''; Remove-Item"));
-        assert!(!args.last().unwrap().contains("a'; Remove-Item"));
-
-        let evil_cmd = "C:\\src\\a\" & del C:\\ & \"";
-        let (_, args) = shell_invocation(false, Some(evil_cmd));
-        assert_eq!(args.last().unwrap(), "cd /d \"C:\\src\\a & del C:\\ & \"");
+        assert_eq!(args, vec!["/k"]);
     }
 
     #[test]
