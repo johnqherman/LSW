@@ -156,7 +156,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
     let mut artifact_dir = project.root.join("build");
     let flat_layout = matches!(system, BuildSystem::Make | BuildSystem::Ninja);
     let pre_build = if flat_layout {
-        artifact_mtimes(&project.root)
+        artifact_hashes(&project.root)
     } else {
         std::collections::HashMap::new()
     };
@@ -329,8 +329,8 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             .iter()
             .filter(|rel| {
                 let abs = project.root.join(rel);
-                match (file_mtime(&abs), pre_build.get(abs.as_path())) {
-                    (Some(now), Some(before)) => now > *before,
+                match (file_hash(&abs), pre_build.get(abs.as_path())) {
+                    (Some(now), Some(before)) => now != *before,
                     (Some(_), None) => true,
                     _ => false,
                 }
@@ -438,17 +438,19 @@ fn write_cmake_toolchain_marker(build_dir: &Path, config: &str) {
     );
 }
 
-fn file_mtime(path: &Path) -> Option<std::time::SystemTime> {
-    fs::metadata(path).and_then(|m| m.modified()).ok()
+fn file_hash(path: &Path) -> Option<String> {
+    use sha2::Digest;
+    let bytes = fs::read(path).ok()?;
+    Some(format!("{:x}", sha2::Sha256::digest(&bytes)))
 }
 
-fn artifact_mtimes(root: &Path) -> std::collections::HashMap<PathBuf, std::time::SystemTime> {
+fn artifact_hashes(root: &Path) -> std::collections::HashMap<PathBuf, String> {
     let mut out = std::collections::HashMap::new();
     let mut paths = Vec::new();
     walk(root, &mut paths);
     for p in paths {
-        if let Some(t) = file_mtime(&p) {
-            out.insert(p, t);
+        if let Some(h) = file_hash(&p) {
+            out.insert(p, h);
         }
     }
     out
