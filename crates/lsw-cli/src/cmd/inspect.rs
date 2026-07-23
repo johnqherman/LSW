@@ -212,9 +212,17 @@ pub(crate) fn diff(a: &Path, b: &Path, format: Format) -> lsw_core::Result<ExitC
     Ok(ExitCode::SUCCESS)
 }
 
-pub(crate) fn strings(file: &Path, min: &usize) -> lsw_core::Result<ExitCode> {
-    for s in lsw_core::stringsops::strings(file, *min)? {
-        println!("{s}");
+pub(crate) fn strings(file: &Path, min: &usize, format: Format) -> lsw_core::Result<ExitCode> {
+    let found = lsw_core::stringsops::strings(file, *min)?;
+    if format == Format::Json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&found).expect("serializes")
+        );
+    } else {
+        for s in &found {
+            println!("{s}");
+        }
     }
     Ok(ExitCode::SUCCESS)
 }
