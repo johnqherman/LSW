@@ -91,7 +91,7 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<DotnetInitRe
     let mut created = Vec::new();
     let manifest_path = root.join(lsw_config::PROJECT_MANIFEST);
     let result: Result<()> = (|| {
-        lsw_config::ProjectManifest::new(&project_name).save(&manifest_path)?;
+        lsw_config::ProjectManifest::new(&project_name).save_new(&manifest_path)?;
         created.push(manifest_path.clone());
         write_file(
             &root,
