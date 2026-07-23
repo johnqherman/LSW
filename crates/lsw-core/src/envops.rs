@@ -290,7 +290,7 @@ pub fn profile_dir(layout: &EnvironmentLayout) -> PathBuf {
     layout
         .drive_c()
         .join("users")
-        .join(crate::runops::WINDOWS_USER)
+        .join(crate::runops::windows_user())
 }
 
 pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
