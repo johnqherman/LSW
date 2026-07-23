@@ -126,6 +126,9 @@ pub fn run_on_host(project: &Project, artifacts: &[PathBuf]) -> Result<VerifyRep
         .unwrap_or_else(|| default_remote_dir(project));
 
     validate_windows_dir(&remote_dir)?;
+    if let Some(dump_dir) = cfg.dump_dir.as_deref() {
+        validate_windows_dir(dump_dir)?;
+    }
     let plan = plan(project, artifacts, &remote_dir);
     for (_, name) in &plan.uploads {
         validate_windows_name(name)?;
@@ -355,7 +358,24 @@ pub(crate) fn ssh_opts(identity: Option<&str>) -> Vec<String> {
 }
 
 pub(crate) fn default_remote_dir(project: &Project) -> String {
-    format!("C:\\lsw-verify\\{}", project.manifest.project.name)
+    let safe: String = project
+        .manifest
+        .project
+        .name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '+') {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let safe = safe.trim_matches('-');
+    format!(
+        "C:\\lsw-verify\\{}",
+        if safe.is_empty() { "project" } else { safe }
+    )
 }
 
 pub(crate) fn which(program: &str) -> Option<PathBuf> {

@@ -25,7 +25,14 @@ pub fn validate_name(kind: &str, name: &str) -> Result<()> {
         || name.chars().any(|c| {
             matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control()
         })
-        || WINDOWS_RESERVED.contains(&name.to_ascii_lowercase().as_str());
+        || WINDOWS_RESERVED.contains(
+            &name
+                .split('.')
+                .next()
+                .unwrap_or_default()
+                .to_ascii_lowercase()
+                .as_str(),
+        );
     if bad {
         return Err(Error::InvalidName {
             kind: kind.to_owned(),
