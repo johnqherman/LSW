@@ -37,14 +37,11 @@ fn scan(dir: &Path, root: &Path, out: &mut Vec<CaseHazard>) {
         let name = entry.file_name().to_string_lossy().into_owned();
         let path = entry.path();
         let is_dir = path.is_dir();
-        if is_dir && SKIP_DIRS.contains(&name.as_str()) {
-            continue;
-        }
         folded
             .entry(name.to_ascii_lowercase())
             .or_default()
             .push(name.clone());
-        if is_dir && !path.is_symlink() {
+        if is_dir && !path.is_symlink() && !SKIP_DIRS.contains(&name.as_str()) {
             subdirs.push(path);
         }
     }

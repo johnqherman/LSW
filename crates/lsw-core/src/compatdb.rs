@@ -90,12 +90,12 @@ impl CompatDb {
     pub fn record(&mut self, runtime: &str, supported: &[String], unsupported: &[String]) {
         for key in supported {
             let e = self.entries.entry(normalize(key)).or_default();
-            e.supported_count += 1;
+            e.supported_count = e.supported_count.saturating_add(1);
             e.last_runtime = runtime.to_owned();
         }
         for key in unsupported {
             let e = self.entries.entry(normalize(key)).or_default();
-            e.unsupported_count += 1;
+            e.unsupported_count = e.unsupported_count.saturating_add(1);
             e.last_runtime = runtime.to_owned();
         }
     }
