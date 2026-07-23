@@ -28,7 +28,19 @@ pub fn build_msix(
     let name = &project.manifest.project.name;
     let publisher = "CN=LSW Self-Signed (Development)";
 
-    let logo = "logo.png";
+    let logo = "lsw-appx-logo.png";
+    const RESERVED: &[&str] = &[
+        "AppxManifest.xml",
+        "AppxBlockMap.xml",
+        "[Content_Types].xml",
+    ];
+    for f in files {
+        if RESERVED.contains(&f.as_str()) || f.as_str() == logo {
+            return Err(Error::MsixSign {
+                detail: format!("build artifact '{f}' collides with a reserved MSIX package file"),
+            });
+        }
+    }
     std::fs::write(dir.join(logo), minimal_png()).map_err(|e| Error::io(dir.join(logo), e))?;
 
     let entry = files.iter().find(|f| f.ends_with(".exe")).cloned().ok_or(
@@ -56,6 +68,7 @@ pub fn build_msix(
     let mut zip_args = vec![
         "-q".to_owned(),
         "-X".to_owned(),
+        "-0".to_owned(),
         "-r".to_owned(),
         std::path::absolute(&unsigned)
             .unwrap_or(unsigned.clone())
@@ -64,9 +77,15 @@ pub fn build_msix(
         "[Content_Types].xml".to_owned(),
         "AppxBlockMap.xml".to_owned(),
         "AppxManifest.xml".to_owned(),
-        "logo.png".to_owned(),
+        logo.to_owned(),
     ];
-    zip_args.extend(files.iter().cloned());
+    zip_args.extend(files.iter().map(|f| {
+        if f.starts_with('-') {
+            format!("./{f}")
+        } else {
+            f.clone()
+        }
+    }));
     let status = std::process::Command::new("zip")
         .args(&zip_args)
         .current_dir(dir)
@@ -164,8 +183,8 @@ fn ensure_signing_identity(publisher: &str) -> Result<PathBuf> {
         "-passout",
         "pass:lsw",
     ])?;
-    std::fs::rename(&cert_tmp, &cert).map_err(|e| Error::io(cert.clone(), e))?;
     std::fs::rename(&pfx_tmp, &pfx).map_err(|e| Error::io(pfx.clone(), e))?;
+    std::fs::rename(&cert_tmp, &cert).map_err(|e| Error::io(cert.clone(), e))?;
     let _ = std::fs::remove_file(&key_tmp);
     Ok(pfx)
 }
@@ -259,11 +278,22 @@ fn sanitize_identity(name: &str) -> String {
         .collect();
     let trimmed: String = cleaned.trim_matches(['-', '.']).chars().take(46).collect();
     let base = trimmed.trim_end_matches(['-', '.']);
-    if base.is_empty() {
+    let ident = if base.is_empty() {
         "LSW.app".to_owned()
     } else {
         format!("LSW.{base}")
-    }
+    };
+    ident
+        .split('.')
+        .map(|seg| {
+            if seg.len() >= 4 && seg[..4].eq_ignore_ascii_case("xn--") {
+                format!("x{seg}")
+            } else {
+                seg.to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 fn block_map_xml(dir: &Path, files: &[String]) -> Result<String> {
@@ -315,7 +345,8 @@ fn content_types_xml(files: &[String]) -> String {
             _ => "application/octet-stream",
         };
         out.push_str(&format!(
-            "  <Default Extension=\"{ext}\" ContentType=\"{ct}\"/>\n"
+            "  <Default Extension=\"{}\" ContentType=\"{ct}\"/>\n",
+            crate::xml_escape(ext)
         ));
     }
     out.push_str(
