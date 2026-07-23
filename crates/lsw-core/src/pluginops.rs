@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::time::Duration;
@@ -130,16 +130,33 @@ impl Plugin {
             ));
         }
         {
-            let stdin = self
+            let mut stdin = self
                 .stdin
-                .as_mut()
+                .take()
                 .ok_or_else(|| plugin_err(&self.name, "plugin stdin closed".into()))?;
-            stdin
-                .write_all(line.as_bytes())
-                .map_err(|e| plugin_err(&self.name, format!("write failed: {e}")))?;
-            stdin
-                .flush()
-                .map_err(|e| plugin_err(&self.name, format!("flush failed: {e}")))?;
+            let bytes = line.into_bytes();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                use std::io::Write;
+                let res = stdin.write_all(&bytes).and_then(|()| stdin.flush());
+                let _ = tx.send((stdin, res));
+            });
+            match rx.recv_timeout(CALL_TIMEOUT) {
+                Ok((stdin, res)) => {
+                    self.stdin = Some(stdin);
+                    res.map_err(|e| plugin_err(&self.name, format!("write failed: {e}")))?;
+                }
+                Err(_) => {
+                    let _ = self.child.kill();
+                    return Err(plugin_err(
+                        &self.name,
+                        format!(
+                            "write did not complete within {}s; plugin killed",
+                            CALL_TIMEOUT.as_secs()
+                        ),
+                    ));
+                }
+            }
         }
 
         let raw = match self.rx.recv_timeout(CALL_TIMEOUT) {
