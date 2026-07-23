@@ -177,10 +177,12 @@ impl Winrm {
             hdr = self.header("http://schemas.xmlsoap.org/ws/2004/09/transfer/Create"),
         );
         let resp = self.post(&env)?;
-        extract(&resp, "<rsp:ShellId>", "<").ok_or_else(|| Error::ProbeFailed {
-            host: self.addr.clone(),
-            detail: format!("WinRM did not return a ShellId: {}", first_fault(&resp)),
-        })
+        extract(&resp, "<rsp:ShellId>", "<")
+            .map(|s| xml_attr(&s))
+            .ok_or_else(|| Error::ProbeFailed {
+                host: self.addr.clone(),
+                detail: format!("WinRM did not return a ShellId: {}", first_fault(&resp)),
+            })
     }
 
     fn command(&self, shell: &str, program: &str, args: &[&str], skip_cmd: bool) -> Result<String> {
@@ -203,10 +205,12 @@ impl Winrm {
             sel = Self::selector(shell),
         );
         let resp = self.post(&env)?;
-        extract(&resp, "<rsp:CommandId>", "<").ok_or_else(|| Error::ProbeFailed {
-            host: self.addr.clone(),
-            detail: format!("WinRM did not return a CommandId: {}", first_fault(&resp)),
-        })
+        extract(&resp, "<rsp:CommandId>", "<")
+            .map(|s| xml_attr(&s))
+            .ok_or_else(|| Error::ProbeFailed {
+                host: self.addr.clone(),
+                detail: format!("WinRM did not return a CommandId: {}", first_fault(&resp)),
+            })
     }
 
     fn send_stdin(&self, shell: &str, command: &str, bytes: &[u8]) -> Result<()> {
@@ -412,6 +416,10 @@ fn xml(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+fn xml_attr(s: &str) -> String {
+    xml(s).replace('"', "&quot;").replace('\'', "&apos;")
 }
 
 fn extract(haystack: &str, start: &str, end: &str) -> Option<String> {

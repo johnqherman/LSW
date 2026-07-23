@@ -376,7 +376,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
         if !touched.is_empty() {
             artifacts = touched;
             let _ = fs::write(&manifest, encode_artifact_manifest(&artifacts));
-        } else if let Ok(recorded) = fs::read(&manifest) {
+        } else if let Some(recorded) = read_capped(&manifest, 4 * 1024 * 1024) {
             let remembered: Vec<PathBuf> = decode_artifact_manifest(&recorded)
                 .into_iter()
                 .filter(|rel| is_safe_artifact(rel) && project.root.join(rel).is_file())
@@ -470,10 +470,11 @@ fn refresh_stale_cmake_build_dir(build_dir: &Path, config: &str) -> Result<()> {
 
 fn write_cmake_toolchain_marker(build_dir: &Path, config: &str) {
     let _ = fs::create_dir_all(build_dir);
-    let _ = fs::write(
-        build_dir.join(".lsw-toolchain"),
-        cmake_config_fingerprint(config),
-    );
+    let marker = build_dir.join(".lsw-toolchain");
+    if fs::symlink_metadata(&marker).is_ok_and(|m| m.file_type().is_symlink()) {
+        let _ = fs::remove_file(&marker);
+    }
+    let _ = fs::write(&marker, cmake_config_fingerprint(config));
 }
 
 fn is_safe_artifact(rel: &Path) -> bool {
@@ -518,6 +519,14 @@ fn file_hash(path: &Path) -> Option<String> {
         hasher.update(&chunk[..n]);
     }
     Some(format!("{:x}", hasher.finalize()))
+}
+
+fn read_capped(path: &Path, max: u64) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let file = fs::File::open(path).ok()?;
+    let mut buf = Vec::new();
+    file.take(max).read_to_end(&mut buf).ok()?;
+    Some(buf)
 }
 
 fn artifact_hashes(root: &Path) -> std::collections::HashMap<PathBuf, String> {
