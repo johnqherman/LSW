@@ -1,11 +1,38 @@
 use std::collections::BTreeSet;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
 use crate::envops::Environment;
 use crate::error::{Error, Result};
+
+const TRACE_TIMEOUT: Duration = Duration::from_secs(120);
+const TRACE_MAX_OUTPUT: usize = 32 * 1024 * 1024;
+
+fn drain_capped(mut reader: impl Read + Send + 'static) -> mpsc::Receiver<Vec<u8>> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 8192];
+        loop {
+            match reader.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if buf.len() < TRACE_MAX_OUTPUT {
+                        let take = (TRACE_MAX_OUTPUT - buf.len()).min(n);
+                        buf.extend_from_slice(&chunk[..take]);
+                    }
+                }
+            }
+        }
+        let _ = tx.send(buf);
+    });
+    rx
+}
 
 #[derive(Debug, Serialize)]
 pub struct TraceReport {
@@ -50,18 +77,46 @@ pub fn trace(
         "+loaddll,+reg,+file,fixme-all"
     };
 
-    let output = Command::new(&wine)
+    let mut child = Command::new(&wine)
         .arg(&program)
         .args(args)
         .env("WINEPREFIX", env.layout.prefix())
         .env("WINEDEBUG", channels)
-        .output()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| Error::io(wine.clone(), e))?;
+    let out_rx = child.stdout.take().map(drain_capped);
+    let err_rx = child.stderr.take().map(drain_capped);
+    let deadline = Instant::now() + TRACE_TIMEOUT;
+    let (status, timed_out) = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break (Some(status), false),
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break (None, true);
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(_) => break (None, false),
+        }
+    };
+    let stdout_bytes = out_rx.and_then(|rx| rx.recv().ok()).unwrap_or_default();
+    let stderr_bytes = err_rx.and_then(|rx| rx.recv().ok()).unwrap_or_default();
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = String::from_utf8_lossy(&stderr_bytes);
     let parsed = parse_wine_trace(&stderr);
 
-    eprint!("{}", String::from_utf8_lossy(&output.stdout));
+    eprint!("{}", String::from_utf8_lossy(&stdout_bytes));
+    if timed_out {
+        eprintln!(
+            "lsw: trace timed out after {}s and was killed",
+            TRACE_TIMEOUT.as_secs()
+        );
+    }
 
     Ok(TraceReport {
         imported_dlls,
@@ -70,7 +125,7 @@ pub fn trace(
         registry_access: parsed.registry,
         filesystem_access: parsed.filesystem,
         unsupported: parsed.unsupported,
-        exit_code: output.status.code(),
+        exit_code: status.and_then(|s| s.code()),
     })
 }
 

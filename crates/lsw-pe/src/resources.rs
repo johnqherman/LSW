@@ -51,9 +51,15 @@ fn rva_to_bytes<'d, Pe: ImageNtHeaders>(
         let raw = section.size_of_raw_data.get(LE);
         let span = vsize.max(raw);
         if rva >= va && rva < va.saturating_add(span) {
+            let off = rva - va;
+            if off >= raw {
+                return None;
+            }
             let ptr = section.pointer_to_raw_data.get(LE);
-            let start = ptr.checked_add(rva - va)? as usize;
-            let end = start.checked_add(size as usize)?;
+            let start = ptr.checked_add(off)? as usize;
+            let avail = (raw - off) as usize;
+            let take = (size as usize).min(avail);
+            let end = start.checked_add(take)?;
             return data.get(start..end.min(data.len()));
         }
     }
@@ -118,8 +124,26 @@ fn resources_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Resou
     Ok(out)
 }
 
+fn decode_text(bytes: &[u8]) -> String {
+    if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
+        let wide: Vec<u16> = rest
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        String::from_utf16_lossy(&wide)
+    } else if let Some(rest) = bytes.strip_prefix(&[0xFE, 0xFF]) {
+        let wide: Vec<u16> = rest
+            .chunks_exact(2)
+            .map(|c| u16::from_be_bytes([c[0], c[1]]))
+            .collect();
+        String::from_utf16_lossy(&wide)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
 pub(crate) fn parse_manifest(bytes: &[u8], out: &mut Resources) {
-    let text = String::from_utf8_lossy(bytes).into_owned();
+    let text = decode_text(bytes);
     out.execution_level = between(&text, "level=\"", "\"");
     if let Some(dpi) = between(&text, "<dpiAware>", "</dpiAware>") {
         out.dpi_aware = Some(dpi);
