@@ -9,6 +9,13 @@ use object::read::pe::{ImageNtHeaders, Import, PeFile, optional_header_magic};
 use crate::MZ_MAGIC;
 use crate::error::PeError;
 
+const MAX_NAMES: usize = 65536;
+const MAX_NAME_LEN: usize = 4096;
+
+fn decode_name(raw: &[u8]) -> String {
+    String::from_utf8_lossy(&raw[..raw.len().min(MAX_NAME_LEN)]).into_owned()
+}
+
 pub fn imports(path: &Path) -> Result<Vec<String>, PeError> {
     let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
     if !data.starts_with(MZ_MAGIC) {
@@ -42,10 +49,13 @@ fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
         .next()
         .map_err(|e| PeError::malformed(path, e))?
     {
+        if dlls.len() >= MAX_NAMES {
+            break;
+        }
         let raw = table
             .name(descriptor.name.get(LE))
             .map_err(|e| PeError::malformed(path, e))?;
-        let name = String::from_utf8_lossy(raw).into_owned();
+        let name = decode_name(raw);
         if !dlls.iter().any(|seen| seen.eq_ignore_ascii_case(&name)) {
             dlls.push(name);
         }
@@ -80,8 +90,11 @@ fn exports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
         return Ok(out);
     };
     for export in table.exports().map_err(|e| PeError::malformed(path, e))? {
+        if out.len() >= MAX_NAMES {
+            break;
+        }
         match export.name {
-            Some(name) => out.push(String::from_utf8_lossy(name).into_owned()),
+            Some(name) => out.push(decode_name(name)),
             None => out.push(format!("#{}", export.ordinal)),
         }
     }
@@ -128,12 +141,14 @@ fn imported_symbols_typed<Pe: ImageNtHeaders>(
         .next()
         .map_err(|e| PeError::malformed(path, e))?
     {
-        let dll = String::from_utf8_lossy(
+        if out.len() >= MAX_NAMES {
+            break;
+        }
+        let dll = decode_name(
             table
                 .name(descriptor.name.get(LE))
                 .map_err(|e| PeError::malformed(path, e))?,
-        )
-        .into_owned();
+        );
         let ilt = descriptor.original_first_thunk.get(LE);
         let first = if ilt != 0 {
             ilt
@@ -147,12 +162,15 @@ fn imported_symbols_typed<Pe: ImageNtHeaders>(
             .next::<Pe>()
             .map_err(|e| PeError::malformed(path, e))?
         {
+            if out.len() >= MAX_NAMES {
+                break;
+            }
             let symbol = match table
                 .import::<Pe>(thunk)
                 .map_err(|e| PeError::malformed(path, e))?
             {
                 Import::Ordinal(n) => format!("#{n}"),
-                Import::Name(_hint, name) => String::from_utf8_lossy(name).into_owned(),
+                Import::Name(_hint, name) => decode_name(name),
             };
             out.push((dll.clone(), symbol));
         }

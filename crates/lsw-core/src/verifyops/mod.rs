@@ -95,9 +95,6 @@ pub fn run_on_host(
     artifacts: &[PathBuf],
     args: &[String],
 ) -> Result<VerifyReport> {
-    for arg in args {
-        validate_windows_name(arg)?;
-    }
     let cfg = &project.manifest.verify;
     let Some(host) = cfg.host.clone() else {
         return Ok(VerifyReport {
@@ -112,7 +109,11 @@ pub fn run_on_host(
 
     let transport = cfg.transport.as_deref().unwrap_or("ssh");
     match transport {
-        "ssh" => {}
+        "ssh" => {
+            for arg in args {
+                validate_windows_name(arg)?;
+            }
+        }
         "winrm" | "https" => return crate::winrmops::run_on_host(project, artifacts, args),
         other => {
             return Err(Error::UnsupportedTransport {

@@ -14,6 +14,15 @@ fn sh_squote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
+fn strip_symlink(p: &Path) -> Result<()> {
+    if let Ok(meta) = fs::symlink_metadata(p)
+        && meta.file_type().is_symlink()
+    {
+        fs::remove_file(p).map_err(|e| Error::io(p.to_path_buf(), e))?;
+    }
+    Ok(())
+}
+
 const GLUE_SOURCE: &str = r#"extern "C" {
 typedef unsigned long long uptr;
 typedef decltype(sizeof(0)) usize;
@@ -162,9 +171,10 @@ pub fn prepare(project: &Project, env: &Environment, tc: &ResolvedToolchain) -> 
         ),
     })?;
 
-    let aot_dir = project.root.join("build").join("lsw-aot");
+    let build_dir = project.root.join("build");
+    let aot_dir = build_dir.join("lsw-aot");
     let shim_dir = aot_dir.join("libs");
-    for d in [&aot_dir, &shim_dir] {
+    for d in [&build_dir, &aot_dir, &shim_dir] {
         if let Ok(meta) = fs::symlink_metadata(d)
             && meta.file_type().is_symlink()
         {
@@ -193,8 +203,10 @@ pub fn prepare(project: &Project, env: &Environment, tc: &ResolvedToolchain) -> 
     }
 
     let glue_src = aot_dir.join("glue.cpp");
+    strip_symlink(&glue_src)?;
     fs::write(&glue_src, GLUE_SOURCE).map_err(|e| Error::io(glue_src.clone(), e))?;
     let glue_obj = aot_dir.join("glue.obj");
+    strip_symlink(&glue_obj)?;
     let output = Command::new(&clang)
         .args([
             "--target=x86_64-pc-windows-msvc",
@@ -221,6 +233,7 @@ pub fn prepare(project: &Project, env: &Environment, tc: &ResolvedToolchain) -> 
     let abs_shim = std::path::absolute(&shim_dir).map_err(|e| Error::io(shim_dir.clone(), e))?;
     let abs_obj = std::path::absolute(&glue_obj).map_err(|e| Error::io(glue_obj.clone(), e))?;
     let wrapper = aot_dir.join("lld-link.sh");
+    strip_symlink(&wrapper)?;
     let q_link = sh_squote(&lld_link.display().to_string());
     let q_libpath = sh_squote(&format!("/libpath:{}", abs_shim.display()));
     let q_obj = sh_squote(&abs_obj.display().to_string());
