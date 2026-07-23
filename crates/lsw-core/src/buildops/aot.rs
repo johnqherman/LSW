@@ -10,6 +10,10 @@ use crate::envops::Environment;
 use crate::error::{Error, Result};
 use crate::project::Project;
 
+fn sh_squote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
 const GLUE_SOURCE: &str = r#"extern "C" {
 typedef unsigned long long uptr;
 typedef decltype(sizeof(0)) usize;
@@ -208,6 +212,9 @@ pub fn prepare(project: &Project, env: &Environment, tc: &ResolvedToolchain) -> 
     let abs_shim = std::path::absolute(&shim_dir).map_err(|e| Error::io(shim_dir.clone(), e))?;
     let abs_obj = std::path::absolute(&glue_obj).map_err(|e| Error::io(glue_obj.clone(), e))?;
     let wrapper = aot_dir.join("lld-link.sh");
+    let q_link = sh_squote(&lld_link.display().to_string());
+    let q_libpath = sh_squote(&format!("/libpath:{}", abs_shim.display()));
+    let q_obj = sh_squote(&abs_obj.display().to_string());
     let script = format!(
         "#!/bin/sh\n\
          newargs=\n\
@@ -222,10 +229,7 @@ pub fn prepare(project: &Project, env: &Environment, tc: &ResolvedToolchain) -> 
          \x20 newargs=\"$newargs '$(printf %s \"$a\" | sed \"s/'/'\\\\\\\\''/g\")'\"\n\
          done\n\
          eval set -- $newargs\n\
-         exec \"{}\" \"/libpath:{}\" \"{}\" \"$@\" \"mingwex.lib\" \"mingwcrt.lib\"\n",
-        lld_link.display(),
-        abs_shim.display(),
-        abs_obj.display()
+         exec {q_link} {q_libpath} {q_obj} \"$@\" \"mingwex.lib\" \"mingwcrt.lib\"\n",
     );
     fs::write(&wrapper, script).map_err(|e| Error::io(wrapper.clone(), e))?;
     let mut perms = fs::metadata(&wrapper)

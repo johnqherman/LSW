@@ -8,6 +8,26 @@ use lsw_config::TargetArch;
 use crate::envops::Environment;
 use crate::error::{Error, Result};
 
+fn cargo_package_name(raw: &str) -> String {
+    let mut name: String = raw
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if name.is_empty() {
+        name.push_str("app");
+    }
+    if name.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        name.insert(0, '_');
+    }
+    name
+}
+
 const TEMPLATE_CARGO: &str = r#"[package]
 name = "{name}"
 version = "0.1.0"
@@ -76,7 +96,7 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<RustInitRepo
     write_file(
         &root,
         "Cargo.toml",
-        &TEMPLATE_CARGO.replace("{name}", &project_name),
+        &TEMPLATE_CARGO.replace("{name}", &cargo_package_name(&project_name)),
         &mut created,
     )?;
     write_file(&root, "src/main.rs", TEMPLATE_MAIN, &mut created)?;

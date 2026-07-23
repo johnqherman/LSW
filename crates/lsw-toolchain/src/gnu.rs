@@ -61,6 +61,15 @@ impl ToolchainProvider for LlvmMingw {
     }
 }
 
+fn version_key(path: &Path) -> Vec<u64> {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .split(['.', '-'])
+        .map(|part| part.parse::<u64>().unwrap_or(0))
+        .collect()
+}
+
 fn libstdcxx_include_dirs(sysroot: &Path, triple: &str) -> Vec<PathBuf> {
     let base = sysroot.join("include/c++");
     let mut versions: Vec<PathBuf> = std::fs::read_dir(&base)
@@ -71,7 +80,7 @@ fn libstdcxx_include_dirs(sysroot: &Path, triple: &str) -> Vec<PathBuf> {
         .map(|e| e.path())
         .filter(|p| p.join("iostream").is_file())
         .collect();
-    versions.sort();
+    versions.sort_by_key(|p| version_key(p));
     match versions.pop() {
         Some(dir) => {
             let target = dir.join(triple);
@@ -93,7 +102,7 @@ fn latest_gcc_lib_dir(triple: &str) -> Option<PathBuf> {
         .map(|e| e.path())
         .filter(|p| p.is_dir() && p.join("libgcc.a").is_file())
         .collect();
-    versions.sort();
+    versions.sort_by_key(|p| version_key(p));
     versions.pop()
 }
 

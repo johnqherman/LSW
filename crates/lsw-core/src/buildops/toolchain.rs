@@ -83,6 +83,20 @@ pub(crate) fn run_step(
     run_step_with_env(project, env, tc, argv, &[], commands)
 }
 
+fn join_flags(flags: impl IntoIterator<Item = String>) -> String {
+    flags
+        .into_iter()
+        .map(|f| {
+            if f.chars().any(char::is_whitespace) {
+                format!("\"{}\"", f.replace('\\', "\\\\").replace('"', "\\\""))
+            } else {
+                f
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub(crate) fn run_step_with_env(
     project: &Project,
     env: &Environment,
@@ -95,22 +109,19 @@ pub(crate) fn run_step_with_env(
     let rendered = argv.join(" ");
     commands.push(rendered.clone());
 
-    let mut c_flags = tc.c_flags.join(" ");
-    let mut cxx_flags = tc
-        .c_flags
-        .iter()
-        .chain(&tc.cxx_flags)
-        .cloned()
-        .collect::<Vec<_>>()
-        .join(" ");
-    let mut link_flags = tc.link_flags.join(" ");
+    let mut c_list: Vec<String> = tc.c_flags.clone();
+    let mut cxx_list: Vec<String> = tc.c_flags.iter().chain(&tc.cxx_flags).cloned().collect();
+    let mut link_list: Vec<String> = tc.link_flags.clone();
     if let Some((include, lib, _bin)) = crate::depsops::dep_dirs(project, env.manifest.target_arch)
     {
-        let include_flag = format!(" -I{}", include.display());
-        c_flags.push_str(&include_flag);
-        cxx_flags.push_str(&include_flag);
-        link_flags.push_str(&format!(" -L{}", lib.display()));
+        let include_flag = format!("-I{}", include.display());
+        c_list.push(include_flag.clone());
+        cxx_list.push(include_flag);
+        link_list.push(format!("-L{}", lib.display()));
     }
+    let c_flags = join_flags(c_list);
+    let cxx_flags = join_flags(cxx_list);
+    let link_flags = join_flags(link_list);
     let mut command = Command::new(program);
     lsw_runtime::scrub_wine_env(&mut command);
     command
