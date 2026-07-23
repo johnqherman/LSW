@@ -75,7 +75,7 @@ pub fn plan(project: &Project, artifacts: &[PathBuf], remote_dir: &str) -> Agent
 
 pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
     if project.manifest.verify.host.is_none() {
-        return run_on_host(project, &[]);
+        return run_on_host(project, &[], &[]);
     }
     let build = buildops::build(
         project,
@@ -87,10 +87,17 @@ pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
             aot: false,
         },
     )?;
-    run_on_host(project, &build.artifacts)
+    run_on_host(project, &build.artifacts, &[])
 }
 
-pub fn run_on_host(project: &Project, artifacts: &[PathBuf]) -> Result<VerifyReport> {
+pub fn run_on_host(
+    project: &Project,
+    artifacts: &[PathBuf],
+    args: &[String],
+) -> Result<VerifyReport> {
+    for arg in args {
+        validate_windows_name(arg)?;
+    }
     let cfg = &project.manifest.verify;
     let Some(host) = cfg.host.clone() else {
         return Ok(VerifyReport {
@@ -106,7 +113,7 @@ pub fn run_on_host(project: &Project, artifacts: &[PathBuf]) -> Result<VerifyRep
     let transport = cfg.transport.as_deref().unwrap_or("ssh");
     match transport {
         "ssh" => {}
-        "winrm" | "https" => return crate::winrmops::run_on_host(project, artifacts),
+        "winrm" | "https" => return crate::winrmops::run_on_host(project, artifacts, args),
         other => {
             return Err(Error::UnsupportedTransport {
                 transport: other.to_owned(),
@@ -142,6 +149,7 @@ pub fn run_on_host(project: &Project, artifacts: &[PathBuf]) -> Result<VerifyRep
         identity.as_deref(),
         cfg.dump_dir.as_deref(),
         &dump_local,
+        args,
     )
 }
 
@@ -215,7 +223,13 @@ fn run_ssh_plan(
     identity: Option<&str>,
     dump_remote: Option<&str>,
     dump_local: &std::path::Path,
+    args: &[String],
 ) -> Result<VerifyReport> {
+    let arg_suffix = if args.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", args.join(" "))
+    };
     let mkdir = Command::new("ssh")
         .args(ssh_opts(identity))
         .arg(host)
@@ -265,7 +279,7 @@ fn run_ssh_plan(
         let dump_before = dump_remote.and_then(|dir| newest_dump(host, identity, dir, program));
         let sentinel = "__LSW_EXIT__";
         let remote_cmd = format!(
-            "cmd /v:on /c \"cd /d \"{dir}\" && \"{prog}\" & echo {sentinel}!errorlevel!\"",
+            "cmd /v:on /c \"cd /d \"{dir}\" && \"{prog}\"{arg_suffix} & echo {sentinel}!errorlevel!\"",
             dir = plan.remote_dir,
             prog = program,
         );
