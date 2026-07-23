@@ -196,9 +196,11 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             };
             let toolchain_contents = fs::read_to_string(&toolchain_file).unwrap_or_default();
             let cmake_config = format!(
-                "{tc:?}|arch={}|generator={generator:?}|toolchain={}|emulator={}|deps={:?}|env={}",
+                "{tc:?}|arch={}|generator={generator:?}|toolchain_path={}|toolchain_body={}|prefix={}|emulator={}|deps={:?}|env={}",
                 env.manifest.target_arch,
+                toolchain_file.display(),
                 toolchain_contents,
+                env.layout.prefix().display(),
                 env.manifest.runtime.executable.display(),
                 crate::depsops::dep_dirs(project),
                 ambient_env_fingerprint()
@@ -360,12 +362,18 @@ fn verify_artifacts_are_pe(project: &Project, artifacts: &[PathBuf]) -> Result<(
 /// instead: deterministic, complete, and it only ever over-invalidates (a cheap
 /// reconfigure) rather than leaving a stale build directory.
 fn ambient_env_fingerprint() -> String {
+    use sha2::Digest;
+    use std::os::unix::ffi::OsStrExt;
     let mut vars: Vec<(std::ffi::OsString, std::ffi::OsString)> = std::env::vars_os().collect();
     vars.sort();
-    vars.into_iter()
-        .map(|(k, v)| format!("{}={}", k.to_string_lossy(), v.to_string_lossy()))
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut hasher = sha2::Sha256::new();
+    for (k, v) in vars {
+        hasher.update(k.as_bytes());
+        hasher.update(b"=");
+        hasher.update(v.as_bytes());
+        hasher.update(b"\0");
+    }
+    format!("{:x}", hasher.finalize())
 }
 
 fn cmake_config_fingerprint(config: &str) -> String {
