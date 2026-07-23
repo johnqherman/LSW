@@ -33,7 +33,7 @@ impl PathMapper {
                 && comps[..map_comps.len()]
                     .iter()
                     .zip(&map_comps)
-                    .all(|(a, b)| a.eq_ignore_ascii_case(b))
+                    .all(|(a, b)| a.to_lowercase() == b.to_lowercase())
                 && best.is_none_or(|(depth, _)| map_comps.len() > depth)
             {
                 best = Some((map_comps.len(), mapping));
