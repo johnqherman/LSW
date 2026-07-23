@@ -307,5 +307,10 @@ pub(crate) fn write_toml<T: Serialize>(path: &Path, value: &T, what: &'static st
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| ConfigError::write(path, e))?;
     }
-    fs::write(path, text).map_err(|e| ConfigError::write(path, e))
+    let tmp = path.with_extension(match path.extension().and_then(|e| e.to_str()) {
+        Some(ext) => format!("{ext}.tmp"),
+        None => "tmp".to_owned(),
+    });
+    fs::write(&tmp, text).map_err(|e| ConfigError::write(&tmp, e))?;
+    fs::rename(&tmp, path).map_err(|e| ConfigError::write(path, e))
 }
