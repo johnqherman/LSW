@@ -89,34 +89,14 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
     let root = dirs.environment(&opts.name);
     let layout = EnvironmentLayout::new(root.clone());
 
-    if layout.manifest().is_file() {
-        if opts.force {
-            fs::remove_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
-        } else {
-            return Err(Error::EnvironmentExists {
-                name: opts.name.clone(),
-            });
-        }
+    if layout.manifest().is_file() && !opts.force {
+        return Err(Error::EnvironmentExists {
+            name: opts.name.clone(),
+        });
     }
-
-    for dir in dirs.managed_dirs() {
-        fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
-    }
-    fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
-    fs::create_dir_all(layout.logs()).map_err(|e| Error::io(layout.logs(), e))?;
 
     let runtime_provider = lsw_runtime::WineRuntime;
     let resolved_runtime = runtime_provider.resolve()?;
-    runtime_provider.prepare(&layout.prefix())?;
-
-    for dir in [layout.src(), layout.temp()] {
-        fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
-    }
-    provision_profile(&layout)?;
-    if !opts.expose_home {
-        harden_profiles(&layout)?;
-    }
-
     let (resolved_toolchain, probe) = match &opts.sdk {
         Some(sdk_name) => {
             validate_name("sdk", sdk_name)?;
@@ -132,6 +112,26 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         }
         None => lsw_toolchain::select(opts.toolchain.as_deref(), opts.arch)?,
     };
+
+    if layout.manifest().is_file() {
+        fs::remove_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
+    }
+
+    for dir in dirs.managed_dirs() {
+        fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
+    }
+    fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
+    fs::create_dir_all(layout.logs()).map_err(|e| Error::io(layout.logs(), e))?;
+
+    runtime_provider.prepare(&layout.prefix())?;
+
+    for dir in [layout.src(), layout.temp()] {
+        fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
+    }
+    provision_profile(&layout)?;
+    if !opts.expose_home {
+        harden_profiles(&layout)?;
+    }
 
     let manifest = EnvironmentManifest {
         name: opts.name.clone(),
