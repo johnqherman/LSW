@@ -7,6 +7,7 @@ use crate::envops::{self, Environment};
 use crate::error::{Error, Result};
 use crate::project::Project;
 
+pub mod aot;
 mod lockfile;
 mod toolchain;
 
@@ -119,6 +120,7 @@ pub struct BuildOptions {
     pub system: Option<String>,
     pub update_lock: bool,
     pub reproducible: bool,
+    pub aot: bool,
 }
 
 #[derive(Debug)]
@@ -251,22 +253,21 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                     arch: env.manifest.target_arch.to_string(),
                 }
             })?;
-            run_step(
-                project,
-                env,
-                &tc,
-                &[
-                    "dotnet".to_owned(),
-                    "publish".to_owned(),
-                    "-c".to_owned(),
-                    "Debug".to_owned(),
-                    "-r".to_owned(),
-                    rid.to_owned(),
-                    "--self-contained".to_owned(),
-                    "true".to_owned(),
-                ],
-                &mut commands,
-            )?;
+            let mut args = vec![
+                "dotnet".to_owned(),
+                "publish".to_owned(),
+                "-c".to_owned(),
+                "Debug".to_owned(),
+                "-r".to_owned(),
+                rid.to_owned(),
+                "--self-contained".to_owned(),
+                "true".to_owned(),
+            ];
+            if opts.aot || project.manifest.toolchain.aot {
+                let setup = aot::prepare(project, env, &tc)?;
+                args.extend(aot::publish_args(&setup));
+            }
+            run_step(project, env, &tc, &args, &mut commands)?;
             artifact_dir = project.root.join("bin");
         }
         BuildSystem::Meson => {

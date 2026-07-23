@@ -10,6 +10,7 @@ pub(crate) fn build(
     system: &Option<String>,
     update_lock: &bool,
     reproducible: &bool,
+    aot: &bool,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
@@ -21,6 +22,7 @@ pub(crate) fn build(
             system: system.clone(),
             update_lock: *update_lock,
             reproducible: *reproducible,
+            aot: *aot,
         },
     )?;
     if format == Format::Json {

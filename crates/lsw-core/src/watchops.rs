@@ -28,6 +28,7 @@ fn rebuild(project: &Project, env: &Environment) {
         system: None,
         update_lock: false,
         reproducible: false,
+        aot: false,
     };
     match buildops::build(project, env, &opts) {
         Ok(report) => {

@@ -225,6 +225,9 @@ pub enum Error {
 
     #[error("LSW2040: installer verification failed during {stage}: {detail}")]
     InstallVerifyFailed { stage: String, detail: String },
+
+    #[error("LSW2041: NativeAOT cross-compilation is unavailable: {detail}")]
+    AotUnsupported { detail: String },
 }
 
 impl Error {

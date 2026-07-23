@@ -81,6 +81,7 @@ pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
             system: None,
             update_lock: false,
             reproducible: false,
+            aot: false,
         },
     )?;
     run_on_host(project, &build.artifacts)

@@ -56,6 +56,9 @@ pub(crate) enum Cmd {
         /// Zero PE timestamps for reproducible, byte-identical artifacts.
         #[arg(long)]
         reproducible: bool,
+        /// Compile C# with NativeAOT to a native PE (dotnet projects only).
+        #[arg(long)]
+        aot: bool,
     },
     /// Run an executable (PE via the Windows runtime, ELF natively).
     Run {

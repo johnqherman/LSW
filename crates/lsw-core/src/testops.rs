@@ -54,6 +54,7 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
             system: None,
             update_lock: false,
             reproducible: false,
+            aot: false,
         },
     )?;
     let build = Component {
