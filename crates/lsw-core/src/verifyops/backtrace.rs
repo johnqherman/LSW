@@ -42,9 +42,7 @@ pub fn native_backtrace(
     };
     let transport = cfg.transport.as_deref().unwrap_or("ssh");
     if transport != "ssh" {
-        return Err(Error::UnsupportedTransport {
-            transport: transport.to_owned(),
-        });
+        return Ok(None);
     }
     if which("ssh").is_none() {
         return Err(Error::ToolMissing {

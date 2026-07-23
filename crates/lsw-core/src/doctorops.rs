@@ -230,11 +230,21 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
         Some(v) if v.host.is_some() => {
             let host = v.host.as_deref().unwrap_or("");
             let transport = v.transport.as_deref().unwrap_or("ssh");
-            row(
-                "Verification host",
-                format!("{host} (transport: {transport})"),
-                Status::Ok,
-            )
+            if matches!(transport, "ssh" | "winrm" | "https") {
+                row(
+                    "Verification host",
+                    format!("{host} (transport: {transport})"),
+                    Status::Ok,
+                )
+            } else {
+                row(
+                    "Verification host",
+                    format!(
+                        "{host} (unsupported transport '{transport}'; use ssh, winrm, or https)"
+                    ),
+                    Status::Fail,
+                )
+            }
         }
         _ => row(
             "Verification host",
