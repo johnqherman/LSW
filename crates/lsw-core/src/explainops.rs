@@ -361,6 +361,11 @@ const TABLE: &[Explanation] = &[
         summary: "a custom [filesystem] project_drive/mount_project was set but is not supported",
         hint: "use project_drive = \"C:\" and mount_project = \"/src\" (the project mounts at C:\\src\\<name>)",
     },
+    Explanation {
+        code: "LSW2044",
+        summary: "env restore cannot reconstruct an SDK/MSVC toolchain (lsw.lock has no SDK identity)",
+        hint: "re-import the SDK and recreate the environment with `lsw env create <name> --sdk <name>`",
+    },
 ];
 
 #[cfg(test)]
