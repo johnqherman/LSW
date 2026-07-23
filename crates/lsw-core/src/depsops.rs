@@ -48,7 +48,9 @@ fn resolve_dll(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
             continue;
         };
         for entry in entries.flatten() {
-            if entry.file_name().to_string_lossy().to_ascii_lowercase() == wanted {
+            if entry.file_name().to_string_lossy().to_ascii_lowercase() == wanted
+                && entry.path().is_file()
+            {
                 return Some(entry.path());
             }
         }
@@ -202,7 +204,14 @@ fn curl_download(url: &str, dest: &Path) -> Result<()> {
         std::fs::create_dir_all(parent).map_err(|e| Error::io(parent.to_path_buf(), e))?;
     }
     let out = std::process::Command::new("curl")
-        .args(["-fsSL", "--retry", "2", "-o"])
+        .args([
+            "-fsSL",
+            "--retry",
+            "2",
+            "--max-filesize",
+            "1073741824",
+            "-o",
+        ])
         .arg(dest)
         .arg(url)
         .output()
@@ -277,10 +286,29 @@ fn resolve(dirs: &lsw_config::Dirs, repo: &str, prefix: &str, name: &str) -> Res
 
 fn sha256_of(path: &Path) -> Result<String> {
     use sha2::{Digest, Sha256};
-    let bytes = std::fs::read(path).map_err(|e| Error::io(path.to_path_buf(), e))?;
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).map_err(|e| Error::io(path.to_path_buf(), e))?;
     let mut hasher = Sha256::new();
-    hasher.update(&bytes);
+    let mut buf = [0u8; 65536];
+    loop {
+        let n = file
+            .read(&mut buf)
+            .map_err(|e| Error::io(path.to_path_buf(), e))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn is_safe_filename(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && !name.contains('/')
+        && !name.contains('\\')
+        && !Path::new(name).is_absolute()
 }
 
 pub fn add(
@@ -291,6 +319,12 @@ pub fn add(
 ) -> Result<PkgRef> {
     let (repo, prefix) = repo_for(arch)?;
     let pkg = resolve(dirs, repo, prefix, name)?;
+    if !is_safe_filename(&pkg.filename) {
+        return Err(Error::DepNotFound {
+            name: name.to_owned(),
+            repo: repo.to_owned(),
+        });
+    }
     let cached = dirs.cache.join("msys2").join(repo).join(&pkg.filename);
     if !cached.is_file() {
         curl_download(&format!("{MIRROR}/{repo}/{}", pkg.filename), &cached)?;
