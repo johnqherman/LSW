@@ -6,7 +6,15 @@ use lsw_core::Dirs;
 use crate::cli::PackageTargetArg;
 use crate::{active_env, cwd};
 
-pub(crate) fn package(target: &PackageTargetArg, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
+pub(crate) fn package(
+    target: &PackageTargetArg,
+    verify: bool,
+    dirs: &Dirs,
+) -> lsw_core::Result<ExitCode> {
+    if verify && !matches!(target, PackageTargetArg::Msi) {
+        eprintln!("--verify requires --target msi");
+        return Ok(ExitCode::FAILURE);
+    }
     let (p, env) = active_env(dirs)?;
     let target = match target {
         PackageTargetArg::PortableDirectory => {
@@ -29,6 +37,20 @@ pub(crate) fn package(target: &PackageTargetArg, dirs: &Dirs) -> lsw_core::Resul
     }
     if let Some(msix) = &report.msix {
         println!("MSIX:      {} (self-signed)", msix.display());
+    }
+    if verify && let Some(msi) = &report.msi {
+        let check = lsw_core::installops::verify_msi(
+            dirs,
+            &env,
+            &p.manifest.project.name,
+            msi,
+            &report.files,
+        )?;
+        println!(
+            "Verified:  installed {} file(s) to {}, uninstalled clean",
+            check.files.len(),
+            check.install_dir.display()
+        );
     }
     Ok(ExitCode::SUCCESS)
 }

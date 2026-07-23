@@ -214,6 +214,13 @@ lsw package --target msi                   # Windows Installer (needs wixl/msito
 lsw package --target msix                  # signed MSIX (needs zip, osslsigncode, openssl)
 ```
 
+`lsw package --target msi --verify` does an install test of the MSI before it
+reports success. It clones the active environment to a scratch prefix. It runs
+`msiexec /i` quietly. It makes sure that each packaged file is under Program
+Files. It uninstalls with `msiexec /x`. It makes sure that no files remain. It
+removes the scratch environment. Failures show as `LSW2040` with the msiexec
+output.
+
 LSW builds MSIX packages natively (manifest, block map, OPC zip). LSW signs
 them with a cached self-signed identity (`~/.local/share/lsw/msix/`).
 `lsw sign <pe> [--publisher <subject>]` does the same for one binary.

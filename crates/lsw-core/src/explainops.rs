@@ -106,6 +106,11 @@ const TABLE: &[Explanation] = &[
         summary: "an invalid [sandbox] network value was set",
         hint: "use network = \"host\", \"isolated\", or \"none\"",
     },
+    Explanation {
+        code: "LSW2040",
+        summary: "the MSI failed install/uninstall verification in a scratch environment",
+        hint: "inspect the msiexec output in the error; rerun `lsw package --target msi --verify`",
+    },
 ];
 
 #[cfg(test)]
