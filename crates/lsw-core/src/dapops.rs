@@ -16,6 +16,7 @@ const REGISTER_NAMES: [&str; 17] = [
 ];
 
 const MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_HEADER_BYTES: usize = 8 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProtocolMessage {
@@ -42,11 +43,19 @@ pub fn read_message<R: BufRead>(reader: &mut R) -> Result<Option<ProtocolMessage
     let mut content_length: Option<usize> = None;
     loop {
         let mut line = String::new();
-        let n = reader.read_line(&mut line).map_err(|e| Error::Dap {
-            detail: format!("header read failed: {e}"),
-        })?;
+        let n = {
+            let mut limited = reader.by_ref().take((MAX_HEADER_BYTES + 1) as u64);
+            limited.read_line(&mut line).map_err(|e| Error::Dap {
+                detail: format!("header read failed: {e}"),
+            })?
+        };
         if n == 0 {
             return Ok(None);
+        }
+        if line.len() > MAX_HEADER_BYTES {
+            return Err(Error::Dap {
+                detail: format!("DAP header line exceeds the {MAX_HEADER_BYTES}-byte limit"),
+            });
         }
         let trimmed = line.trim_end_matches(['\r', '\n']);
         if trimmed.is_empty() {
