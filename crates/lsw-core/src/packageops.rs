@@ -198,6 +198,7 @@ fn build_msi(
 
 fn render_wxs(name: &str, files: &[String]) -> String {
     let upgrade_code = deterministic_guid(&format!("lsw:{name}:upgrade"));
+    let ename = crate::xml_escape(name);
 
     let mut components = String::new();
     let mut refs = String::new();
@@ -205,9 +206,10 @@ fn render_wxs(name: &str, files: &[String]) -> String {
         let comp_id = format!("cmp{i}");
         let file_id = format!("file{i}");
         let guid = deterministic_guid(&format!("lsw:{name}:{file}"));
+        let efile = crate::xml_escape(file);
         components.push_str(&format!(
             "          <Component Id=\"{comp_id}\" Guid=\"{guid}\">\n\
-             \x20           <File Id=\"{file_id}\" Source=\"{file}\" KeyPath=\"yes\"/>\n\
+             \x20           <File Id=\"{file_id}\" Source=\"{efile}\" KeyPath=\"yes\"/>\n\
              \x20         </Component>\n"
         ));
         refs.push_str(&format!("        <ComponentRef Id=\"{comp_id}\"/>\n"));
@@ -216,18 +218,18 @@ fn render_wxs(name: &str, files: &[String]) -> String {
     format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
          <Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\">\n\
-         \x20 <Product Id=\"*\" Name=\"{name}\" Language=\"1033\" Version=\"1.0.0\"\n\
+         \x20 <Product Id=\"*\" Name=\"{ename}\" Language=\"1033\" Version=\"1.0.0\"\n\
          \x20          Manufacturer=\"LSW\" UpgradeCode=\"{upgrade_code}\">\n\
          \x20   <Package InstallerVersion=\"200\" Compressed=\"yes\" InstallScope=\"perMachine\"/>\n\
          \x20   <Media Id=\"1\" Cabinet=\"main.cab\" EmbedCab=\"yes\"/>\n\
          \x20   <Directory Id=\"TARGETDIR\" Name=\"SourceDir\">\n\
          \x20     <Directory Id=\"ProgramFilesFolder\">\n\
-         \x20       <Directory Id=\"INSTALLDIR\" Name=\"{name}\">\n\
+         \x20       <Directory Id=\"INSTALLDIR\" Name=\"{ename}\">\n\
          {components}\
          \x20       </Directory>\n\
          \x20     </Directory>\n\
          \x20   </Directory>\n\
-         \x20   <Feature Id=\"Main\" Title=\"{name}\" Level=\"1\">\n\
+         \x20   <Feature Id=\"Main\" Title=\"{ename}\" Level=\"1\">\n\
          {refs}\
          \x20   </Feature>\n\
          \x20 </Product>\n\

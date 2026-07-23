@@ -192,6 +192,9 @@ fn manifest_xml(name: &str, publisher: &str, arch: TargetArch, entry: &str, logo
         TargetArch::Armv7 => "arm",
     };
     let ident = sanitize_identity(name);
+    let name = crate::xml_escape(name);
+    let entry = crate::xml_escape(entry);
+    let publisher = crate::xml_escape(publisher);
     format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
 <Package xmlns=\"http://schemas.microsoft.com/appx/manifest/foundation/windows10\" \
@@ -244,7 +247,7 @@ HashMethod=\"http://www.w3.org/2001/04/xmlenc#sha256\">\n",
         let lfh = 30 + file.len();
         out.push_str(&format!(
             "  <File Name=\"{}\" Size=\"{}\" LfhSize=\"{}\">\n",
-            file.replace('/', "\\"),
+            crate::xml_escape(&file.replace('/', "\\")),
             data.len(),
             lfh
         ));

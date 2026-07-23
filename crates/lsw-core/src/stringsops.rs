@@ -25,22 +25,24 @@ pub fn extract_strings(data: &[u8], min_len: usize) -> Vec<String> {
         out.push(std::mem::take(&mut cur));
     }
 
-    let mut cur = String::new();
-    let mut i = 0;
-    while i + 1 < data.len() {
-        let lo = data[i];
-        let hi = data[i + 1];
-        if hi == 0 && is_printable(lo) {
-            cur.push(lo as char);
-        } else if cur.len() >= min_len {
-            out.push(std::mem::take(&mut cur));
-        } else {
-            cur.clear();
+    for start in [0usize, 1] {
+        let mut cur = String::new();
+        let mut i = start;
+        while i + 1 < data.len() {
+            let lo = data[i];
+            let hi = data[i + 1];
+            if hi == 0 && is_printable(lo) {
+                cur.push(lo as char);
+            } else if cur.len() >= min_len {
+                out.push(std::mem::take(&mut cur));
+            } else {
+                cur.clear();
+            }
+            i += 2;
         }
-        i += 2;
-    }
-    if cur.len() >= min_len {
-        out.push(cur);
+        if cur.len() >= min_len {
+            out.push(std::mem::take(&mut cur));
+        }
     }
 
     out
@@ -65,5 +67,8 @@ mod tests {
 
         let wide = b"H\x00e\x00l\x00p\x00\x00\x00";
         assert!(extract_strings(wide, 4).contains(&"Help".to_owned()));
+
+        let odd = b"\x01H\x00e\x00l\x00p\x00\x00";
+        assert!(extract_strings(odd, 4).contains(&"Help".to_owned()));
     }
 }
