@@ -42,6 +42,10 @@ fn meson_cpu_family(arch: TargetArch) -> &'static str {
     }
 }
 
+fn meson_escape(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
 pub(crate) fn write_meson_cross_file(
     path: &Path,
     tc: &ResolvedToolchain,
@@ -51,8 +55,8 @@ pub(crate) fn write_meson_cross_file(
     let family = meson_cpu_family(arch);
     let text = format!(
         "[binaries]\nc = '{cc}'\ncpp = '{cxx}'\nar = '{triple}-ar'\nstrip = '{triple}-strip'\nwindres = '{triple}-windres'\n\n[host_machine]\nsystem = 'windows'\ncpu_family = '{family}'\ncpu = '{family}'\nendian = 'little'\n",
-        cc = tc.cc.display(),
-        cxx = tc.cxx.display(),
+        cc = meson_escape(&tc.cc.display().to_string()),
+        cxx = meson_escape(&tc.cxx.display().to_string()),
     );
     fs::write(path, text)
 }

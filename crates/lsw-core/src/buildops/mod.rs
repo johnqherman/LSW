@@ -358,7 +358,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
 
     if opts.reproducible {
         for artifact in &artifacts {
-            let _ = lsw_pe::set_coff_timestamp(&project.root.join(artifact), 0);
+            lsw_pe::set_coff_timestamp(&project.root.join(artifact), 0)?;
         }
     }
 

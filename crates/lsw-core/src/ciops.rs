@@ -3,6 +3,10 @@ use std::path::{Path, PathBuf};
 use crate::error::{Error, Result};
 
 pub fn github_workflow(project_name: &str) -> String {
+    let project_name = format!(
+        "\"{}\"",
+        project_name.replace('\\', "\\\\").replace('"', "\\\"")
+    );
     format!(
         r#"name: {project_name}
 
@@ -70,7 +74,7 @@ mod tests {
     #[test]
     fn github_workflow_names_the_project_and_key_steps() {
         let yaml = github_workflow("demo");
-        assert!(yaml.starts_with("name: demo"));
+        assert!(yaml.starts_with("name: \"demo\""));
         assert!(yaml.contains("lsw build"));
         assert!(yaml.contains("lsw test --headless"));
         assert!(yaml.contains("mingw-w64"));
