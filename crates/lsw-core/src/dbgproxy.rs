@@ -255,6 +255,16 @@ impl RspConn {
         Ok(out)
     }
 
+    pub(crate) fn select_thread(&mut self, id: i64) {
+        let _ = self.command(&format!("Hg{id:x}"));
+    }
+
+    pub(crate) fn current_thread(&mut self) -> Option<i64> {
+        let reply = self.command("qC").ok()?;
+        let text = std::str::from_utf8(&reply).ok()?;
+        parse_thread_id(text.strip_prefix("QC").unwrap_or(text))
+    }
+
     pub(crate) fn kill(&mut self) {
         let pkt = encode_packet(b"k");
         let _ = self.stream.write_all(&pkt);
