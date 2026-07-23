@@ -31,7 +31,9 @@ const JSONRPC_VERSION: &str = "2.0";
 #[derive(Debug, Deserialize)]
 struct Request {
     #[serde(default)]
-    id: u64,
+    jsonrpc: Option<String>,
+    #[serde(default)]
+    id: Option<u64>,
     method: String,
     #[serde(default)]
     #[allow(dead_code)]
@@ -154,7 +156,9 @@ fn handle_connection(stream: UnixStream, dirs: &Dirs, running: &Arc<AtomicBool>)
         if line.is_empty() {
             continue;
         }
-        let response = dispatch(line, dirs, running);
+        let Some(response) = dispatch(line, dirs, running) else {
+            continue;
+        };
         let mut out = serde_json::to_string(&response).expect("response serializes");
         out.push('\n');
         if writer.write_all(out.as_bytes()).is_err() {
@@ -167,15 +171,24 @@ fn handle_connection(stream: UnixStream, dirs: &Dirs, running: &Arc<AtomicBool>)
     }
 }
 
-fn dispatch(line: &str, dirs: &Dirs, running: &Arc<AtomicBool>) -> Response {
+fn dispatch(line: &str, dirs: &Dirs, running: &Arc<AtomicBool>) -> Option<Response> {
     let request: Request = match serde_json::from_str(line) {
         Ok(r) => r,
         Err(e) => {
-            return Response::err(0, -32700, format!("parse error: {e}"));
+            return Some(Response::err(0, -32700, format!("parse error: {e}")));
         }
     };
-    let id = request.id;
-    match request.method.as_str() {
+    let id = request.id?;
+    if let Some(version) = &request.jsonrpc
+        && version != JSONRPC_VERSION
+    {
+        return Some(Response::err(
+            id,
+            -32600,
+            "invalid request: jsonrpc must be \"2.0\"".to_owned(),
+        ));
+    }
+    Some(match request.method.as_str() {
         "version" => Response::ok(
             id,
             serde_json::json!({
@@ -196,7 +209,7 @@ fn dispatch(line: &str, dirs: &Dirs, running: &Arc<AtomicBool>) -> Response {
             Response::ok(id, serde_json::json!({ "stopping": true }))
         }
         other => Response::err(id, -32601, format!("unknown method '{other}'")),
-    }
+    })
 }
 
 pub struct DaemonClient {

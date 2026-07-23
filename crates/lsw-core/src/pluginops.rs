@@ -35,7 +35,7 @@ struct Request<'a> {
 #[derive(Deserialize)]
 struct Response {
     #[serde(default)]
-    id: u64,
+    id: Option<u64>,
     #[serde(default)]
     result: Option<serde_json::Value>,
     #[serde(default)]
@@ -158,10 +158,13 @@ impl Plugin {
 
         let response: Response = serde_json::from_slice(&raw)
             .map_err(|e| plugin_err(&self.name, format!("malformed response: {e}")))?;
-        if response.id != id {
+        if response.id != Some(id) {
             return Err(plugin_err(
                 &self.name,
-                format!("response id {} does not match request id {id}", response.id),
+                format!(
+                    "response id {:?} does not match request id {id}",
+                    response.id
+                ),
             ));
         }
         if let Some(error) = response.error {
