@@ -154,6 +154,12 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
     }
     let mut commands = Vec::new();
     let mut artifact_dir = project.root.join("build");
+    let flat_layout = matches!(system, BuildSystem::Make | BuildSystem::Ninja);
+    let pre_build = if flat_layout {
+        artifact_mtimes(&project.root)
+    } else {
+        std::collections::HashMap::new()
+    };
     match system {
         BuildSystem::Explicit => {
             let spec = explicit.ok_or(Error::NoBuildSystem)?;
@@ -317,6 +323,39 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
     }
 
     let mut artifacts = find_artifacts(&artifact_dir, &project.root);
+    if flat_layout {
+        let manifest = project.root.join("build").join(".lsw-artifacts");
+        let touched: Vec<PathBuf> = artifacts
+            .iter()
+            .filter(|rel| {
+                let abs = project.root.join(rel);
+                match (file_mtime(&abs), pre_build.get(abs.as_path())) {
+                    (Some(now), Some(before)) => now > *before,
+                    (Some(_), None) => true,
+                    _ => false,
+                }
+            })
+            .cloned()
+            .collect();
+        if !touched.is_empty() {
+            artifacts = touched;
+            let recorded = artifacts
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("\n");
+            let _ = fs::write(&manifest, recorded);
+        } else if let Ok(recorded) = fs::read_to_string(&manifest) {
+            let remembered: Vec<PathBuf> = recorded
+                .lines()
+                .map(PathBuf::from)
+                .filter(|rel| project.root.join(rel).is_file())
+                .collect();
+            if !remembered.is_empty() {
+                artifacts = remembered;
+            }
+        }
+    }
     verify_artifacts_are_pe(project, &artifacts)?;
 
     if opts.reproducible {
@@ -356,11 +395,6 @@ fn verify_artifacts_are_pe(project: &Project, artifacts: &[PathBuf]) -> Result<(
     Ok(())
 }
 
-/// The subprocess that configures CMake inherits LSW's ambient environment, and a
-/// project's own CMakeLists.txt may read any `$ENV{...}` var, so no fixed allowlist of
-/// "cmake-affecting" variables can be complete. Hash the entire sorted environment
-/// instead: deterministic, complete, and it only ever over-invalidates (a cheap
-/// reconfigure) rather than leaving a stale build directory.
 fn ambient_env_fingerprint() -> String {
     use sha2::Digest;
     use std::os::unix::ffi::OsStrExt;
@@ -402,6 +436,22 @@ fn write_cmake_toolchain_marker(build_dir: &Path, config: &str) {
         build_dir.join(".lsw-toolchain"),
         cmake_config_fingerprint(config),
     );
+}
+
+fn file_mtime(path: &Path) -> Option<std::time::SystemTime> {
+    fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+fn artifact_mtimes(root: &Path) -> std::collections::HashMap<PathBuf, std::time::SystemTime> {
+    let mut out = std::collections::HashMap::new();
+    let mut paths = Vec::new();
+    walk(root, &mut paths);
+    for p in paths {
+        if let Some(t) = file_mtime(&p) {
+            out.insert(p, t);
+        }
+    }
+    out
 }
 
 fn find_artifacts(build_dir: &std::path::Path, project_root: &std::path::Path) -> Vec<PathBuf> {

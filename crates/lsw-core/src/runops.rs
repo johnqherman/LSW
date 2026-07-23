@@ -386,8 +386,6 @@ static SHELL_CHILD_PID: std::sync::atomic::AtomicI32 = std::sync::atomic::Atomic
 static LAST_SIGINT_MS: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
 const SIGINT_EXIT_WINDOW_MS: i64 = 2000;
 
-/// Serializes interactive-shell sessions: the signal guards mutate process-global
-/// signal dispositions, so only one session may own them at a time.
 static SHELL_SESSION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 extern "C" fn shell_sigint(_: libc::c_int) {
