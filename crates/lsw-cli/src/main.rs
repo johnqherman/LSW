@@ -163,7 +163,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Completions { shell } => cmd::tooling::completions(shell),
         Cmd::Man { dir } => cmd::tooling::man(dir),
         Cmd::Install { prefix } => cmd::tooling::install(prefix),
-        Cmd::Explain { code } => cmd::tooling::explain(code),
+        Cmd::Explain { code } => cmd::tooling::explain(code, cli.format),
     }
 }
 
