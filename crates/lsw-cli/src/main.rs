@@ -81,7 +81,8 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             system,
             update_lock,
             reproducible,
-        } => cmd::build::build(system, update_lock, reproducible, &dirs, cli.format),
+            aot,
+        } => cmd::build::build(system, update_lock, reproducible, aot, &dirs, cli.format),
         Cmd::Run {
             program,
             args,

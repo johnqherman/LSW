@@ -107,6 +107,11 @@ const TABLE: &[Explanation] = &[
         hint: "use network = \"host\", \"isolated\", or \"none\"",
     },
     Explanation {
+        code: "LSW2041",
+        summary: "C# NativeAOT cross-compilation prerequisites are missing",
+        hint: "needs x86_64 target, clang, lld-link, and a mingw-w64 sysroot; see the error detail",
+    },
+    Explanation {
         code: "LSW2040",
         summary: "the MSI failed install/uninstall verification in a scratch environment",
         hint: "inspect the msiexec output in the error; rerun `lsw package --target msi --verify`",

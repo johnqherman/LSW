@@ -75,6 +75,7 @@ pub(crate) fn dotnet(op: &DotnetCmd, dirs: &Dirs, format: Format) -> lsw_core::R
                 println!("  Runtime ID        {}", mark(report.runtime_identifier));
                 println!("  Self-contained    {}", mark(report.self_contained));
                 println!("  Runtime execution {}", mark(report.runtime_execution));
+                println!("  NativeAOT         {}", mark(report.native_aot));
                 println!("  Native validation {}", mark(report.native_validation));
             }
             Ok(ExitCode::SUCCESS)

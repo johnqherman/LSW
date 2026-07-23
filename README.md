@@ -50,7 +50,7 @@ library.
 ## Command reference
 
 - **Build / run** - `lsw build [--system cmake|cargo|make|ninja|meson|zig|dotnet]
-  [--reproducible] [--update-lock]` builds the project. `lsw run
+  [--reproducible] [--update-lock] [--aot]` builds the project. `lsw run
   [--host|--windows] [--sandbox strict] [--headless] <program>` starts a
   program. `lsw exec ... <cmd>` runs one command. `lsw test [--headless]` runs
   the tests and shows the true compatibility status. `lsw shell [--windows]`
@@ -128,12 +128,21 @@ lsw dotnet doctor                       # report C#->Windows toolchain readiness
 ```
 
 Builds are self-contained by default. Thus the artifact runs under Wine
-without a .NET runtime in the prefix (LSW ships no runtime). C# is managed
-code. It is not compiled to native code as the other languages are (cross-OS
-NativeAOT is not supported). The native apphost launcher contains the runtime.
-Wine gives bad support to the GUI stacks (WPF and WinForms). The supported
-path is console and service apps. Use `lsw verify --native-windows` to get a
-real Windows verdict.
+without a .NET runtime in the prefix (LSW ships no runtime). Wine gives bad
+support to the GUI stacks (WPF and WinForms). The supported path is console
+and service apps. Use `lsw verify --native-windows` to get a real Windows
+verdict.
+
+`lsw build --aot` (or `aot = true` in `[toolchain]`) compiles C# with
+NativeAOT. The output is a native PE, not a managed app. The file is smaller.
+The start is faster. The artifact contains no CLR. The full `inspect`,
+`audit`, and `compat` tooling applies. The .NET SDK does not permit cross-OS
+NativeAOT. LSW makes it possible from Linux without a Microsoft SDK: LSW
+writes the MSVC CRT glue (chkstk, security cookie, TLS directory, CRT
+startup), compiles the glue with the MSVC-ABI codegen of clang, maps the
+mingw-w64 import libraries to their MSVC names, and links with `lld-link`. The
+current scope is x86_64 console apps. The host needs `clang` and `lld-link`.
+`lsw dotnet doctor` shows the NativeAOT row.
 
 **Rust** is a first-class language (`Cargo.toml` found automatically):
 
@@ -240,6 +249,7 @@ api  = "win10"       # -> _WIN32_WINNT/WINVER/NTDDI defines (win7/win8/win10/win
 
 [toolchain]
 link = "dynamic"     # static (default) | dynamic
+aot  = false         # C# NativeAOT (see Languages)
 
 [env.vars]           # extra Windows env vars for run/exec
 RUST_LOG = "debug"

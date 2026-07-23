@@ -174,6 +174,12 @@ pub struct ToolchainSection {
     pub version: Option<String>,
     #[serde(default)]
     pub link: LinkMode,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub aot: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

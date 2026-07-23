@@ -54,6 +54,7 @@ fn e2e_init_build_inspect_audit() {
             system: None,
             update_lock: true,
             reproducible: true,
+            aot: false,
         },
     )
     .unwrap();

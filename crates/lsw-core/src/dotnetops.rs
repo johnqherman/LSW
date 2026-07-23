@@ -111,6 +111,7 @@ pub struct DotnetDoctor {
     pub runtime_identifier: Check,
     pub self_contained: Check,
     pub runtime_execution: Check,
+    pub native_aot: Check,
     pub native_validation: Check,
 }
 
@@ -138,6 +139,11 @@ pub fn doctor(env: &Environment) -> Result<DotnetDoctor> {
             Check::Ok
         } else {
             Check::NotConfigured
+        },
+        native_aot: if which("lld-link").is_some() && which("clang").is_some() {
+            Check::Ok
+        } else {
+            Check::Missing
         },
         native_validation: Check::NotConfigured,
     })

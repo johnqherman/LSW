@@ -96,6 +96,15 @@ mod tests {
     }
 
     #[test]
+    fn toolchain_aot_defaults_false_and_parses() {
+        let m: ProjectManifest = toml::from_str("[project]\nname = \"x\"\n").unwrap();
+        assert!(!m.toolchain.aot);
+        let m: ProjectManifest =
+            toml::from_str("[project]\nname = \"x\"\n[toolchain]\naot = true\n").unwrap();
+        assert!(m.toolchain.aot);
+    }
+
+    #[test]
     fn unknown_manifest_keys_are_rejected() {
         let err = toml::from_str::<ProjectManifest>("[project]\nname = \"x\"\nbogus = 1\n");
         assert!(err.is_err());
