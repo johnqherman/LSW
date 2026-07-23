@@ -112,7 +112,10 @@ impl DebugInfo {
     pub(crate) fn line_to_addr(&self, file: &str, line: u32) -> Option<u64> {
         let mut best: Option<(usize, u32, u64)> = None;
         for delta in 0..=20 {
-            let Some(v) = self.lines.get(&(norm(file), line + delta)) else {
+            let Some(target) = line.checked_add(delta) else {
+                break;
+            };
+            let Some(v) = self.lines.get(&(norm(file), target)) else {
                 continue;
             };
             for (path, addr) in v {
@@ -183,8 +186,8 @@ fn collect_functions<R: gimli::Reader>(
         };
         let high = match entry.attr_value(gimli::DW_AT_high_pc) {
             Ok(Some(gimli::AttributeValue::Addr(a))) => a,
-            Ok(Some(gimli::AttributeValue::Udata(n))) => low + n,
-            _ => low + 1,
+            Ok(Some(gimli::AttributeValue::Udata(n))) => low.saturating_add(n),
+            _ => low.saturating_add(1),
         };
         let name = entry
             .attr(gimli::DW_AT_name)
@@ -255,6 +258,18 @@ mod tests {
         };
         assert_eq!(info.line_to_addr("/src/client/util.c", 10), Some(0x2000));
         assert_eq!(info.line_to_addr("/src/server/util.c", 10), Some(0x1000));
+    }
+
+    #[test]
+    fn line_to_addr_high_line_does_not_overflow() {
+        let info = DebugInfo {
+            image_base: 0,
+            lines: BTreeMap::new(),
+            by_addr: Vec::new(),
+            funcs: Vec::new(),
+        };
+        assert_eq!(info.line_to_addr("a.c", u32::MAX), None);
+        assert_eq!(info.line_to_addr("a.c", u32::MAX - 5), None);
     }
 
     #[test]

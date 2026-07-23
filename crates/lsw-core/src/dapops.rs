@@ -591,7 +591,12 @@ impl<'a> Adapter<'a> {
             }
             let sp = self.current_sp().unwrap_or(start_sp);
             let in_func = self.rip_in_range(start_range);
-            if step_over && !in_func && sp < start_sp {
+            let at_entry = start_range
+                .zip(self.current_rip())
+                .is_some_and(|((low, _), rip)| rip.wrapping_sub(self.slide) == low);
+            let is_call =
+                step_over && start_range.is_some() && sp < start_sp && (!in_func || at_entry);
+            if is_call {
                 if prev_in_func
                     && let Some(ret) = self.read_stack_u64(sp)
                     && let Some(stop) = self.finish_call(ret, start_sp, out)?
