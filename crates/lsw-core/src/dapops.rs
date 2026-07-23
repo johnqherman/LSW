@@ -569,13 +569,19 @@ impl<'a> Adapter<'a> {
         out: &mut Vec<ProtocolMessage>,
     ) -> Result<()> {
         let stop = self.source_step(step_over, out)?;
-        self.report_stop(stop, "step", out);
+        let reason = if matches!(stop, Stop::Signal { signal: 5 }) && self.at_user_breakpoint() {
+            "breakpoint"
+        } else {
+            "step"
+        };
+        self.report_stop(stop, reason, out);
         Ok(())
     }
 
     fn source_step(&mut self, step_over: bool, out: &mut Vec<ProtocolMessage>) -> Result<Stop> {
         let start = self.current_line();
         let start_sp = self.current_sp().unwrap_or(0);
+        let mut prev_sp = start_sp;
         for _ in 0..500_000 {
             let (stop, output) = match self.conn.as_mut() {
                 Some(conn) => conn.resume("s")?,
@@ -585,10 +591,21 @@ impl<'a> Adapter<'a> {
             if !matches!(stop, Stop::Signal { signal: 5 }) {
                 return Ok(stop);
             }
+            if self.at_user_breakpoint() {
+                break;
+            }
             let sp = self.current_sp().unwrap_or(start_sp);
             if step_over && sp < start_sp {
+                if prev_sp >= start_sp
+                    && let Some(ret) = self.read_stack_u64(sp)
+                    && let Some(stop) = self.finish_call(ret, start_sp, out)?
+                {
+                    return Ok(stop);
+                }
+                prev_sp = self.current_sp().unwrap_or(sp);
                 continue;
             }
+            prev_sp = sp;
             let now = self.current_line();
             if now.is_some() && now != start {
                 break;
@@ -600,6 +617,57 @@ impl<'a> Adapter<'a> {
         Ok(Stop::Signal { signal: 5 })
     }
 
+    fn finish_call(
+        &mut self,
+        ret: u64,
+        start_sp: u64,
+        out: &mut Vec<ProtocolMessage>,
+    ) -> Result<Option<Stop>> {
+        let already = self.breakpoints.iter().any(|b| b.verified && b.addr == ret);
+        let temp = match self.conn.as_mut() {
+            Some(conn) if !already => conn.set_breakpoint(ret).is_ok().then_some(ret),
+            _ => None,
+        };
+        if temp.is_none() && !already {
+            return Ok(None);
+        }
+        let mut result = Ok(None);
+        while let Some(conn) = self.conn.as_mut() {
+            let (stop, output) = match conn.resume("c") {
+                Ok(v) => v,
+                Err(e) => {
+                    result = Err(e);
+                    break;
+                }
+            };
+            self.emit_output(&output, out);
+            if !matches!(stop, Stop::Signal { signal: 5 }) || self.at_user_breakpoint() {
+                result = Ok(Some(stop));
+                break;
+            }
+            if self.current_sp().unwrap_or(start_sp) >= start_sp {
+                break;
+            }
+        }
+        if let (Some(addr), Some(conn)) = (temp, self.conn.as_mut()) {
+            let _ = conn.remove_breakpoint(addr);
+        }
+        result
+    }
+
+    fn at_user_breakpoint(&mut self) -> bool {
+        let Some(rip) = self.current_rip() else {
+            return false;
+        };
+        self.breakpoints.iter().any(|b| b.verified && b.addr == rip)
+    }
+
+    fn read_stack_u64(&mut self, addr: u64) -> Option<u64> {
+        let conn = self.conn.as_mut()?;
+        let mem = conn.read_memory(addr, 8).ok()?;
+        Some(u64::from_le_bytes(mem.try_into().ok()?))
+    }
+
     fn step_out_and_report(&mut self, out: &mut Vec<ProtocolMessage>) -> Result<()> {
         let ret = self.return_address();
         let temp = match (ret, self.conn.as_mut()) {
@@ -608,17 +676,18 @@ impl<'a> Adapter<'a> {
             }
             _ => None,
         };
-        let stop = match self.conn.as_mut() {
-            Some(conn) => {
-                let (stop, output) = conn.resume("c")?;
-                if let Some(addr) = temp {
-                    let _ = conn.remove_breakpoint(addr);
-                }
-                self.emit_output(&output, out);
-                stop
+        let (stop, output) = {
+            let Some(conn) = self.conn.as_mut() else {
+                self.report_stop(Stop::Signal { signal: 5 }, "step", out);
+                return Ok(());
+            };
+            let result = conn.resume("c");
+            if let Some(addr) = temp {
+                let _ = conn.remove_breakpoint(addr);
             }
-            None => Stop::Signal { signal: 5 },
+            result?
         };
+        self.emit_output(&output, out);
         self.report_stop(stop, "step", out);
         Ok(())
     }
@@ -636,6 +705,12 @@ impl<'a> Adapter<'a> {
         let conn = self.conn.as_mut()?;
         let regs = conn.read_registers().ok()?;
         amd64::reg(&regs, amd64::RSP)
+    }
+
+    fn current_rip(&mut self) -> Option<u64> {
+        let conn = self.conn.as_mut()?;
+        let regs = conn.read_registers().ok()?;
+        amd64::reg(&regs, amd64::RIP)
     }
 
     fn return_address(&mut self) -> Option<u64> {
@@ -735,12 +810,12 @@ impl<'a> Adapter<'a> {
         let stderr = child.stderr.take().ok_or_else(|| Error::Dap {
             detail: "winedbg produced no stderr".into(),
         })?;
+        self.backend = Some(child);
         let port = read_gdb_port(stderr)?;
         let mut conn = RspConn::connect(port)?;
         self.slide = compute_slide(&mut conn, self.info.as_ref());
         self.program = Some(program);
         self.conn = Some(conn);
-        self.backend = Some(child);
         Ok(())
     }
 }
@@ -757,25 +832,37 @@ fn z_drive_path(path: &Path) -> String {
 }
 
 fn read_gdb_port<R: Read + Send + 'static>(stream: R) -> Result<u16> {
-    let mut reader = BufReader::new(stream);
-    for _ in 0..200 {
-        let mut line = String::new();
-        let n = reader.read_line(&mut line).map_err(|e| Error::Dap {
-            detail: format!("reading winedbg output failed: {e}"),
-        })?;
-        if n == 0 {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stream);
+        let mut forward = true;
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {
+                    if forward && tx.send(line).is_err() {
+                        forward = false;
+                    }
+                }
+            }
+        }
+    });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
             break;
         }
+        let Ok(line) = rx.recv_timeout(remaining) else {
+            break;
+        };
         if let Some(idx) = line.find("localhost:") {
             let digits: String = line[idx + "localhost:".len()..]
                 .chars()
                 .take_while(|c| c.is_ascii_digit())
                 .collect();
             if let Ok(port) = digits.parse::<u16>() {
-                std::thread::spawn(move || {
-                    let mut sink = Vec::new();
-                    let _ = reader.read_to_end(&mut sink);
-                });
                 return Ok(port);
             }
         }

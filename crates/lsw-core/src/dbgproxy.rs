@@ -1,6 +1,5 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::time::Duration;
 
 use crate::error::{Error, Result};
 
@@ -52,21 +51,24 @@ pub(crate) enum Stop {
     Terminated { signal: u8 },
 }
 
+fn signal_byte(payload: &[u8]) -> Option<u8> {
+    let hex = payload.get(1..3)?;
+    hex_to_bytes(std::str::from_utf8(hex).ok()?)?
+        .first()
+        .copied()
+}
+
 pub(crate) fn parse_stop(payload: &[u8]) -> Option<Stop> {
     match payload.first()? {
-        b'S' => hex_to_bytes(std::str::from_utf8(&payload[1..3]).ok()?)
-            .map(|b| Stop::Signal { signal: b[0] }),
-        b'T' => hex_to_bytes(std::str::from_utf8(&payload[1..3]).ok()?)
-            .map(|b| Stop::Signal { signal: b[0] }),
+        b'S' | b'T' => signal_byte(payload).map(|signal| Stop::Signal { signal }),
         b'W' => {
-            let code = std::str::from_utf8(&payload[1..]).ok()?;
+            let code = std::str::from_utf8(payload.get(1..)?).ok()?;
             let code = code.split(';').next().unwrap_or("0");
             i64::from_str_radix(code, 16)
                 .ok()
                 .map(|c| Stop::Exited { code: c as i32 })
         }
-        b'X' => hex_to_bytes(std::str::from_utf8(&payload[1..3]).ok()?)
-            .map(|b| Stop::Terminated { signal: b[0] }),
+        b'X' => signal_byte(payload).map(|signal| Stop::Terminated { signal }),
         _ => None,
     }
 }
@@ -83,9 +85,6 @@ impl RspConn {
                 "cannot connect to the wine gdb stub on port {port}: {e}"
             ))
         })?;
-        stream
-            .set_read_timeout(Some(Duration::from_secs(30)))
-            .map_err(|e| dap(format!("set_read_timeout failed: {e}")))?;
         Ok(Self {
             stream,
             no_ack: false,
@@ -123,14 +122,17 @@ impl RspConn {
             while b != b'$' {
                 b = self.read_byte()?;
             }
+            let mut raw = Vec::new();
             let mut payload = Vec::new();
             loop {
                 let c = self.read_byte()?;
                 if c == b'#' {
                     break;
                 }
+                raw.push(c);
                 if c == b'}' {
                     let esc = self.read_byte()?;
+                    raw.push(esc);
                     payload.push(esc ^ 0x20);
                 } else {
                     payload.push(c);
@@ -138,15 +140,14 @@ impl RspConn {
             }
             let hi = self.read_byte()?;
             let lo = self.read_byte()?;
+            let want = format!("{hi}{lo}", hi = hi as char, lo = lo as char);
+            let got = format!("{:02x}", checksum(&raw));
+            let valid = want.eq_ignore_ascii_case(&got);
             if !self.no_ack {
-                self.stream
-                    .write_all(b"+")
-                    .map_err(|e| dap(format!("ack write failed: {e}")))?;
+                self.stream.write_all(if valid { b"+" } else { b"-" }).ok();
                 self.stream.flush().ok();
             }
-            let want = format!("{hi}{lo}", hi = hi as char, lo = lo as char);
-            let got = format!("{:02x}", checksum(&payload));
-            if want.eq_ignore_ascii_case(&got) {
+            if valid {
                 return Ok(payload);
             }
         }
@@ -238,7 +239,9 @@ impl RspConn {
     }
 
     pub(crate) fn kill(&mut self) {
-        let _ = self.send(b"k");
+        let pkt = encode_packet(b"k");
+        let _ = self.stream.write_all(&pkt);
+        let _ = self.stream.flush();
     }
 }
 
@@ -290,6 +293,20 @@ mod tests {
         assert_eq!(parse_stop(b"W00"), Some(Stop::Exited { code: 0 }));
         assert_eq!(parse_stop(b"W2a"), Some(Stop::Exited { code: 42 }));
         assert_eq!(parse_stop(b"X0b"), Some(Stop::Terminated { signal: 11 }));
+    }
+
+    #[test]
+    fn parse_stop_truncated_does_not_panic() {
+        for p in [&b"S"[..], b"S0", b"T", b"T0", b"X", b"X0", b"W", b""] {
+            assert_eq!(parse_stop(p), None);
+        }
+    }
+
+    #[test]
+    fn output_packet_distinguishes_ok() {
+        assert_eq!(output_packet(b"OK"), None);
+        assert_eq!(output_packet(b"O4869"), Some(b"Hi".to_vec()));
+        assert_eq!(output_packet(b"O"), None);
     }
 
     #[test]
