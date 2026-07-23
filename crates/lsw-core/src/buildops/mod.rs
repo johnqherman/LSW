@@ -14,7 +14,7 @@ mod toolchain;
 pub(crate) use lockfile::check_lock;
 
 use lockfile::{stamp_build_dir, sync_lockfile};
-use toolchain::{effective_toolchain, run_step, write_meson_cross_file};
+use toolchain::{effective_toolchain, run_step, run_step_with_env, write_meson_cross_file};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuildSystem {
@@ -176,7 +176,27 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 }
             })?;
             crate::rustops::ensure_target(env.manifest.target_arch)?;
-            run_step(
+            let default_linker = format!("{}-gcc", env.manifest.target_arch.mingw_triple());
+            let cargo_env = if which(&default_linker).is_some() {
+                Vec::new()
+            } else {
+                let triple_env = triple.to_uppercase().replace('-', "_");
+                let link_args: String = tc
+                    .c_flags
+                    .iter()
+                    .chain(&tc.link_flags)
+                    .map(|f| format!("-Clink-arg={f}"))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                vec![
+                    (
+                        format!("CARGO_TARGET_{triple_env}_LINKER"),
+                        tc.cc.display().to_string(),
+                    ),
+                    (format!("CARGO_TARGET_{triple_env}_RUSTFLAGS"), link_args),
+                ]
+            };
+            run_step_with_env(
                 project,
                 env,
                 &tc,
@@ -186,6 +206,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                     "--target".to_owned(),
                     triple.to_owned(),
                 ],
+                &cargo_env,
                 &mut commands,
             )?;
             artifact_dir = project.root.join("target").join(triple).join("debug");
@@ -290,8 +311,11 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 let setup = aot::prepare(project, env, &tc)?;
                 args.extend(aot::publish_args(&setup));
             }
+            let publish_dir = project.root.join("bin").join("lsw-publish");
+            args.push("-o".to_owned());
+            args.push(publish_dir.display().to_string());
             run_step(project, env, &tc, &args, &mut commands)?;
-            artifact_dir = project.root.join("bin");
+            artifact_dir = publish_dir;
         }
         BuildSystem::Meson => {
             let cross_file = env.layout.root.join("meson-cross.ini");

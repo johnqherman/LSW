@@ -274,12 +274,19 @@ pub fn clone_env(dirs: &Dirs, src: &str, dst: &str, force: bool) -> Result<Envir
 
 pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateReport> {
     let lock = Lockfile::load(&project.lockfile_path())?;
+    let provider = lock.toolchain.provider.clone();
+    if !matches!(provider.as_str(), "llvm-mingw" | "mingw-gcc") {
+        return Err(Error::RestoreUnsupportedToolchain {
+            provider,
+            name: name.to_owned(),
+        });
+    }
     let report = create(
         dirs,
         &EnvCreateOptions {
             name: name.to_owned(),
             arch: lock.target_arch,
-            toolchain: Some(lock.toolchain.provider.clone()),
+            toolchain: Some(provider),
             sdk: None,
             force: true,
             expose_home: false,

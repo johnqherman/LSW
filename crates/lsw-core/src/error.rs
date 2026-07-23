@@ -238,6 +238,12 @@ pub enum Error {
          Only project_drive = \"C:\" and mount_project = \"/src\" work today; the project mounts at C:\\src\\<name>"
     )]
     UnsupportedFilesystem { drive: String, mount: String },
+
+    #[error(
+        "LSW2044: cannot restore the SDK/MSVC toolchain '{provider}' from lsw.lock (the lockfile records no SDK identity)\n\
+         Recreate it with: lsw sdk import <name> --from <path>  then  lsw env create {name} --sdk <name>"
+    )]
+    RestoreUnsupportedToolchain { provider: String, name: String },
 }
 
 impl Error {

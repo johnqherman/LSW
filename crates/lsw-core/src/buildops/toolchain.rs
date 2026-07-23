@@ -80,6 +80,17 @@ pub(crate) fn run_step(
     argv: &[String],
     commands: &mut Vec<String>,
 ) -> Result<()> {
+    run_step_with_env(project, env, tc, argv, &[], commands)
+}
+
+pub(crate) fn run_step_with_env(
+    project: &Project,
+    env: &Environment,
+    tc: &ResolvedToolchain,
+    argv: &[String],
+    extra_env: &[(String, String)],
+    commands: &mut Vec<String>,
+) -> Result<()> {
     let (program, args) = argv.split_first().ok_or(Error::NoBuildSystem)?;
     let rendered = argv.join(" ");
     commands.push(rendered.clone());
@@ -114,6 +125,9 @@ pub(crate) fn run_step(
         .env("LDFLAGS", &link_flags)
         .env("LSW_ENV", &env.name)
         .env("LSW_TARGET_FLAGS", &c_flags);
+    for (key, value) in extra_env {
+        command.env(key, value);
+    }
     let status = command.status().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             Error::ToolMissing {
