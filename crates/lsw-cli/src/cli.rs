@@ -205,6 +205,9 @@ pub(crate) enum Cmd {
         /// Package target.
         #[arg(long, value_enum, default_value_t = PackageTargetArg::Zip)]
         target: PackageTargetArg,
+        /// Install-test the MSI in a scratch environment (msi target only).
+        #[arg(long)]
+        verify: bool,
     },
     /// List the environment's Windows/runtime processes.
     Ps,

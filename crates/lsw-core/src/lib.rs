@@ -19,6 +19,7 @@ pub mod error;
 pub mod explainops;
 pub mod ideops;
 pub mod inspectops;
+pub mod installops;
 pub mod msixops;
 pub mod packageops;
 pub mod pluginops;

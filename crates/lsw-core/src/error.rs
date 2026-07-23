@@ -222,6 +222,9 @@ pub enum Error {
          These files coexist on Linux but clash on Windows. Rename them, or use case = \"native\"."
     )]
     CaseCollision { detail: String },
+
+    #[error("LSW2040: installer verification failed during {stage}: {detail}")]
+    InstallVerifyFailed { stage: String, detail: String },
 }
 
 impl Error {
