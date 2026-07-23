@@ -60,17 +60,27 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<DotnetInitRe
         contents: &str,
         created: &mut Vec<std::path::PathBuf>,
     ) -> Result<()> {
+        use std::io::Write;
         let path = root.join(rel);
-        if path.exists() {
-            return Err(Error::InitFailed {
-                path: path.clone(),
-                detail: format!("{rel} already exists; refusing to overwrite"),
-            });
-        }
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir).map_err(|e| Error::io(dir.to_path_buf(), e))?;
         }
-        fs::write(&path, contents).map_err(|e| Error::io(path.clone(), e))?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    Error::InitFailed {
+                        path: path.clone(),
+                        detail: format!("{rel} already exists; refusing to overwrite"),
+                    }
+                } else {
+                    Error::io(path.clone(), e)
+                }
+            })?;
+        file.write_all(contents.as_bytes())
+            .map_err(|e| Error::io(path.clone(), e))?;
         created.push(path);
         Ok(())
     }

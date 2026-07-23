@@ -389,8 +389,15 @@ fn backup_path(root: &Path) -> PathBuf {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let uniq = BACKUP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    root.with_file_name(format!(".{name}.lsw-bak-{}-{uniq}", std::process::id()))
+    let counter = BACKUP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    root.with_file_name(format!(
+        ".{name}.lsw-bak-{}-{nanos}-{counter}",
+        std::process::id()
+    ))
 }
 
 struct Replacement {
