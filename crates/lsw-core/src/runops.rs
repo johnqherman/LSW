@@ -325,6 +325,13 @@ fn resolve_program(program: &Path, domain: Domain) -> Result<ResolvedProgram> {
         return Ok(ResolvedProgram::RuntimeResolved(program.to_path_buf()));
     }
 
+    if program.is_dir() {
+        return Err(Error::NotExecutable {
+            program: program.to_path_buf(),
+            detail: "is a directory, not an executable".into(),
+        });
+    }
+
     let has_separator = text.contains('/');
     if has_separator || program.is_file() {
         if !program.exists() {
