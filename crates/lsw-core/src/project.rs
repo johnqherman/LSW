@@ -14,9 +14,17 @@ pub struct Project {
 impl Project {
     pub fn discover(start: &Path) -> Result<Self> {
         let (root, manifest) = ProjectManifest::discover(start)?;
+        crate::envops::validate_name("project", &manifest.project.name)?;
         if manifest.target.os != "windows" {
             return Err(Error::UnsupportedTargetOs {
                 os: manifest.target.os,
+            });
+        }
+        if manifest.filesystem.project_drive != "C:" || manifest.filesystem.mount_project != "/src"
+        {
+            return Err(Error::UnsupportedFilesystem {
+                drive: manifest.filesystem.project_drive.clone(),
+                mount: manifest.filesystem.mount_project.clone(),
             });
         }
         Ok(Self { root, manifest })

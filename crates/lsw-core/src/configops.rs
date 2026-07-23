@@ -74,6 +74,13 @@ pub fn lint(manifest: &ProjectManifest) -> Vec<Finding> {
         );
     }
 
+    if manifest.filesystem.project_drive != "C:" || manifest.filesystem.mount_project != "/src" {
+        error(
+            &mut out,
+            "[filesystem] project_drive/mount_project other than \"C:\" and \"/src\" is not yet supported; the project always mounts at C:\\src\\<name>".into(),
+        );
+    }
+
     if !KNOWN_NETWORK.contains(&manifest.sandbox.network.as_str()) {
         error(
             &mut out,

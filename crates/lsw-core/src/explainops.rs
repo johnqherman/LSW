@@ -356,6 +356,11 @@ const TABLE: &[Explanation] = &[
         summary: "the SDK import failed",
         hint: "pass --from <dir> pointing at an SDK directory; see the error detail",
     },
+    Explanation {
+        code: "LSW2043",
+        summary: "a custom [filesystem] project_drive/mount_project was set but is not supported",
+        hint: "use project_drive = \"C:\" and mount_project = \"/src\" (the project mounts at C:\\src\\<name>)",
+    },
 ];
 
 #[cfg(test)]
