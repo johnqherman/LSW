@@ -587,11 +587,19 @@ fn deploy_runtime_dlls(
 
     let mut deployed = Vec::new();
     let mut done: std::collections::BTreeSet<PathBuf> = std::collections::BTreeSet::new();
+    let canon_root = project_root.canonicalize().ok();
     for artifact in artifacts {
         let abs = project_root.join(artifact);
         let Some(dir) = abs.parent().map(Path::to_path_buf) else {
             continue;
         };
+        let within = canon_root
+            .as_ref()
+            .zip(dir.canonicalize().ok())
+            .is_some_and(|(root, canon)| canon.starts_with(root));
+        if !within {
+            continue;
+        }
         let mut work = vec![abs.clone()];
         while let Some(pe) = work.pop() {
             let Ok(imports) = lsw_pe::imports(&pe) else {
