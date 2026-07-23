@@ -448,8 +448,9 @@ fn encode_artifact_manifest(artifacts: &[PathBuf]) -> Vec<u8> {
 
 fn decode_artifact_manifest(bytes: &[u8]) -> Vec<PathBuf> {
     use std::os::unix::ffi::OsStrExt;
+    let sep = if bytes.contains(&0) { 0u8 } else { b'\n' };
     bytes
-        .split(|b| *b == 0)
+        .split(|b| *b == sep)
         .filter(|s| !s.is_empty())
         .map(|s| PathBuf::from(std::ffi::OsStr::from_bytes(s)))
         .collect()
