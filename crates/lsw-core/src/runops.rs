@@ -222,9 +222,19 @@ pub fn run(
 }
 
 pub fn windows_user() -> String {
-    std::env::var("USER")
+    let raw = std::env::var("USER")
         .or_else(|_| std::env::var("LOGNAME"))
-        .unwrap_or_else(|_| "lsw".to_owned())
+        .unwrap_or_default();
+    let cleaned: String = raw
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
+        .collect();
+    let trimmed = cleaned.trim_matches('.');
+    if trimmed.is_empty() || trimmed == "." || trimmed == ".." {
+        "lsw".to_owned()
+    } else {
+        trimmed.to_owned()
+    }
 }
 
 fn is_msi(path: &Path) -> bool {
@@ -346,13 +356,17 @@ fn shell_invocation(powershell: bool, dos: Option<&str>) -> (PathBuf, Vec<String
     if powershell {
         let mut args = vec!["-NoExit".to_owned()];
         if let Some(dos) = dos {
+            let escaped = dos.replace('\'', "''");
             args.push("-Command".to_owned());
-            args.push(format!("Set-Location -LiteralPath '{dos}'"));
+            args.push(format!("Set-Location -LiteralPath '{escaped}'"));
         }
         (PathBuf::from("powershell.exe"), args)
     } else {
         let args = dos
-            .map(|dos| vec!["/k".to_owned(), format!("cd /d {dos}")])
+            .map(|dos| {
+                let escaped = dos.replace('"', "");
+                vec!["/k".to_owned(), format!("cd /d \"{escaped}\"")]
+            })
             .unwrap_or_default();
         (PathBuf::from("cmd.exe"), args)
     }
@@ -410,7 +424,9 @@ extern "C" fn shell_sigint(_: libc::c_int) {
     }
 }
 
-struct ShellSignalGuard;
+struct ShellSignalGuard {
+    previous: libc::sigaction,
+}
 
 impl ShellSignalGuard {
     fn install() -> Self {
@@ -421,9 +437,10 @@ impl ShellSignalGuard {
             action.sa_sigaction = shell_sigint as extern "C" fn(libc::c_int) as usize;
             action.sa_flags = libc::SA_RESTART;
             libc::sigemptyset(&mut action.sa_mask);
-            libc::sigaction(libc::SIGINT, &action, std::ptr::null_mut());
+            let mut previous: libc::sigaction = std::mem::zeroed();
+            libc::sigaction(libc::SIGINT, &action, &mut previous);
+            ShellSignalGuard { previous }
         }
-        ShellSignalGuard
     }
 }
 
@@ -432,7 +449,7 @@ impl Drop for ShellSignalGuard {
         use std::sync::atomic::Ordering;
         SHELL_CHILD_PID.store(0, Ordering::Relaxed);
         unsafe {
-            libc::signal(libc::SIGINT, libc::SIG_DFL);
+            libc::sigaction(libc::SIGINT, &self.previous, std::ptr::null_mut());
         }
     }
 }
@@ -506,10 +523,22 @@ mod tests {
 
         let (prog, args) = shell_invocation(false, Some("C:\\src\\demo"));
         assert_eq!(prog, PathBuf::from("cmd.exe"));
-        assert_eq!(args, vec!["/k", "cd /d C:\\src\\demo"]);
+        assert_eq!(args, vec!["/k", "cd /d \"C:\\src\\demo\""]);
 
         let (_, args) = shell_invocation(false, None);
         assert!(args.is_empty());
+    }
+
+    #[test]
+    fn shell_invocation_neutralizes_injection() {
+        let evil = "C:\\src\\a'; Remove-Item C:\\ ; '";
+        let (_, args) = shell_invocation(true, Some(evil));
+        assert!(args.last().unwrap().contains("''; Remove-Item"));
+        assert!(!args.last().unwrap().contains("a'; Remove-Item"));
+
+        let evil_cmd = "C:\\src\\a\" & del C:\\ & \"";
+        let (_, args) = shell_invocation(false, Some(evil_cmd));
+        assert_eq!(args.last().unwrap(), "cd /d \"C:\\src\\a & del C:\\ & \"");
     }
 
     #[test]
