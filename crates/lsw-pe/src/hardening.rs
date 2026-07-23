@@ -46,27 +46,58 @@ struct LoadCfg {
     guard_flags: u32,
 }
 
+fn read_u32(bytes: &[u8], off: usize) -> u32 {
+    bytes
+        .get(off..off + 4)
+        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+        .unwrap_or(0)
+}
+
+fn read_u64(bytes: &[u8], off: usize) -> u64 {
+    bytes
+        .get(off..off + 8)
+        .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
+        .unwrap_or(0)
+}
+
 fn load_config<Pe: ImageNtHeaders>(file: &PeFile<Pe>, data: &[u8], is_64: bool) -> Option<LoadCfg> {
     let sections = file.section_table();
     let dir = file
         .data_directories()
         .get(pe::IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG)?;
     let bytes = dir.data(data, &sections).ok()?;
+    let size = read_u32(bytes, 0) as usize;
     if is_64 {
-        let (cfg, _) = object::pod::from_bytes::<pe::ImageLoadConfigDirectory64>(bytes).ok()?;
         Some(LoadCfg {
-            size: cfg.size.get(LE) as usize,
-            se_table: cfg.sehandler_table.get(LE),
-            se_count: cfg.sehandler_count.get(LE),
-            guard_flags: cfg.guard_flags.get(LE),
+            size,
+            se_table: read_u64(
+                bytes,
+                std::mem::offset_of!(pe::ImageLoadConfigDirectory64, sehandler_table),
+            ),
+            se_count: read_u64(
+                bytes,
+                std::mem::offset_of!(pe::ImageLoadConfigDirectory64, sehandler_count),
+            ),
+            guard_flags: read_u32(
+                bytes,
+                std::mem::offset_of!(pe::ImageLoadConfigDirectory64, guard_flags),
+            ),
         })
     } else {
-        let (cfg, _) = object::pod::from_bytes::<pe::ImageLoadConfigDirectory32>(bytes).ok()?;
         Some(LoadCfg {
-            size: cfg.size.get(LE) as usize,
-            se_table: cfg.sehandler_table.get(LE) as u64,
-            se_count: cfg.sehandler_count.get(LE) as u64,
-            guard_flags: cfg.guard_flags.get(LE),
+            size,
+            se_table: read_u32(
+                bytes,
+                std::mem::offset_of!(pe::ImageLoadConfigDirectory32, sehandler_table),
+            ) as u64,
+            se_count: read_u32(
+                bytes,
+                std::mem::offset_of!(pe::ImageLoadConfigDirectory32, sehandler_count),
+            ) as u64,
+            guard_flags: read_u32(
+                bytes,
+                std::mem::offset_of!(pe::ImageLoadConfigDirectory32, guard_flags),
+            ),
         })
     }
 }
