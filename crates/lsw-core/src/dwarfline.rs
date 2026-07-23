@@ -112,8 +112,19 @@ impl DebugInfo {
             v.sort_by_key(|(_, a)| *a);
             v.dedup();
         }
-        by_addr.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.is_none().cmp(&b.1.is_none())));
-        by_addr.dedup_by_key(|(a, _)| *a);
+        by_addr.sort_by_key(|(a, _)| *a);
+        let mut collapsed: Vec<(u64, Option<(String, u32)>)> = Vec::with_capacity(by_addr.len());
+        for entry in by_addr {
+            match collapsed.last_mut() {
+                Some(last) if last.0 == entry.0 => {
+                    if entry.1.is_some() {
+                        *last = entry;
+                    }
+                }
+                _ => collapsed.push(entry),
+            }
+        }
+        by_addr = collapsed;
         funcs.sort_by_key(|(a, _, _)| *a);
 
         Ok(Self {
