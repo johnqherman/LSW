@@ -137,7 +137,7 @@ pub fn run(
             prefix: env.layout.prefix(),
             cwd: windows_cwd(env, project),
             env: windows_env(env, project),
-            sandbox: None,
+            sandbox: sandbox_spec(env, project, sandbox)?,
             display: lsw_runtime::DisplayMode::Inherit,
             emulate: crate::emulateops::resolve(env.manifest.target_arch)?,
         })?;
