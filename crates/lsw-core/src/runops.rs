@@ -388,7 +388,7 @@ extern "C" fn shell_sigint(_: libc::c_int) {
     unsafe {
         libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts);
     }
-    let now_ms = ts.tv_sec as i64 * 1000 + ts.tv_nsec as i64 / 1_000_000;
+    let now_ms = ts.tv_sec * 1000 + ts.tv_nsec / 1_000_000;
     let last = LAST_SIGINT_MS.swap(now_ms, Ordering::Relaxed);
     if now_ms - last <= SIGINT_EXIT_WINDOW_MS {
         let pid = SHELL_CHILD_PID.load(Ordering::Relaxed);

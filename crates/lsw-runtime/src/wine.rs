@@ -48,6 +48,7 @@ pub fn base_env(prefix: &Path) -> Vec<(String, String)> {
 
 pub(crate) fn full_env(prefix: &Path, extra: &[(String, String)]) -> Vec<(String, String)> {
     let mut env = base_env(prefix);
+    env.extend(crate::gpu::egl_vendor_pin());
     env.extend(extra.iter().cloned());
     env
 }
