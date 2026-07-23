@@ -8,7 +8,7 @@ use crate::{active_env, cwd};
 pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     match op {
         RustCmd::Init { name } => {
-            let report = lsw_core::rustops::init(&cwd(), name.as_deref())?;
+            let report = lsw_core::rustops::init(&cwd()?, name.as_deref())?;
             println!("Initialized LSW Rust project at {}", report.root.display());
             for f in &report.created {
                 println!("  created {}", f.display());
@@ -47,7 +47,7 @@ pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
 pub(crate) fn dotnet(op: &DotnetCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     match op {
         DotnetCmd::Init { name } => {
-            let report = lsw_core::dotnetops::init(&cwd(), name.as_deref())?;
+            let report = lsw_core::dotnetops::init(&cwd()?, name.as_deref())?;
             println!("Initialized LSW C# project at {}", report.root.display());
             for f in &report.created {
                 println!("  created {}", f.display());

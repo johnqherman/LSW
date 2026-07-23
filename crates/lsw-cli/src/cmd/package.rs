@@ -74,7 +74,7 @@ pub(crate) fn path(
             let absolute = if path.is_absolute() {
                 path.clone()
             } else {
-                cwd().join(path)
+                cwd()?.join(path)
             };
             ("windows", mapper.to_windows(&absolute)?)
         }

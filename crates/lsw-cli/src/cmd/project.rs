@@ -6,7 +6,7 @@ use crate::cli::{EnvCmd, Format, TemplateArg};
 use crate::{cwd, project};
 
 pub(crate) fn init(name: &Option<String>, template: &TemplateArg) -> lsw_core::Result<ExitCode> {
-    let report = lsw_core::init(&cwd(), name.as_deref(), (*template).into())?;
+    let report = lsw_core::init(&cwd()?, name.as_deref(), (*template).into())?;
     println!("Initialized LSW project at {}", report.root.display());
     for f in &report.created {
         println!("  created {}", f.display());

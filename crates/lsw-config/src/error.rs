@@ -27,7 +27,7 @@ pub enum ConfigError {
          Possible fixes:\n  lsw init  (scaffold a project here)\n  cd into an existing LSW project", start.display()
     )]
     ProjectNotFound { start: PathBuf },
-    #[error("LSW1006: cannot determine home directory")]
+    #[error("LSW1006: cannot determine home directory; set $HOME to a writable directory")]
     NoHome,
     #[error(
         "LSW1007: {} was created by a newer LSW (format {found}, this build supports {supported}); upgrade LSW or recreate the environment", path.display()

@@ -257,12 +257,19 @@ pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
 
         DepsCmd::Remove { name } => {
             let (p, _env) = active_env(dirs)?;
-            if lsw_core::depsops::remove(&p, name)? {
+            let removed = lsw_core::depsops::remove(&p, name)?;
+            if format == Format::Json {
+                println!("{}", serde_json::json!({ "name": name, "removed": removed }));
+            } else if removed {
                 println!("{} removed {name}", color::yellow("-"));
             } else {
-                println!("{name} is not an installed dependency");
+                eprintln!("error: {name} is not an installed dependency");
             }
-            Ok(ExitCode::SUCCESS)
+            Ok(if removed {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            })
         }
 
         DepsCmd::List => {
