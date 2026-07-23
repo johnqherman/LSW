@@ -358,10 +358,10 @@ fn verify_artifacts_are_pe(project: &Project, artifacts: &[PathBuf]) -> Result<(
 /// instead: deterministic, complete, and it only ever over-invalidates (a cheap
 /// reconfigure) rather than leaving a stale build directory.
 fn ambient_env_fingerprint() -> String {
-    let mut vars: Vec<(String, String)> = std::env::vars().collect();
+    let mut vars: Vec<(std::ffi::OsString, std::ffi::OsString)> = std::env::vars_os().collect();
     vars.sort();
     vars.into_iter()
-        .map(|(k, v)| format!("{k}={v}"))
+        .map(|(k, v)| format!("{}={}", k.to_string_lossy(), v.to_string_lossy()))
         .collect::<Vec<_>>()
         .join("\n")
 }
