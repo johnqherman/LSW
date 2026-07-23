@@ -233,7 +233,13 @@ fn sanitize_identity(name: &str) -> String {
             }
         })
         .collect();
-    format!("LSW.{}", cleaned.trim_matches('-'))
+    let trimmed: String = cleaned.trim_matches(['-', '.']).chars().take(46).collect();
+    let base = trimmed.trim_end_matches(['-', '.']);
+    if base.is_empty() {
+        "LSW.app".to_owned()
+    } else {
+        format!("LSW.{base}")
+    }
 }
 
 fn block_map_xml(dir: &Path, files: &[String]) -> Result<String> {
