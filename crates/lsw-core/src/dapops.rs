@@ -757,7 +757,7 @@ impl<'a> Adapter<'a> {
         if rbp == 0 {
             return None;
         }
-        let mem = conn.read_memory(rbp + 8, 8).ok()?;
+        let mem = conn.read_memory(rbp.checked_add(8)?, 8).ok()?;
         Some(u64::from_le_bytes(mem.try_into().ok()?))
     }
 
