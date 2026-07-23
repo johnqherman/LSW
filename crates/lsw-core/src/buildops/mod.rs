@@ -194,15 +194,12 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             } else {
                 None
             };
-            let ambient: Vec<String> = CMAKE_AFFECTING_ENV
-                .iter()
-                .map(|k| format!("{k}={}", std::env::var(k).unwrap_or_default()))
-                .collect();
             let cmake_config = format!(
-                "{tc:?}|generator={generator:?}|toolchain={}|emulator={}|deps={:?}|env={ambient:?}",
+                "{tc:?}|generator={generator:?}|toolchain={}|emulator={}|deps={:?}|env={}",
                 toolchain_file.display(),
                 env.manifest.runtime.executable.display(),
-                crate::depsops::dep_dirs(project)
+                crate::depsops::dep_dirs(project),
+                ambient_env_fingerprint()
             );
             refresh_stale_cmake_build_dir(&project.root.join("build"), &cmake_config)?;
             let mut configure = vec![
@@ -355,15 +352,19 @@ fn verify_artifacts_are_pe(project: &Project, artifacts: &[PathBuf]) -> Result<(
     Ok(())
 }
 
-const CMAKE_AFFECTING_ENV: &[&str] = &[
-    "CMAKE_GENERATOR",
-    "CMAKE_PREFIX_PATH",
-    "PKG_CONFIG_PATH",
-    "CPATH",
-    "C_INCLUDE_PATH",
-    "CPLUS_INCLUDE_PATH",
-    "LIBRARY_PATH",
-];
+/// The subprocess that configures CMake inherits LSW's ambient environment, and a
+/// project's own CMakeLists.txt may read any `$ENV{...}` var, so no fixed allowlist of
+/// "cmake-affecting" variables can be complete. Hash the entire sorted environment
+/// instead: deterministic, complete, and it only ever over-invalidates (a cheap
+/// reconfigure) rather than leaving a stale build directory.
+fn ambient_env_fingerprint() -> String {
+    let mut vars: Vec<(String, String)> = std::env::vars().collect();
+    vars.sort();
+    vars.into_iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 fn cmake_config_fingerprint(config: &str) -> String {
     use sha2::Digest;
