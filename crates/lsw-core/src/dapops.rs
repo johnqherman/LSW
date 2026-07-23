@@ -406,6 +406,12 @@ impl<'a> Adapter<'a> {
             .get("threadId")
             .and_then(|v| v.as_i64())
             .unwrap_or(self.current_thread);
+        if !self.thread_is_live(thread_id) {
+            return Ok(vec![self.success_response(
+                req,
+                serde_json::json!({ "stackFrames": [], "totalFrames": 0 }),
+            )]);
+        }
         if let Some(conn) = self.conn.as_mut() {
             conn.select_thread(thread_id);
         }
@@ -500,12 +506,13 @@ impl<'a> Adapter<'a> {
             .and_then(|v| v.as_i64())
             .unwrap_or(0);
         let mut variables = Vec::new();
-        if reference == REGISTERS_REF || self.frame_threads.contains_key(&reference) {
-            let thread = self
-                .frame_threads
-                .get(&reference)
-                .copied()
-                .unwrap_or(self.current_thread);
+        let known = reference == REGISTERS_REF || self.frame_threads.contains_key(&reference);
+        let thread = self
+            .frame_threads
+            .get(&reference)
+            .copied()
+            .unwrap_or(self.current_thread);
+        if known && self.thread_is_live(thread) {
             if let Some(conn) = self.conn.as_mut() {
                 conn.select_thread(thread);
             }
@@ -586,6 +593,11 @@ impl<'a> Adapter<'a> {
             .and_then(|v| v.as_i64())
             .and_then(|id| self.frame_threads.get(&id).copied())
             .unwrap_or(self.current_thread);
+        if !self.thread_is_live(thread) {
+            return Ok(vec![
+                self.error_response(req, "thread is no longer available"),
+            ]);
+        }
         if let Some(conn) = self.conn.as_mut() {
             conn.select_thread(thread);
         }
@@ -831,6 +843,19 @@ impl<'a> Adapter<'a> {
             serde_json::json!({ "category": "stdout", "output": text }),
         );
         out.push(ev);
+    }
+
+    fn thread_is_live(&mut self, id: i64) -> bool {
+        if id == self.current_thread {
+            return true;
+        }
+        match self.conn.as_mut() {
+            Some(conn) => conn
+                .thread_ids()
+                .map(|ids| ids.contains(&id))
+                .unwrap_or(true),
+            None => false,
+        }
     }
 
     fn refresh_current_thread(&mut self) {
