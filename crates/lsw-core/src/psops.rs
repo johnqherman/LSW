@@ -14,6 +14,26 @@ pub struct ProcessInfo {
     pub command: String,
 }
 
+const WINE_INFRASTRUCTURE: &[&str] = &[
+    "wineserver",
+    "services.exe",
+    "winedevice.exe",
+    "plugplay.exe",
+    "svchost.exe",
+    "rpcss.exe",
+    "conhost.exe",
+    "tabtip.exe",
+];
+
+pub fn is_wine_infrastructure(command: &str) -> bool {
+    let head = command.split_whitespace().next().unwrap_or_default();
+    let base = head.rsplit(['/', '\\']).next().unwrap_or_default();
+    WINE_INFRASTRUCTURE.contains(&base.to_ascii_lowercase().as_str())
+        || command
+            .to_ascii_lowercase()
+            .contains("explorer.exe /desktop")
+}
+
 pub fn ps(env: &Environment) -> Result<Vec<ProcessInfo>> {
     let prefix = env.layout.prefix();
     let mut out = Vec::new();
