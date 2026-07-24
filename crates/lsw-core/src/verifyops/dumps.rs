@@ -42,8 +42,14 @@ pub(crate) fn collect_dump(
         }
     }
     let name = name?;
+    if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") {
+        return None;
+    }
     std::fs::create_dir_all(dump_local).ok()?;
     let dest = dump_local.join(&name);
+    if std::fs::symlink_metadata(&dest).is_ok_and(|m| m.file_type().is_symlink()) {
+        std::fs::remove_file(&dest).ok()?;
+    }
     let remote_fwd = dump_remote.replace('\\', "/");
     let scp = super::capped_output(
         Command::new("scp")

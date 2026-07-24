@@ -23,6 +23,7 @@ const MAX_BREAKPOINTS: usize = 10_000;
 const MAX_TOTAL_BREAKPOINTS: usize = 50_000;
 const MAX_FRAME_THREADS: usize = 100_000;
 const MAX_STEP_ITERS: u32 = 1_000_000;
+const MAX_STEP_OUTPUT: usize = 4 * 1024 * 1024;
 const MAX_HEADER_BYTES: usize = 8 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,6 +131,7 @@ pub struct Adapter<'a> {
     current_thread: i64,
     frame_threads: HashMap<i64, i64>,
     next_frame_id: i64,
+    step_output_bytes: usize,
 }
 
 impl Drop for Adapter<'_> {
@@ -156,6 +158,7 @@ impl<'a> Adapter<'a> {
             current_thread: 1,
             frame_threads: HashMap::new(),
             next_frame_id: 1000,
+            step_output_bytes: 0,
         }
     }
 
@@ -701,6 +704,7 @@ impl<'a> Adapter<'a> {
     }
 
     fn source_step(&mut self, step_over: bool, out: &mut Vec<ProtocolMessage>) -> Result<Stop> {
+        self.step_output_bytes = 0;
         let start = self.current_line();
         let start_sp = self.current_sp().unwrap_or(0);
         let start_range = self.current_func_range();
@@ -892,9 +896,10 @@ impl<'a> Adapter<'a> {
     }
 
     fn emit_output(&mut self, text: &str, out: &mut Vec<ProtocolMessage>) {
-        if text.is_empty() {
+        if text.is_empty() || self.step_output_bytes >= MAX_STEP_OUTPUT {
             return;
         }
+        self.step_output_bytes = self.step_output_bytes.saturating_add(text.len());
         let ev = self.event(
             "output",
             serde_json::json!({ "category": "stdout", "output": text }),

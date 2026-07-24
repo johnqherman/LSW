@@ -7,6 +7,7 @@ use crate::envops::Environment;
 use crate::error::{Error, Result};
 
 const MAX_LISTING_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_DEP_DEPTH: usize = 64;
 
 const SYSTEM_DLLS: &[&str] = &[
     "kernel32.dll",
@@ -91,8 +92,17 @@ fn search_dirs(env: Option<&Environment>, pe: &Path) -> Vec<PathBuf> {
     dirs
 }
 
-fn build(name: &str, path: &Path, dirs: &[PathBuf], seen: &mut BTreeSet<String>) -> Vec<DepNode> {
+fn build(
+    name: &str,
+    path: &Path,
+    dirs: &[PathBuf],
+    seen: &mut BTreeSet<String>,
+    depth: usize,
+) -> Vec<DepNode> {
     let mut children = Vec::new();
+    if depth >= MAX_DEP_DEPTH {
+        return children;
+    }
     let Ok(imports) = lsw_pe::imports(path) else {
         return children;
     };
@@ -103,12 +113,12 @@ fn build(name: &str, path: &Path, dirs: &[PathBuf], seen: &mut BTreeSet<String>)
         if dep.eq_ignore_ascii_case(name) {
             continue;
         }
-        children.push(node(&dep, dirs, seen));
+        children.push(node(&dep, dirs, seen, depth + 1));
     }
     children
 }
 
-fn node(name: &str, dirs: &[PathBuf], seen: &mut BTreeSet<String>) -> DepNode {
+fn node(name: &str, dirs: &[PathBuf], seen: &mut BTreeSet<String>, depth: usize) -> DepNode {
     let key = name.to_ascii_lowercase();
     if is_system_dll(name) {
         return DepNode {
@@ -128,7 +138,7 @@ fn node(name: &str, dirs: &[PathBuf], seen: &mut BTreeSet<String>) -> DepNode {
                     children: Vec::new(),
                 };
             }
-            let children = build(name, &resolved, dirs, seen);
+            let children = build(name, &resolved, dirs, seen, depth);
             DepNode {
                 name: name.to_owned(),
                 kind: DepKind::Resolved,
@@ -159,7 +169,7 @@ pub fn tree(env: Option<&Environment>, pe: &Path) -> Result<DepNode> {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "root".to_owned());
-    let children = build(&name, pe, &dirs, &mut seen);
+    let children = build(&name, pe, &dirs, &mut seen, 0);
     Ok(DepNode {
         name,
         kind: DepKind::Root,
