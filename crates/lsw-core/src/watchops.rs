@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use notify::{RecursiveMode, Watcher};
 
@@ -67,19 +67,27 @@ pub fn watch(project: &Project, env: &Environment) -> Result<()> {
         .watch(&project.root, RecursiveMode::Recursive)
         .map_err(|e| notify_err(&project.root, e))?;
 
+    const MAX_PATHS: usize = 4096;
     loop {
         let first = rx
             .recv()
             .map_err(|_| Error::io(project.root.clone(), std::io::Error::other("watch ended")))?;
         let mut paths = event_paths(first);
-        while let Ok(next) = rx.recv_timeout(Duration::from_millis(300)) {
+        let debounce_deadline = Instant::now() + Duration::from_secs(2);
+        while paths.len() < MAX_PATHS
+            && Instant::now() < debounce_deadline
+            && let Ok(next) = rx.recv_timeout(Duration::from_millis(300))
+        {
             paths.extend(event_paths(next));
         }
         if is_source_change(&paths, &project.root, &outputs)
             && let Some(next) = rebuild(project, env)
         {
             outputs = next;
-            while rx.recv_timeout(Duration::from_millis(500)).is_ok() {}
+            let drain_deadline = Instant::now() + Duration::from_secs(2);
+            while Instant::now() < drain_deadline
+                && rx.recv_timeout(Duration::from_millis(500)).is_ok()
+            {}
         }
     }
 }

@@ -239,15 +239,25 @@ fn refresh_db(dirs: &lsw_config::Dirs, repo: &str) -> Result<PathBuf> {
         .arg(&db)
         .arg("-C")
         .arg(&extracted)
-        .output()
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
         .map_err(|e| Error::io(PathBuf::from("tar"), e))?;
-    if !out.status.success() {
+    if !out.success() {
         return Err(Error::ExtractFailed {
             name: format!("{repo}.db"),
-            detail: String::from_utf8_lossy(&out.stderr).trim().to_owned(),
+            detail: "extracting repository database failed".to_owned(),
         });
     }
     Ok(extracted)
+}
+
+fn read_capped_string(path: &Path, max: u64) -> Option<String> {
+    use std::io::Read;
+    let file = std::fs::File::open(path).ok()?;
+    let mut buf = Vec::new();
+    file.take(max).read_to_end(&mut buf).ok()?;
+    String::from_utf8(buf).ok()
 }
 
 fn desc_field(desc: &str, key: &str) -> Option<String> {
@@ -268,7 +278,7 @@ fn resolve(dirs: &lsw_config::Dirs, repo: &str, prefix: &str, name: &str) -> Res
         .flatten()
     {
         let desc_path = entry.path().join("desc");
-        let Ok(desc) = std::fs::read_to_string(&desc_path) else {
+        let Some(desc) = read_capped_string(&desc_path, 4 * 1024 * 1024) else {
             continue;
         };
         if desc_field(&desc, "%NAME%").as_deref() == Some(full.as_str()) {
@@ -391,12 +401,14 @@ pub fn add(
         .arg("--exclude=.*")
         .arg("-C")
         .arg(&root)
-        .output()
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
         .map_err(|e| Error::io(PathBuf::from("tar"), e))?;
-    if !extract.status.success() {
+    if !extract.success() {
         return Err(Error::ExtractFailed {
             name: name.to_owned(),
-            detail: String::from_utf8_lossy(&extract.stderr).trim().to_owned(),
+            detail: "extracting package archive failed".to_owned(),
         });
     }
 

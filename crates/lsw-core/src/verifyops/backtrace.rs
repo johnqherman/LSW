@@ -76,26 +76,28 @@ pub fn native_backtrace(
     let remote_fwd = remote_dir.replace('\\', "/");
     let remote_target = format!("{remote_dir}\\{name}");
 
-    let mkdir = Command::new("ssh")
-        .args(ssh_opts(identity.as_deref()))
-        .arg(&host)
-        .arg(format!(
-            "cmd /c \"if not exist \"{remote_dir}\" mkdir \"{remote_dir}\"\""
-        ))
-        .output()
-        .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    let mkdir = super::capped_output(
+        Command::new("ssh")
+            .args(ssh_opts(identity.as_deref()))
+            .arg(&host)
+            .arg(format!(
+                "cmd /c \"if not exist \"{remote_dir}\" mkdir \"{remote_dir}\"\""
+            )),
+    )
+    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
     if !mkdir.status.success() {
         return Err(Error::ProbeFailed {
             host,
             detail: String::from_utf8_lossy(&mkdir.stderr).trim().to_owned(),
         });
     }
-    let scp = Command::new("scp")
-        .args(ssh_opts(identity.as_deref()))
-        .arg(program)
-        .arg(format!("{host}:{remote_fwd}/{name}"))
-        .output()
-        .map_err(|e| Error::io(PathBuf::from("scp"), e))?;
+    let scp = super::capped_output(
+        Command::new("scp")
+            .args(ssh_opts(identity.as_deref()))
+            .arg(program)
+            .arg(format!("{host}:{remote_fwd}/{name}")),
+    )
+    .map_err(|e| Error::io(PathBuf::from("scp"), e))?;
     if !scp.status.success() {
         return Err(Error::ProbeFailed {
             host,
@@ -103,14 +105,15 @@ pub fn native_backtrace(
         });
     }
 
-    let out = Command::new("ssh")
-        .args(ssh_opts(identity.as_deref()))
-        .arg(&host)
-        .arg(format!(
-            "cmd /c \"\"{cdb}\" -c \"sxe av; g; kn 100; q\" \"{remote_target}\"\""
-        ))
-        .output()
-        .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    let out = super::capped_output(
+        Command::new("ssh")
+            .args(ssh_opts(identity.as_deref()))
+            .arg(&host)
+            .arg(format!(
+                "cmd /c \"\"{cdb}\" -c \"sxe av; g; kn 100; q\" \"{remote_target}\"\""
+            )),
+    )
+    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
     if !out.status.success() {
         let detail = String::from_utf8_lossy(&out.stderr);
         let detail = detail.trim();
@@ -134,12 +137,13 @@ fn detect_cdb(host: &str, identity: Option<&str>, paths: &[&str]) -> Result<Opti
         .map(|(i, p)| format!("if exist \"{p}\" echo LSWCDB{i}"))
         .collect::<Vec<_>>()
         .join(" & ");
-    let out = Command::new("ssh")
-        .args(ssh_opts(identity))
-        .arg(host)
-        .arg(format!("cmd /c \"{checks}\""))
-        .output()
-        .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    let out = super::capped_output(
+        Command::new("ssh")
+            .args(ssh_opts(identity))
+            .arg(host)
+            .arg(format!("cmd /c \"{checks}\"")),
+    )
+    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
     if !out.status.success() {
         let detail = String::from_utf8_lossy(&out.stderr);
         return Err(Error::ProbeFailed {
