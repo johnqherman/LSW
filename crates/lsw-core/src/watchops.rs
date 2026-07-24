@@ -58,9 +58,9 @@ pub fn watch(project: &Project, env: &Environment) -> Result<()> {
     );
     let mut outputs = rebuild(project, env).unwrap_or_default();
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::sync_channel(8192);
     let mut watcher = notify::recommended_watcher(move |res| {
-        let _ = tx.send(res);
+        let _ = tx.try_send(res);
     })
     .map_err(|e| notify_err(&project.root, e))?;
     watcher
