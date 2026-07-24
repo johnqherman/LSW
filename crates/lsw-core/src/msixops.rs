@@ -11,6 +11,7 @@ use crate::project::Project;
 
 const BLOCK_SIZE: usize = 65536;
 const MAX_MSIX_ARTIFACT: u64 = 4 * 1024 * 1024 * 1024;
+const MAX_BLOCKMAP_BYTES: usize = 256 * 1024 * 1024;
 
 pub fn build_msix(
     project: &Project,
@@ -335,6 +336,11 @@ HashMethod=\"http://www.w3.org/2001/04/xmlenc#sha256\">\n",
     );
     for file in files {
         use std::io::Read;
+        if out.len() > MAX_BLOCKMAP_BYTES {
+            return Err(Error::MsixSign {
+                detail: "block map exceeds size limit; too many or too large artifacts".to_owned(),
+            });
+        }
         let path = dir.join(file);
         let size = std::fs::metadata(&path)
             .map_err(|e| Error::io(path.clone(), e))?
