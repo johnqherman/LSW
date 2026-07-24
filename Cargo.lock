@@ -559,7 +559,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "lsw"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -574,7 +574,7 @@ dependencies = [
 
 [[package]]
 name = "lsw-config"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "dirs",
  "serde",
@@ -585,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "lsw-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "base64",
  "gimli",
@@ -609,7 +609,7 @@ dependencies = [
 
 [[package]]
 name = "lsw-path"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "proptest",
  "serde",
@@ -618,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "lsw-pe"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "object",
  "tempfile",
@@ -627,14 +627,14 @@ dependencies = [
 
 [[package]]
 name = "lsw-provider-example"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "lsw-runtime"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "libc",
  "lsw-config",
@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "lsw-toolchain"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "lsw-config",
  "sha2",
