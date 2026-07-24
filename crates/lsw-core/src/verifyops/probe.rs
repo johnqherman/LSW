@@ -47,7 +47,10 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
             continue;
         }
         let clean = func.trim();
-        if clean.is_empty() || !clean.chars().all(|c| c.is_ascii_graphic() && c != '\'') {
+        if clean.is_empty()
+            || clean.starts_with('#')
+            || !clean.chars().all(|c| c.is_ascii_graphic() && c != '\'')
+        {
             continue;
         }
         let entry = grouped.entry(dll).or_default();
