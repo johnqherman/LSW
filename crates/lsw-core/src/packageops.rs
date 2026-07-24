@@ -9,6 +9,8 @@ use crate::envops::Environment;
 use crate::error::{Error, Result};
 use crate::project::Project;
 
+const MAX_ARTIFACTS: usize = 4096;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackageTarget {
     PortableDirectory,
@@ -49,6 +51,12 @@ pub fn package(
         "{}-{}",
         project.manifest.project.name, env.manifest.target_arch
     );
+    if build.artifacts.len() > MAX_ARTIFACTS {
+        return Err(Error::InitFailed {
+            path: project.root.join("dist"),
+            detail: format!("build produced more than {MAX_ARTIFACTS} artifacts to package"),
+        });
+    }
     let dist = project.root.join("dist");
     let dir = dist.join(&stem);
     if dir.parent() != Some(dist.as_path()) {
@@ -57,8 +65,18 @@ pub fn package(
             detail: "package output directory escaped dist/".into(),
         });
     }
-    if dir.exists() {
-        fs::remove_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
+    if fs::symlink_metadata(&dist).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(Error::InitFailed {
+            path: dist.clone(),
+            detail: "dist/ is a symlink; refusing to package through it".into(),
+        });
+    }
+    if let Ok(meta) = fs::symlink_metadata(&dir) {
+        if meta.file_type().is_symlink() {
+            fs::remove_file(&dir).map_err(|e| Error::io(dir.clone(), e))?;
+        } else {
+            fs::remove_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
+        }
     }
     fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
 
@@ -163,6 +181,9 @@ fn build_msi(
     let name = &project.manifest.project.name;
     let wxs = render_wxs(name, files);
     let wxs_path = dist.join(format!("{stem}.wxs"));
+    if fs::symlink_metadata(&wxs_path).is_ok_and(|m| m.file_type().is_symlink()) {
+        fs::remove_file(&wxs_path).map_err(|e| Error::io(wxs_path.clone(), e))?;
+    }
     fs::write(&wxs_path, wxs).map_err(|e| Error::io(wxs_path.clone(), e))?;
 
     let msi_path = dist.join(format!("{stem}.msi"));
