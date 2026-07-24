@@ -127,13 +127,15 @@ impl DebugInfo {
                     continue;
                 }
                 let Some(line) = row.line() else { continue };
+                let Ok(line) = u32::try_from(line.get()) else {
+                    continue;
+                };
                 let file = cap_len(
                     row.file(header)
                         .and_then(|f| file_name(&dwarf, &unit, header, f, &comp_dir))
                         .unwrap_or_default(),
                 );
                 let addr = row.address();
-                let line = line.get() as u32;
                 string_bytes = string_bytes.saturating_add(file.len().saturating_mul(2));
                 lines
                     .entry((norm(&file), line))
