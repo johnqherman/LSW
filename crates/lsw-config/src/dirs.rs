@@ -101,7 +101,7 @@ impl Dirs {
     }
 
     pub fn environment(&self, name: &str) -> PathBuf {
-        self.environments().join(name)
+        self.environments().join(sanitize_component(name))
     }
 
     pub fn sysroots(&self) -> PathBuf {
@@ -131,12 +131,19 @@ impl Dirs {
     }
 
     pub fn sysroot(&self, name: &str) -> PathBuf {
-        self.sysroots().join(name)
+        self.sysroots().join(sanitize_component(name))
     }
 
     pub fn user_config_file(&self) -> PathBuf {
         self.config.join("config.toml")
     }
+}
+
+fn sanitize_component(name: &str) -> &str {
+    if name.is_empty() || name == "." || name == ".." || name.contains('/') || name.contains('\\') {
+        return "_invalid_";
+    }
+    name
 }
 
 #[derive(Debug, Clone, PartialEq)]

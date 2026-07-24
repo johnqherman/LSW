@@ -522,7 +522,7 @@ fn file_hash(path: &Path) -> Option<String> {
     Some(format!("{:x}", hasher.finalize()))
 }
 
-fn read_capped(path: &Path, max: u64) -> Option<Vec<u8>> {
+pub(super) fn read_capped(path: &Path, max: u64) -> Option<Vec<u8>> {
     use std::io::Read;
     let file = fs::File::open(path).ok()?;
     let mut buf = Vec::new();
@@ -530,7 +530,7 @@ fn read_capped(path: &Path, max: u64) -> Option<Vec<u8>> {
     Some(buf)
 }
 
-fn safe_marker_write(path: &Path, contents: impl AsRef<[u8]>) {
+pub(super) fn safe_marker_write(path: &Path, contents: impl AsRef<[u8]>) {
     if fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
         && fs::remove_file(path).is_err()
     {
