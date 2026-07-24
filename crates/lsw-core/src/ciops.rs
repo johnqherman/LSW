@@ -63,7 +63,16 @@ pub fn init_github(project_root: &Path) -> Result<PathBuf> {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "lsw-project".to_owned());
-    let dir = project_root.join(".github").join("workflows");
+    let gh = project_root.join(".github");
+    let dir = gh.join("workflows");
+    for d in [&gh, &dir] {
+        if std::fs::symlink_metadata(d).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(Error::InitFailed {
+                path: d.clone(),
+                detail: "path is a symlink; refusing to write the workflow through it".into(),
+            });
+        }
+    }
     std::fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
     let path = dir.join("lsw.yml");
     if std::fs::symlink_metadata(&path).is_ok() {
