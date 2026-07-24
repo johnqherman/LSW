@@ -126,7 +126,7 @@ pub fn probe_msvc(tc: &ResolvedToolchain) -> ProbeReport {
         cmd.arg(f);
     }
 
-    match cmd.output() {
+    match crate::util::capped_output(&mut cmd) {
         Ok(out) if out.status.success() && starts_with_mz(&exe) => ProbeReport {
             provider: CLANG_CL_ID.to_owned(),
             compiled: true,
@@ -142,8 +142,7 @@ pub fn probe_msvc(tc: &ResolvedToolchain) -> ProbeReport {
                 .arg("/c")
                 .arg(&src)
                 .arg(format!("/Fo{}", obj.display()));
-            let compiled = compile
-                .output()
+            let compiled = crate::util::capped_output(&mut compile)
                 .map(|o| o.status.success() && obj.is_file())
                 .unwrap_or(false);
             let link_err = match link_result {

@@ -4,8 +4,44 @@ use std::process::Command;
 
 use sha2::{Digest, Sha256};
 
+const MAX_TOOL_OUTPUT: u64 = 16 * 1024 * 1024;
+
+pub(crate) fn capped_output(cmd: &mut Command) -> std::io::Result<std::process::Output> {
+    use std::io::Read;
+    use std::process::Stdio;
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let so = child.stdout.take().expect("piped stdout");
+    let mut se = child.stderr.take().expect("piped stderr");
+    let drain = move |mut p: std::process::ChildStdout| {
+        std::thread::spawn(move || {
+            let mut b = Vec::new();
+            let _ = p.by_ref().take(MAX_TOOL_OUTPUT).read_to_end(&mut b);
+            let _ = std::io::copy(&mut p, &mut std::io::sink());
+            b
+        })
+    };
+    let h_out = drain(so);
+    let h_err = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = se.by_ref().take(MAX_TOOL_OUTPUT).read_to_end(&mut b);
+        let _ = std::io::copy(&mut se, &mut std::io::sink());
+        b
+    });
+    let status = child.wait()?;
+    let stdout = h_out.join().unwrap_or_default();
+    let stderr = h_err.join().unwrap_or_default();
+    Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
 pub fn compiler_version(cc: &Path) -> String {
-    let Ok(out) = Command::new(cc).arg("--version").output() else {
+    let Ok(out) = capped_output(Command::new(cc).arg("--version")) else {
         return "unknown".to_owned();
     };
     if !out.status.success() {
@@ -100,7 +136,7 @@ pub(crate) fn run_tool(
 ) -> Result<String, String> {
     let mut cmd = Command::new(tool);
     configure(&mut cmd);
-    match cmd.output() {
+    match capped_output(&mut cmd) {
         Ok(out) => {
             let stderr = String::from_utf8_lossy(&out.stderr).trim().to_owned();
             if out.status.success() {

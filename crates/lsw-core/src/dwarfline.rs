@@ -198,32 +198,33 @@ impl DebugInfo {
         self.by_addr.get(idx)?.1.clone()
     }
 
-    pub(crate) fn addr_to_func(&self, addr: u64) -> Option<String> {
+    fn containing_func(&self, addr: u64) -> Option<&(u64, u64, String)> {
+        const MAX_OVERLAP_SCAN: usize = 10_000;
         let idx = match self.funcs.binary_search_by_key(&addr, |(a, _, _)| *a) {
             Ok(i) => i,
             Err(0) => return None,
             Err(i) => i - 1,
         };
-        let (low, high, name) = self.funcs.get(idx)?;
-        if addr >= *low && addr < *high {
-            Some(name.clone())
-        } else {
-            None
+        let start = idx.saturating_sub(MAX_OVERLAP_SCAN);
+        let mut best: Option<&(u64, u64, String)> = None;
+        for f in self.funcs[start..=idx].iter().rev() {
+            if f.0 <= addr && addr < f.1 {
+                match best {
+                    Some(b) if (b.1 - b.0) <= (f.1 - f.0) => {}
+                    _ => best = Some(f),
+                }
+            }
         }
+        best
+    }
+
+    pub(crate) fn addr_to_func(&self, addr: u64) -> Option<String> {
+        self.containing_func(addr).map(|(_, _, name)| name.clone())
     }
 
     pub(crate) fn func_range(&self, addr: u64) -> Option<(u64, u64)> {
-        let idx = match self.funcs.binary_search_by_key(&addr, |(a, _, _)| *a) {
-            Ok(i) => i,
-            Err(0) => return None,
-            Err(i) => i - 1,
-        };
-        let (low, high, _) = self.funcs.get(idx)?;
-        if addr >= *low && addr < *high {
-            Some((*low, *high))
-        } else {
-            None
-        }
+        self.containing_func(addr)
+            .map(|(low, high, _)| (*low, *high))
     }
 }
 
