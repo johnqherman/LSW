@@ -69,7 +69,7 @@ pub fn package(
             .expect("artifacts always have file names")
             .to_string_lossy()
             .into_owned();
-        if let Some(previous) = seen.insert(name.clone(), artifact.clone()) {
+        if let Some(previous) = seen.insert(name.to_ascii_lowercase(), artifact.clone()) {
             return Err(Error::PackageNameCollision {
                 name,
                 first: previous,

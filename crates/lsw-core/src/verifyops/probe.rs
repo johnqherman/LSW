@@ -71,14 +71,15 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
     let remote_script = format!("{remote_dir}\\lsw_probe.ps1");
     let script = probe_script(&grouped);
 
-    let mkdir = Command::new("ssh")
-        .args(ssh_opts(identity.as_deref()))
-        .arg(&host)
-        .arg(format!(
-            "cmd /c \"if not exist \"{remote_dir}\" mkdir \"{remote_dir}\"\""
-        ))
-        .output()
-        .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    let mkdir = super::capped_output(
+        Command::new("ssh")
+            .args(ssh_opts(identity.as_deref()))
+            .arg(&host)
+            .arg(format!(
+                "cmd /c \"if not exist \"{remote_dir}\" mkdir \"{remote_dir}\"\""
+            )),
+    )
+    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
     if !mkdir.status.success() {
         return Err(Error::ProbeFailed {
             host,
@@ -86,16 +87,32 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
         });
     }
 
-    let local_script =
-        std::env::temp_dir().join(format!("lsw_probe_{}.ps1", project.manifest.project.name));
-    std::fs::write(&local_script, script.as_bytes())
-        .map_err(|e| Error::io(local_script.clone(), e))?;
-    let scp = Command::new("scp")
-        .args(ssh_opts(identity.as_deref()))
-        .arg(&local_script)
-        .arg(format!("{host}:{remote_fwd}/lsw_probe.ps1"))
-        .output()
-        .map_err(|e| Error::io(PathBuf::from("scp"), e))?;
+    let nonce = format!(
+        "{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    );
+    let local_script = std::env::temp_dir().join(format!("lsw_probe_{nonce}.ps1"));
+    {
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&local_script)
+            .map_err(|e| Error::io(local_script.clone(), e))?;
+        f.write_all(script.as_bytes())
+            .map_err(|e| Error::io(local_script.clone(), e))?;
+    }
+    let scp = super::capped_output(
+        Command::new("scp")
+            .args(ssh_opts(identity.as_deref()))
+            .arg(&local_script)
+            .arg(format!("{host}:{remote_fwd}/lsw_probe.ps1")),
+    )
+    .map_err(|e| Error::io(PathBuf::from("scp"), e))?;
     let _ = std::fs::remove_file(&local_script);
     if !scp.status.success() {
         return Err(Error::ProbeFailed {
@@ -104,14 +121,15 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
         });
     }
 
-    let out = Command::new("ssh")
-        .args(ssh_opts(identity.as_deref()))
-        .arg(&host)
-        .arg(format!(
-            "powershell -NoProfile -ExecutionPolicy Bypass -File \"{remote_script}\""
-        ))
-        .output()
-        .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    let out = super::capped_output(
+        Command::new("ssh")
+            .args(ssh_opts(identity.as_deref()))
+            .arg(&host)
+            .arg(format!(
+                "powershell -NoProfile -ExecutionPolicy Bypass -File \"{remote_script}\""
+            )),
+    )
+    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
     if !out.status.success() {
         return Err(Error::ProbeFailed {
             host,

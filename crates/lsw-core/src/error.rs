@@ -144,6 +144,13 @@ pub enum Error {
     UnsupportedTransport { transport: String },
 
     #[error(
+        "LSW2027: refusing to bind '{}' into a strict sandbox\n\
+         The project or environment resolves to a system directory; strict isolation would grant the guest writable host access. Move the project out of the filesystem root or a system path.",
+        path.display()
+    )]
+    UnsafeSandboxBind { path: std::path::PathBuf },
+
+    #[error(
         "LSW2019: SDK '{name}' already exists\n\
          Possible fixes:\n  lsw sdk import {name} --from <path> --force\n  lsw sdk remove {name}"
     )]

@@ -1,5 +1,47 @@
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
+
+const SSH_MAX_OUTPUT: u64 = 16 * 1024 * 1024;
+const SSH_TIMEOUT: Duration = Duration::from_secs(300);
+
+pub(crate) fn capped_output(cmd: &mut Command) -> std::io::Result<Output> {
+    use std::io::Read;
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let mut so = child.stdout.take().expect("piped stdout");
+    let mut se = child.stderr.take().expect("piped stderr");
+    let h_out = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = so.by_ref().take(SSH_MAX_OUTPUT).read_to_end(&mut b);
+        b
+    });
+    let h_err = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = se.by_ref().take(SSH_MAX_OUTPUT).read_to_end(&mut b);
+        b
+    });
+    let deadline = Instant::now() + SSH_TIMEOUT;
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            break child.wait()?;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    let stdout = h_out.join().unwrap_or_default();
+    let stderr = h_err.join().unwrap_or_default();
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
 
 use serde::Serialize;
 
@@ -241,15 +283,16 @@ fn run_ssh_plan(
     } else {
         format!(" {}", args.join(" "))
     };
-    let mkdir = Command::new("ssh")
-        .args(ssh_opts(identity))
-        .arg(host)
-        .arg(format!(
-            "cmd /c \"if not exist \"{}\" mkdir \"{}\"\"",
-            plan.remote_dir, plan.remote_dir
-        ))
-        .output()
-        .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    let mkdir = capped_output(
+        Command::new("ssh")
+            .args(ssh_opts(identity))
+            .arg(host)
+            .arg(format!(
+                "cmd /c \"if not exist \"{}\" mkdir \"{}\"\"",
+                plan.remote_dir, plan.remote_dir
+            )),
+    )
+    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
     if !mkdir.status.success() {
         return Ok(VerifyReport {
             status: VerifyStatus::WindowsUnavailable,
@@ -264,12 +307,13 @@ fn run_ssh_plan(
 
     for (local, remote_name) in &plan.uploads {
         let dest = format!("{host}:{}/{remote_name}", plan.remote_dir);
-        let scp = Command::new("scp")
-            .args(ssh_opts(identity))
-            .arg(local)
-            .arg(&dest)
-            .output()
-            .map_err(|e| Error::io(PathBuf::from("scp"), e))?;
+        let scp = capped_output(
+            Command::new("scp")
+                .args(ssh_opts(identity))
+                .arg(local)
+                .arg(&dest),
+        )
+        .map_err(|e| Error::io(PathBuf::from("scp"), e))?;
         if !scp.status.success() {
             return Ok(VerifyReport {
                 status: VerifyStatus::WindowsUnavailable,
@@ -294,12 +338,13 @@ fn run_ssh_plan(
             dir = plan.remote_dir,
             prog = program,
         );
-        let out = Command::new("ssh")
-            .args(ssh_opts(identity))
-            .arg(host)
-            .arg(&remote_cmd)
-            .output()
-            .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+        let out = capped_output(
+            Command::new("ssh")
+                .args(ssh_opts(identity))
+                .arg(host)
+                .arg(&remote_cmd),
+        )
+        .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
 
         let remote_code = parse_sentinel_code(&stdout, sentinel);
