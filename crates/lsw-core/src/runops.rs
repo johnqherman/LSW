@@ -63,15 +63,19 @@ fn sandbox_spec(
     match sandbox {
         Sandbox::None => Ok(None),
         Sandbox::Strict => {
-            let mut rw_binds = vec![env.layout.root.clone()];
+            let mut raw_binds = vec![env.layout.root.clone()];
             if let Some(p) = project {
-                rw_binds.push(p.root.clone());
+                raw_binds.push(p.root.clone());
             }
-            for bind in &rw_binds {
-                let canon = bind.canonicalize().unwrap_or_else(|_| bind.clone());
+            let mut rw_binds = Vec::with_capacity(raw_binds.len());
+            for bind in raw_binds {
+                let canon = bind
+                    .canonicalize()
+                    .map_err(|_| Error::UnsafeSandboxBind { path: bind.clone() })?;
                 if is_unsafe_bind(&canon) {
                     return Err(Error::UnsafeSandboxBind { path: canon });
                 }
+                rw_binds.push(canon);
             }
             let network = match project {
                 Some(p) => parse_network(&p.manifest.sandbox.network).ok_or_else(|| {

@@ -73,12 +73,14 @@ pub fn watch(project: &Project, env: &Environment) -> Result<()> {
             .recv()
             .map_err(|_| Error::io(project.root.clone(), std::io::Error::other("watch ended")))?;
         let mut paths = event_paths(first);
+        paths.truncate(MAX_PATHS);
         let debounce_deadline = Instant::now() + Duration::from_secs(2);
         while paths.len() < MAX_PATHS
             && Instant::now() < debounce_deadline
             && let Ok(next) = rx.recv_timeout(Duration::from_millis(300))
         {
             paths.extend(event_paths(next));
+            paths.truncate(MAX_PATHS);
         }
         if is_source_change(&paths, &project.root, &outputs)
             && let Some(next) = rebuild(project, env)

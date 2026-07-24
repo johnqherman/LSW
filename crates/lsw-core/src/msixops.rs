@@ -35,7 +35,8 @@ pub fn build_msix(
         "[Content_Types].xml",
     ];
     for f in files {
-        if RESERVED.contains(&f.as_str()) || f.as_str() == logo {
+        let lower = f.to_ascii_lowercase();
+        if RESERVED.iter().any(|r| r.eq_ignore_ascii_case(f)) || lower == logo {
             return Err(Error::MsixSign {
                 detail: format!("build artifact '{f}' collides with a reserved MSIX package file"),
             });
@@ -332,22 +333,47 @@ fn block_map_xml(dir: &Path, files: &[String]) -> Result<String> {
 HashMethod=\"http://www.w3.org/2001/04/xmlenc#sha256\">\n",
     );
     for file in files {
-        let data = std::fs::read(dir.join(file)).map_err(|e| Error::io(dir.join(file), e))?;
+        use std::io::Read;
+        let path = dir.join(file);
+        let size = std::fs::metadata(&path)
+            .map_err(|e| Error::io(path.clone(), e))?
+            .len();
         let lfh = 30 + file.len();
         out.push_str(&format!(
             "  <File Name=\"{}\" Size=\"{}\" LfhSize=\"{}\">\n",
             crate::xml_escape(&file.replace('/', "\\")),
-            data.len(),
+            size,
             lfh
         ));
-        let blocks = if data.is_empty() {
-            vec![&data[..]]
-        } else {
-            data.chunks(BLOCK_SIZE).collect()
-        };
-        for block in blocks {
-            let digest = Sha256::digest(block);
+        let mut reader = std::io::BufReader::new(
+            std::fs::File::open(&path).map_err(|e| Error::io(path.clone(), e))?,
+        );
+        let mut block = vec![0u8; BLOCK_SIZE];
+        let mut emitted = false;
+        loop {
+            let mut filled = 0;
+            while filled < BLOCK_SIZE {
+                let n = reader
+                    .read(&mut block[filled..])
+                    .map_err(|e| Error::io(path.clone(), e))?;
+                if n == 0 {
+                    break;
+                }
+                filled += n;
+            }
+            if filled == 0 {
+                break;
+            }
+            emitted = true;
+            let digest = Sha256::digest(&block[..filled]);
             let hash = base64::engine::general_purpose::STANDARD.encode(digest);
+            out.push_str(&format!("    <Block Hash=\"{hash}\"/>\n"));
+            if filled < BLOCK_SIZE {
+                break;
+            }
+        }
+        if !emitted {
+            let hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest([]));
             out.push_str(&format!("    <Block Hash=\"{hash}\"/>\n"));
         }
         out.push_str("  </File>\n");
