@@ -117,7 +117,7 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<DotnetInitRe
 fn has_dotnet_project(root: &std::path::Path) -> bool {
     fs::read_dir(root)
         .map(|entries| {
-            entries.flatten().any(|e| {
+            entries.flatten().take(1_000_000).any(|e| {
                 let name = e.file_name();
                 let name = name.to_string_lossy();
                 name.ends_with(".csproj") || name.ends_with(".sln") || name.ends_with(".fsproj")

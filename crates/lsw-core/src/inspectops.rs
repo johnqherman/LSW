@@ -63,5 +63,6 @@ fn dll_available(env: &Environment, dll: &str) -> bool {
     };
     entries
         .flatten()
+        .take(1_000_000)
         .any(|e| e.file_name().to_string_lossy().to_ascii_lowercase() == wanted)
 }
