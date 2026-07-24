@@ -61,7 +61,7 @@ impl Plugin {
         let stdout = child.stdout.take().expect("piped stdout");
 
         let (tx, rx) = std::sync::mpsc::sync_channel(MAX_PENDING_RESPONSES);
-        let reader = std::thread::spawn(move || {
+        let reader = match std::thread::Builder::new().spawn(move || {
             let mut buf = BufReader::new(stdout);
             loop {
                 match read_bounded_line(&mut buf, MAX_LINE_BYTES) {
@@ -77,7 +77,17 @@ impl Plugin {
                     }
                 }
             }
-        });
+        }) {
+            Ok(handle) => handle,
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(plugin_err(
+                    name,
+                    format!("could not spawn plugin reader thread: {e}"),
+                ));
+            }
+        };
 
         let mut plugin = Plugin {
             name: name.to_owned(),
@@ -118,7 +128,10 @@ impl Plugin {
 
     pub fn call(&mut self, method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
         let id = self.next_id;
-        self.next_id += 1;
+        let Some(next) = self.next_id.checked_add(1) else {
+            return Err(plugin_err(&self.name, "request id space exhausted".into()));
+        };
+        self.next_id = next;
 
         let request = Request { id, method, params };
         let mut line = serde_json::to_string(&request).expect("request serializes");
