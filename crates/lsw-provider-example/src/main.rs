@@ -1,13 +1,19 @@
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
 
 const PROTOCOL: u32 = 1;
+const MAX_LINE_BYTES: u64 = 1024 * 1024;
 
 fn main() {
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
-    for line in stdin.lock().lines() {
-        let Ok(line) = line else { break };
+    let mut reader = stdin.lock();
+    loop {
+        let mut line = String::new();
+        match (&mut reader).take(MAX_LINE_BYTES).read_line(&mut line) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
         if line.trim().is_empty() {
             continue;
         }
