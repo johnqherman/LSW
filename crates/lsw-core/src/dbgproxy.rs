@@ -239,6 +239,7 @@ impl RspConn {
     }
 
     pub(crate) fn thread_ids(&mut self) -> Result<Vec<i64>> {
+        const MAX_THREADS: usize = 100_000;
         let mut out = Vec::new();
         let mut reply = self.command("qfThreadInfo")?;
         while let Some(b'm') = reply.first() {
@@ -246,6 +247,9 @@ impl RspConn {
                 if let Some(id) = parse_thread_id(part) {
                     out.push(id);
                 }
+            }
+            if out.len() >= MAX_THREADS {
+                break;
             }
             reply = self.command("qsThreadInfo")?;
         }
