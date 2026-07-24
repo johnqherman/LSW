@@ -122,6 +122,9 @@ pub fn authenticode_sign(unsigned: &Path, out: &Path, publisher: &str) -> Result
         });
     }
     let pfx = ensure_signing_identity(publisher)?;
+    if std::fs::symlink_metadata(out).is_ok() {
+        std::fs::remove_file(out).map_err(|e| Error::io(out.to_path_buf(), e))?;
+    }
     let output = std::process::Command::new("osslsigncode")
         .arg("sign")
         .args(["-pkcs12"])
