@@ -23,6 +23,7 @@ const RT_MANIFEST: u16 = 24;
 const MAX_RESOURCE_VISITS: u32 = 100_000;
 const MAX_RESOURCE_DATA: usize = 4 * 1024 * 1024;
 const MAX_SECTIONS: usize = 96;
+const MAX_RESOURCE_PAYLOAD_TOTAL: usize = 64 * 1024 * 1024;
 
 pub fn resources(path: &Path) -> Result<Resources, PeError> {
     let data = crate::error::read_pe(path)?;
@@ -85,6 +86,7 @@ fn resources_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Resou
     let root = dir.root().map_err(|e| PeError::malformed(path, e))?;
 
     let mut budget: u32 = MAX_RESOURCE_VISITS;
+    let mut payload_budget: usize = MAX_RESOURCE_PAYLOAD_TOTAL;
     'types: for type_entry in root.entries {
         if budget == 0 {
             break 'types;
@@ -129,6 +131,10 @@ fn resources_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Resou
                     continue;
                 };
                 let bytes = &bytes[..bytes.len().min(MAX_RESOURCE_DATA)];
+                if payload_budget < bytes.len() {
+                    break 'types;
+                }
+                payload_budget -= bytes.len();
                 match id {
                     RT_MANIFEST => parse_manifest(bytes, &mut out),
                     RT_VERSION => parse_version(bytes, &mut out.version),
