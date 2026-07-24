@@ -147,6 +147,18 @@ impl Plugin {
             let deadline = std::time::Instant::now() + CALL_TIMEOUT;
             let mut written = 0;
             while written < bytes.len() {
+                if std::time::Instant::now() >= deadline {
+                    self.stdin = None;
+                    let _ = self.child.kill();
+                    let _ = self.child.wait();
+                    return Err(plugin_err(
+                        &self.name,
+                        format!(
+                            "write did not complete within {}s; plugin killed",
+                            CALL_TIMEOUT.as_secs()
+                        ),
+                    ));
+                }
                 match stdin.write(&bytes[written..]) {
                     Ok(0) => {
                         self.stdin = None;
@@ -154,17 +166,6 @@ impl Plugin {
                     }
                     Ok(n) => written += n,
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        if std::time::Instant::now() >= deadline {
-                            self.stdin = None;
-                            let _ = self.child.kill();
-                            return Err(plugin_err(
-                                &self.name,
-                                format!(
-                                    "write did not complete within {}s; plugin killed",
-                                    CALL_TIMEOUT.as_secs()
-                                ),
-                            ));
-                        }
                         std::thread::sleep(Duration::from_millis(5));
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
