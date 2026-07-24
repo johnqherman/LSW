@@ -6,6 +6,8 @@ use object::{Object, ObjectSection};
 use crate::error::{Error, Result};
 
 const MAX_LINE_ROWS: usize = 8_000_000;
+const MAX_FUNCS: usize = 2_000_000;
+const MAX_UNIT_SCAN: usize = 100_000;
 const MAX_PE_BYTES: u64 = 512 * 1024 * 1024;
 
 pub(crate) struct DebugInfo {
@@ -202,15 +204,23 @@ fn collect_functions<R: gimli::Reader>(
     out: &mut Vec<(u64, u64, String)>,
 ) {
     let mut entries = unit.entries();
+    let mut visited = 0usize;
     while let Ok(Some((_, entry))) = entries.next_dfs() {
+        if out.len() >= MAX_FUNCS || visited >= MAX_FUNCS {
+            return;
+        }
         if entry.tag() != gimli::DW_TAG_subprogram {
             continue;
         }
+        visited += 1;
         let name = func_name(dwarf, unit, entry).unwrap_or_else(|| "<anonymous>".to_owned());
         let Ok(mut ranges) = dwarf.die_ranges(unit, entry) else {
             continue;
         };
         while let Ok(Some(range)) = ranges.next() {
+            if out.len() >= MAX_FUNCS {
+                return;
+            }
             if range.end > range.begin {
                 out.push((range.begin, range.end, name.clone()));
             }
@@ -299,7 +309,12 @@ fn name_at_debug_info<R: gimli::Reader>(
         return None;
     }
     let mut units = dwarf.units();
+    let mut scanned = 0usize;
     while let Ok(Some(header)) = units.next() {
+        if scanned >= MAX_UNIT_SCAN {
+            return None;
+        }
+        scanned += 1;
         let Some(unit_offset) = offset.to_unit_offset(&header) else {
             continue;
         };
