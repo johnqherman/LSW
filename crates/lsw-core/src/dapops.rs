@@ -20,6 +20,7 @@ const MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_STDERR_LINE: u64 = 1024 * 1024;
 const MAX_SOURCE_PATH: usize = 8192;
 const MAX_BREAKPOINTS: usize = 10_000;
+const MAX_TOTAL_BREAKPOINTS: usize = 50_000;
 const MAX_FRAME_THREADS: usize = 100_000;
 const MAX_STEP_ITERS: u32 = 1_000_000;
 const MAX_HEADER_BYTES: usize = 8 * 1024;
@@ -347,6 +348,9 @@ impl<'a> Adapter<'a> {
 
         let mut verified = Vec::new();
         for raw_line in requested {
+            if self.breakpoints.len() >= MAX_TOTAL_BREAKPOINTS {
+                break;
+            }
             let id = self.next_bp_id;
             self.next_bp_id += 1;
             let addr = u32::try_from(raw_line)
