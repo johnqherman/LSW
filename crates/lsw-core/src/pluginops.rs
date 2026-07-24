@@ -137,11 +137,18 @@ impl Plugin {
                 .as_mut()
                 .ok_or_else(|| plugin_err(&self.name, "plugin stdin closed".into()))?;
             let fd = stdin.as_raw_fd();
-            unsafe {
+            let nonblock_ok = unsafe {
                 let flags = libc::fcntl(fd, libc::F_GETFL);
-                if flags != -1 {
-                    libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
-                }
+                flags != -1 && libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) != -1
+            };
+            if !nonblock_ok {
+                self.stdin = None;
+                let _ = self.child.kill();
+                let _ = self.child.wait();
+                return Err(plugin_err(
+                    &self.name,
+                    "could not set plugin stdin non-blocking".into(),
+                ));
             }
             let bytes = line.into_bytes();
             let deadline = std::time::Instant::now() + CALL_TIMEOUT;
@@ -183,6 +190,7 @@ impl Plugin {
             Ok(Err(e)) => return Err(plugin_err(&self.name, format!("read failed: {e}"))),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 let _ = self.child.kill();
+                let _ = self.child.wait();
                 return Err(plugin_err(
                     &self.name,
                     format!(
