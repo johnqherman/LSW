@@ -335,7 +335,7 @@ pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
         Ok(e) => e,
         Err(_) => return Ok(0),
     };
-    for user in entries.flatten() {
+    for user in entries.flatten().take(1_000_000) {
         let udir = user.path();
         let Ok(meta) = fs::symlink_metadata(&udir) else {
             continue;
@@ -347,7 +347,7 @@ pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
             Ok(e) => e,
             Err(_) => continue,
         };
-        for entry in inner.flatten() {
+        for entry in inner.flatten().take(1_000_000) {
             let link = entry.path();
             let Ok(target) = fs::read_link(&link) else {
                 continue;
@@ -545,6 +545,7 @@ fn fingerprint_sysroot(sysroot: &Path) -> Result<String> {
         let mut names: Vec<String> = match fs::read_dir(&dir) {
             Ok(entries) => entries
                 .flatten()
+                .take(1_000_000)
                 .map(|e| {
                     let meta_len = e.metadata().map(|m| m.len()).unwrap_or(0);
                     format!("{}:{}", e.file_name().to_string_lossy(), meta_len)
