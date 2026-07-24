@@ -443,8 +443,8 @@ pub fn remove(
         return Ok(true);
     }
     let files_manifest = root.join(".lsw").join(format!("{name}.files"));
-    if let (Ok(list), Ok(canon_root)) = (
-        std::fs::read_to_string(&files_manifest),
+    if let (Some(list), Ok(canon_root)) = (
+        read_capped_string(&files_manifest, 16 * 1024 * 1024),
         root.canonicalize(),
     ) {
         for rel in list.lines() {
