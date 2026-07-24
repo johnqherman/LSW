@@ -9,14 +9,16 @@ use crate::project::Project;
 pub(crate) fn stamp_build_dir(project: &Project, env: &Environment) -> Result<()> {
     let build_dir = project.root.join("build");
     let marker = build_dir.join(".lsw-env");
+    let owner = super::read_capped(&marker, 1024 * 1024).and_then(|b| String::from_utf8(b).ok());
     if build_dir.is_dir()
-        && let Ok(owner) = fs::read_to_string(&marker)
+        && let Some(owner) = &owner
         && owner.trim() != env.name
     {
         fs::remove_dir_all(&build_dir).map_err(|e| Error::io(build_dir.clone(), e))?;
     }
     fs::create_dir_all(&build_dir).map_err(|e| Error::io(build_dir.clone(), e))?;
-    fs::write(&marker, &env.name).map_err(|e| Error::io(marker, e))
+    super::safe_marker_write(&marker, &env.name);
+    Ok(())
 }
 
 pub(crate) fn check_lock(project: &Project, env: &Environment) -> Result<()> {
