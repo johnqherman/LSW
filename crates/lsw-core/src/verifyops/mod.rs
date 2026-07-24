@@ -16,11 +16,13 @@ pub(crate) fn capped_output(cmd: &mut Command) -> std::io::Result<Output> {
     let h_out = std::thread::spawn(move || {
         let mut b = Vec::new();
         let _ = so.by_ref().take(SSH_MAX_OUTPUT).read_to_end(&mut b);
+        let _ = std::io::copy(&mut so, &mut std::io::sink());
         b
     });
     let h_err = std::thread::spawn(move || {
         let mut b = Vec::new();
         let _ = se.by_ref().take(SSH_MAX_OUTPUT).read_to_end(&mut b);
+        let _ = std::io::copy(&mut se, &mut std::io::sink());
         b
     });
     let deadline = Instant::now() + SSH_TIMEOUT;

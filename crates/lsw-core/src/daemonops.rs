@@ -290,6 +290,12 @@ impl DaemonClient {
                 detail: format!("daemon response id mismatch (expected {id})"),
             });
         }
+        if value.get("result").is_some() == value.get("error").is_some() {
+            return Err(Error::DaemonUnavailable {
+                path: self.path.clone(),
+                detail: "daemon response must contain exactly one of result or error".to_owned(),
+            });
+        }
         if let Some(err) = value.get("error") {
             let message = err
                 .get("message")
@@ -300,13 +306,10 @@ impl DaemonClient {
                 detail: message.to_owned(),
             });
         }
-        match value.get("result") {
-            Some(result) => Ok(result.clone()),
-            None => Err(Error::DaemonUnavailable {
-                path: self.path.clone(),
-                detail: "daemon response has neither result nor error".to_owned(),
-            }),
-        }
+        Ok(value
+            .get("result")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null))
     }
 }
 
