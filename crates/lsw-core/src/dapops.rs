@@ -999,6 +999,9 @@ impl<'a> Adapter<'a> {
         command.args(["--gdb", "--no-start", &win_path]);
         command.args(args);
         for (key, value) in env {
+            if lsw_runtime::host_loader_sensitive(key) {
+                continue;
+            }
             match value {
                 Some(v) => {
                     command.env(key, v);

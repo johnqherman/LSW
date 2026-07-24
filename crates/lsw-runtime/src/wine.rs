@@ -46,7 +46,7 @@ pub fn base_env(prefix: &Path) -> Vec<(String, String)> {
     ]
 }
 
-fn host_loader_sensitive(key: &str) -> bool {
+pub fn host_loader_sensitive(key: &str) -> bool {
     key.starts_with("LD_")
         || matches!(
             key,

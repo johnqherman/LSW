@@ -53,16 +53,23 @@ fn case_collisions(names: &[String]) -> Vec<String> {
 
 fn scan_case_collisions(root: &Path) -> usize {
     const SKIP: &[&str] = &["build", "target", ".git", "node_modules"];
+    const MAX_DIRS: usize = 100_000;
     let mut stack = vec![root.to_path_buf()];
     let mut total = 0;
+    let mut visited = 0;
     while let Some(dir) = stack.pop() {
+        visited += 1;
+        if visited > MAX_DIRS {
+            break;
+        }
         let Ok(entries) = std::fs::read_dir(&dir) else {
             continue;
         };
         let mut names = Vec::new();
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if entry.path().is_dir() && !SKIP.contains(&name.as_str()) {
+            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            if is_dir && !SKIP.contains(&name.as_str()) {
                 stack.push(entry.path());
             }
             names.push(name);
