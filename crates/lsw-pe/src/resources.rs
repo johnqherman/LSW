@@ -22,6 +22,7 @@ const RT_VERSION: u16 = 16;
 const RT_MANIFEST: u16 = 24;
 const MAX_RESOURCE_VISITS: u32 = 100_000;
 const MAX_RESOURCE_DATA: usize = 4 * 1024 * 1024;
+const MAX_SECTIONS: usize = 96;
 
 pub fn resources(path: &Path) -> Result<Resources, PeError> {
     let data = crate::error::read_pe(path)?;
@@ -46,7 +47,7 @@ fn rva_to_bytes<'d, Pe: ImageNtHeaders>(
     rva: u32,
     size: u32,
 ) -> Option<&'d [u8]> {
-    for section in file.section_table().iter() {
+    for section in file.section_table().iter().take(MAX_SECTIONS) {
         let va = section.virtual_address.get(LE);
         let vsize = section.virtual_size.get(LE);
         let raw = section.size_of_raw_data.get(LE);
