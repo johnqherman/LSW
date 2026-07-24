@@ -16,6 +16,8 @@ pub(crate) use lockfile::check_lock;
 use lockfile::{stamp_build_dir, sync_lockfile};
 use toolchain::{effective_toolchain, run_step, run_step_with_env, write_meson_cross_file};
 
+const MAX_DIR_ENTRIES: usize = 1_000_000;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuildSystem {
     Cmake,
@@ -31,7 +33,7 @@ pub enum BuildSystem {
 fn has_dotnet_project(root: &Path) -> bool {
     std::fs::read_dir(root)
         .map(|entries| {
-            entries.flatten().any(|e| {
+            entries.flatten().take(MAX_DIR_ENTRIES).any(|e| {
                 let name = e.file_name();
                 let name = name.to_string_lossy();
                 name.ends_with(".csproj") || name.ends_with(".sln") || name.ends_with(".fsproj")
@@ -225,7 +227,9 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             } else {
                 None
             };
-            let toolchain_contents = fs::read_to_string(&toolchain_file).unwrap_or_default();
+            let toolchain_contents = read_capped(&toolchain_file, 4 * 1024 * 1024)
+                .and_then(|b| String::from_utf8(b).ok())
+                .unwrap_or_default();
             let cmake_config = format!(
                 "{tc:?}|arch={}|generator={generator:?}|toolchain_path={}|toolchain_body={}|prefix={}|emulator={}|deps={:?}|env={}",
                 env.manifest.target_arch,
@@ -581,7 +585,7 @@ fn walk_depth(
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
-    for entry in entries.flatten() {
+    for entry in entries.flatten().take(MAX_DIR_ENTRIES) {
         if out.len() >= max {
             return;
         }
@@ -633,6 +637,7 @@ fn deploy_runtime_dlls(
     for entry in fs::read_dir(&sysroot_bin)
         .map_err(|e| Error::io(sysroot_bin.clone(), e))?
         .flatten()
+        .take(MAX_DIR_ENTRIES)
     {
         let name = entry.file_name().to_string_lossy().into_owned();
         if name.to_ascii_lowercase().ends_with(".dll") {
