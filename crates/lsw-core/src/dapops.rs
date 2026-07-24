@@ -18,6 +18,10 @@ const REGISTER_NAMES: [&str; 17] = [
 
 const MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_STDERR_LINE: u64 = 1024 * 1024;
+const MAX_SOURCE_PATH: usize = 8192;
+const MAX_BREAKPOINTS: usize = 10_000;
+const MAX_FRAME_THREADS: usize = 100_000;
+const MAX_STEP_ITERS: u32 = 1_000_000;
 const MAX_HEADER_BYTES: usize = 8 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,6 +47,7 @@ pub struct ProtocolMessage {
 
 pub fn read_message<R: BufRead>(reader: &mut R) -> Result<Option<ProtocolMessage>> {
     let mut content_length: Option<usize> = None;
+    let mut header_total: usize = 0;
     loop {
         let mut line = String::new();
         let n = {
@@ -54,9 +59,10 @@ pub fn read_message<R: BufRead>(reader: &mut R) -> Result<Option<ProtocolMessage
         if n == 0 {
             return Ok(None);
         }
-        if line.len() > MAX_HEADER_BYTES {
+        header_total = header_total.saturating_add(line.len());
+        if line.len() > MAX_HEADER_BYTES || header_total > MAX_HEADER_BYTES {
             return Err(Error::Dap {
-                detail: format!("DAP header line exceeds the {MAX_HEADER_BYTES}-byte limit"),
+                detail: format!("DAP headers exceed the {MAX_HEADER_BYTES}-byte limit"),
             });
         }
         let trimmed = line.trim_end_matches(['\r', '\n']);
@@ -320,6 +326,11 @@ impl<'a> Adapter<'a> {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_owned();
+        if source.len() > MAX_SOURCE_PATH {
+            return Err(Error::Dap {
+                detail: "setBreakpoints source path exceeds the length limit".into(),
+            });
+        }
         let requested: Vec<u64> = req
             .arguments
             .get("breakpoints")
@@ -327,6 +338,7 @@ impl<'a> Adapter<'a> {
             .map(|a| {
                 a.iter()
                     .filter_map(|b| b.get("line").and_then(|l| l.as_u64()))
+                    .take(MAX_BREAKPOINTS)
                     .collect()
             })
             .unwrap_or_default();
@@ -457,6 +469,9 @@ impl<'a> Adapter<'a> {
     }
 
     fn build_frames(&mut self, thread: i64) -> Result<Vec<serde_json::Value>> {
+        if self.frame_threads.len() > MAX_FRAME_THREADS {
+            self.frame_threads.clear();
+        }
         let Some(conn) = self.conn.as_mut() else {
             return Ok(Vec::new());
         };
@@ -764,7 +779,12 @@ impl<'a> Adapter<'a> {
             return Ok(None);
         }
         let mut result = Ok(None);
+        let mut steps = 0u32;
         while let Some(conn) = self.conn.as_mut() {
+            if steps >= MAX_STEP_ITERS {
+                break;
+            }
+            steps += 1;
             let (stop, output) = match conn.resume("c") {
                 Ok(v) => v,
                 Err(e) => {
@@ -1049,22 +1069,20 @@ fn z_drive_path(path: &Path) -> String {
 }
 
 fn read_gdb_port<R: Read + Send + 'static>(stream: R) -> Result<u16> {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = std::sync::mpsc::sync_channel(64);
     std::thread::spawn(move || {
         let mut reader = BufReader::new(stream);
-        let mut forward = true;
         loop {
             let mut line = String::new();
             match (&mut reader).take(MAX_STDERR_LINE).read_line(&mut line) {
                 Ok(0) | Err(_) => break,
                 Ok(_) => {
-                    if forward && tx.send(line).is_err() {
-                        forward = false;
-                    }
+                    let _ = tx.try_send(line);
                 }
             }
         }
     });
+    const MARKER: &str = "target remote localhost:";
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
         let remaining = deadline.saturating_duration_since(std::time::Instant::now());
@@ -1074,8 +1092,8 @@ fn read_gdb_port<R: Read + Send + 'static>(stream: R) -> Result<u16> {
         let Ok(line) = rx.recv_timeout(remaining) else {
             break;
         };
-        if let Some(idx) = line.find("localhost:") {
-            let digits: String = line[idx + "localhost:".len()..]
+        if let Some(idx) = line.find(MARKER) {
+            let digits: String = line[idx + MARKER.len()..]
                 .chars()
                 .take_while(|c| c.is_ascii_digit())
                 .collect();
