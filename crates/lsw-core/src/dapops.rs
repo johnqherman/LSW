@@ -899,6 +899,16 @@ impl<'a> Adapter<'a> {
         if text.is_empty() || self.step_output_bytes >= MAX_STEP_OUTPUT {
             return;
         }
+        let remaining = MAX_STEP_OUTPUT - self.step_output_bytes;
+        let text = if text.len() > remaining {
+            let mut end = remaining;
+            while end > 0 && !text.is_char_boundary(end) {
+                end -= 1;
+            }
+            &text[..end]
+        } else {
+            text
+        };
         self.step_output_bytes = self.step_output_bytes.saturating_add(text.len());
         let ev = self.event(
             "output",

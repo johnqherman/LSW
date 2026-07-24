@@ -39,10 +39,11 @@ fn has_sdk_dir(root: &Path, kind: &str) -> bool {
 
 pub fn import(dirs: &Dirs, name: &str, from: &Path, force: bool) -> Result<SdkImportReport> {
     validate_name("sdk", name)?;
-    if !from.is_dir() {
+    let from_meta = fs::symlink_metadata(from).map_err(|e| Error::io(from.to_path_buf(), e))?;
+    if from_meta.file_type().is_symlink() || !from_meta.is_dir() {
         return Err(Error::SdkImportFailed {
             path: from.to_path_buf(),
-            detail: "source is not a directory".into(),
+            detail: "source is not a directory (or is a symlink)".into(),
         });
     }
 
@@ -133,13 +134,10 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<usize> {
             Ok(m) => m,
             Err(_) => continue,
         };
-        if meta.file_type().is_symlink() {
-            continue;
-        }
         if meta.is_dir() {
             fs::create_dir_all(&to).map_err(|e| Error::io(to.clone(), e))?;
             count += copy_tree(&from, &to)?;
-        } else {
+        } else if meta.is_file() {
             fs::copy(&from, &to).map_err(|e| Error::io(from.clone(), e))?;
             count += 1;
         }
@@ -156,7 +154,13 @@ fn manifest_save(manifest: &SdkManifest, path: &Path) -> Result<()> {
 }
 
 fn manifest_load(path: &Path) -> Result<SdkManifest> {
-    let text = fs::read_to_string(path).map_err(|e| Error::io(path.to_path_buf(), e))?;
+    use std::io::Read;
+    const MAX_MANIFEST: u64 = 4 * 1024 * 1024;
+    let file = fs::File::open(path).map_err(|e| Error::io(path.to_path_buf(), e))?;
+    let mut text = String::new();
+    file.take(MAX_MANIFEST)
+        .read_to_string(&mut text)
+        .map_err(|e| Error::io(path.to_path_buf(), e))?;
     toml::from_str(&text).map_err(|e| Error::InitFailed {
         path: path.to_path_buf(),
         detail: format!("invalid sdk manifest: {e}"),
