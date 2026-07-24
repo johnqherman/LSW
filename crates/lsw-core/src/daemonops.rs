@@ -19,6 +19,7 @@ const MAX_RESPONSE_BYTES: u64 = 8 * 1024 * 1024;
 
 const ACCEPT_POLL: Duration = Duration::from_millis(100);
 const MAX_CONNECTIONS: usize = 64;
+const MAX_ENV_LIST: usize = 100_000;
 
 struct ActiveGuard(Arc<std::sync::atomic::AtomicUsize>);
 
@@ -224,7 +225,11 @@ fn dispatch(line: &str, dirs: &Dirs, running: &Arc<AtomicBool>) -> Option<Respon
         "ping" => Response::ok(id, serde_json::json!({ "pong": true })),
         "env.list" => match envops::list(dirs) {
             Ok(envs) => {
-                let names: Vec<String> = envs.into_iter().map(|e| e.name).collect();
+                let names: Vec<String> = envs
+                    .into_iter()
+                    .map(|e| e.name)
+                    .take(MAX_ENV_LIST)
+                    .collect();
                 Response::ok(id, serde_json::json!({ "environments": names }))
             }
             Err(e) => Response::err(id, -32603, e.to_string()),
