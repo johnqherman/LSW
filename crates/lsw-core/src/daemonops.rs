@@ -107,11 +107,12 @@ fn run_accept_loop(listener: UnixListener, path: &Path, dirs: &Dirs) -> Result<(
     while running.load(Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
-                if active.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
+                if active.load(Ordering::SeqCst) >= MAX_CONNECTIONS
+                    || stream.set_read_timeout(Some(CLIENT_IDLE_TIMEOUT)).is_err()
+                {
                     drop(stream);
                     continue;
                 }
-                let _ = stream.set_read_timeout(Some(CLIENT_IDLE_TIMEOUT));
                 active.fetch_add(1, Ordering::SeqCst);
                 let dirs = dirs.clone();
                 let running = Arc::clone(&running);
@@ -159,7 +160,9 @@ fn handle_connection(stream: UnixStream, dirs: &Dirs, running: &Arc<AtomicBool>)
         Ok(w) => w,
         Err(_) => return,
     };
-    let _ = writer.set_write_timeout(Some(CLIENT_IDLE_TIMEOUT));
+    if writer.set_write_timeout(Some(CLIENT_IDLE_TIMEOUT)).is_err() {
+        return;
+    }
     const MAX_FRAME: u64 = 1 << 20;
     let mut reader = BufReader::new(stream);
     loop {
