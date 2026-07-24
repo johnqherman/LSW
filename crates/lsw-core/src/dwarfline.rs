@@ -78,6 +78,9 @@ impl DebugInfo {
 
         let mut units = dwarf.units();
         while let Ok(Some(header)) = units.next() {
+            if func_visited >= MAX_FUNCS && rows_seen >= MAX_LINE_ROWS && scan_budget == 0 {
+                break;
+            }
             let Ok(unit) = dwarf.unit(header) else {
                 continue;
             };
