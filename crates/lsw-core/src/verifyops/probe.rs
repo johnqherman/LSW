@@ -157,6 +157,10 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
     }))
 }
 
+fn ps_dquote(s: &str) -> String {
+    s.replace('`', "``").replace('$', "`$").replace('"', "`\"")
+}
+
 fn probe_script(grouped: &std::collections::BTreeMap<String, Vec<String>>) -> String {
     let mut s = String::from(
         "$ErrorActionPreference='SilentlyContinue'\n\
@@ -170,13 +174,15 @@ fn probe_script(grouped: &std::collections::BTreeMap<String, Vec<String>>) -> St
          \"@\n",
     );
     for (dll, funcs) in grouped {
+        let dll_d = ps_dquote(dll);
         s.push_str(&format!("$h=[LswProbe]::LoadLibraryW('{dll}')\n"));
         s.push_str(&format!(
-            "if($h -eq [IntPtr]::Zero){{Write-Output \"DLL`t{dll}`tMISSING\"}}else{{Write-Output \"DLL`t{dll}`tOK\"\n"
+            "if($h -eq [IntPtr]::Zero){{Write-Output \"DLL`t{dll_d}`tMISSING\"}}else{{Write-Output \"DLL`t{dll_d}`tOK\"\n"
         ));
         for func in funcs {
+            let func_d = ps_dquote(func);
             s.push_str(&format!(
-                "if([LswProbe]::GetProcAddress($h,'{func}') -eq [IntPtr]::Zero){{Write-Output \"FN`t{dll}`t{func}`tMISSING\"}}\n"
+                "if([LswProbe]::GetProcAddress($h,'{func}') -eq [IntPtr]::Zero){{Write-Output \"FN`t{dll_d}`t{func_d}`tMISSING\"}}\n"
             ));
         }
         s.push_str("}\n");

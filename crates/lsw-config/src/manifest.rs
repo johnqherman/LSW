@@ -318,10 +318,18 @@ const MAX_MANIFEST_BYTES: u64 = 4 * 1024 * 1024;
 pub(crate) fn read_toml<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
     use std::io::Read;
     let file = fs::File::open(path).map_err(|e| ConfigError::read(path, e))?;
-    let mut text = String::new();
-    file.take(MAX_MANIFEST_BYTES)
-        .read_to_string(&mut text)
+    let mut bytes = Vec::new();
+    file.take(MAX_MANIFEST_BYTES + 1)
+        .read_to_end(&mut bytes)
         .map_err(|e| ConfigError::read(path, e))?;
+    if bytes.len() as u64 > MAX_MANIFEST_BYTES {
+        return Err(ConfigError::read(
+            path,
+            std::io::Error::other(format!("file exceeds {MAX_MANIFEST_BYTES}-byte limit")),
+        ));
+    }
+    let text = String::from_utf8(bytes)
+        .map_err(|_| ConfigError::read(path, std::io::Error::other("file is not valid UTF-8")))?;
     toml::from_str(&text).map_err(|source| ConfigError::Parse {
         path: path.to_path_buf(),
         source: Box::new(source),
