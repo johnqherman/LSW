@@ -1,6 +1,21 @@
 use std::fs;
+use std::io::Read;
 
 use lsw_config::{ResolvedToolchain, TargetArch};
+
+fn read_magic(path: &std::path::Path) -> std::io::Result<[u8; 2]> {
+    let mut buf = [0u8; 2];
+    let mut file = fs::File::open(path)?;
+    let mut read = 0;
+    while read < 2 {
+        let n = file.read(&mut buf[read..])?;
+        if n == 0 {
+            break;
+        }
+        read += n;
+    }
+    Ok(buf)
+}
 
 use crate::error::{ProbeReport, ToolchainError};
 use crate::gnu::{LlvmMingw, MingwGcc};
@@ -123,8 +138,8 @@ pub(crate) fn run_probe(provider_id: &str, tc: &ResolvedToolchain) -> ProbeRepor
         }
     }
 
-    match fs::read(&exe) {
-        Ok(bytes) if bytes.starts_with(b"MZ") => {
+    match read_magic(&exe) {
+        Ok(magic) if magic.starts_with(b"MZ") => {
             report.produced_pe = true;
             report.detail = format!("produced PE binary via {}", tc.cc.display());
         }

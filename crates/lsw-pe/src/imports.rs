@@ -11,6 +11,7 @@ use crate::error::PeError;
 
 const MAX_NAMES: usize = 65536;
 const MAX_NAME_LEN: usize = 512;
+const MAX_SCAN_BYTES: usize = 64 * 1024 * 1024;
 
 fn decode_name(raw: &[u8]) -> String {
     String::from_utf8_lossy(&raw[..raw.len().min(MAX_NAME_LEN)]).into_owned()
@@ -47,17 +48,19 @@ fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
         .map_err(|e| PeError::malformed(path, e))?;
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut visited = 0usize;
+    let mut scanned = 0usize;
     while let Some(descriptor) = descriptors
         .next()
         .map_err(|e| PeError::malformed(path, e))?
     {
-        if dlls.len() >= MAX_NAMES || visited >= MAX_NAMES {
+        if dlls.len() >= MAX_NAMES || visited >= MAX_NAMES || scanned >= MAX_SCAN_BYTES {
             break;
         }
         visited += 1;
         let raw = table
             .name(descriptor.name.get(LE))
             .map_err(|e| PeError::malformed(path, e))?;
+        scanned += raw.len();
         let name = decode_name(raw);
         if seen.insert(name.to_ascii_lowercase()) {
             dlls.push(name);
@@ -95,11 +98,13 @@ fn exports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
     let ordinal_base = table.ordinal_base();
     let count = table.addresses().len().min(MAX_NAMES);
     let mut names: std::collections::HashMap<u32, &[u8]> = std::collections::HashMap::new();
+    let mut scanned = 0usize;
     for (name_pointer, ordinal_index) in table.name_iter() {
-        if names.len() >= MAX_NAMES {
+        if names.len() >= MAX_NAMES || scanned >= MAX_SCAN_BYTES {
             break;
         }
         if let Ok(name) = table.name_from_pointer(name_pointer) {
+            scanned += name.len();
             names.entry(ordinal_index as u32).or_insert(name);
         }
     }
@@ -149,19 +154,20 @@ fn imported_symbols_typed<Pe: ImageNtHeaders>(
         .descriptors()
         .map_err(|e| PeError::malformed(path, e))?;
     let mut visited = 0usize;
+    let mut scanned = 0usize;
     while let Some(descriptor) = descriptors
         .next()
         .map_err(|e| PeError::malformed(path, e))?
     {
-        if out.len() >= MAX_NAMES || visited >= MAX_NAMES {
+        if out.len() >= MAX_NAMES || visited >= MAX_NAMES || scanned >= MAX_SCAN_BYTES {
             break;
         }
         visited += 1;
-        let dll = decode_name(
-            table
-                .name(descriptor.name.get(LE))
-                .map_err(|e| PeError::malformed(path, e))?,
-        );
+        let dll_raw = table
+            .name(descriptor.name.get(LE))
+            .map_err(|e| PeError::malformed(path, e))?;
+        scanned += dll_raw.len();
+        let dll = decode_name(dll_raw);
         let ilt = descriptor.original_first_thunk.get(LE);
         let first = if ilt != 0 {
             ilt
@@ -175,7 +181,7 @@ fn imported_symbols_typed<Pe: ImageNtHeaders>(
             .next::<Pe>()
             .map_err(|e| PeError::malformed(path, e))?
         {
-            if out.len() >= MAX_NAMES {
+            if out.len() >= MAX_NAMES || scanned >= MAX_SCAN_BYTES {
                 break;
             }
             let symbol = match table
@@ -183,7 +189,10 @@ fn imported_symbols_typed<Pe: ImageNtHeaders>(
                 .map_err(|e| PeError::malformed(path, e))?
             {
                 Import::Ordinal(n) => format!("#{n}"),
-                Import::Name(_hint, name) => decode_name(name),
+                Import::Name(_hint, name) => {
+                    scanned += name.len();
+                    decode_name(name)
+                }
             };
             out.push((dll.clone(), symbol));
         }
