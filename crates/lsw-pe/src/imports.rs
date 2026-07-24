@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::Path;
 
 use object::LittleEndian as LE;
@@ -18,7 +17,7 @@ fn decode_name(raw: &[u8]) -> String {
 }
 
 pub fn imports(path: &Path) -> Result<Vec<String>, PeError> {
-    let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+    let data = crate::error::read_pe(path)?;
     if !data.starts_with(MZ_MAGIC) {
         return Err(PeError::NotPe {
             path: path.to_path_buf(),
@@ -70,7 +69,7 @@ fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
 }
 
 pub fn exports(path: &Path) -> Result<Vec<String>, PeError> {
-    let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+    let data = crate::error::read_pe(path)?;
     if !data.starts_with(MZ_MAGIC) {
         return Err(PeError::NotPe {
             path: path.to_path_buf(),
@@ -118,7 +117,7 @@ fn exports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
 }
 
 pub fn imported_symbols(path: &Path) -> Result<Vec<(String, String)>, PeError> {
-    let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+    let data = crate::error::read_pe(path)?;
     if !data.starts_with(MZ_MAGIC) {
         return Err(PeError::NotPe {
             path: path.to_path_buf(),

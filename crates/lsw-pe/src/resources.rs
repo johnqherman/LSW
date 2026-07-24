@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::Path;
 
 use object::LittleEndian as LE;
@@ -25,7 +24,7 @@ const MAX_RESOURCE_VISITS: u32 = 100_000;
 const MAX_RESOURCE_DATA: usize = 4 * 1024 * 1024;
 
 pub fn resources(path: &Path) -> Result<Resources, PeError> {
-    let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+    let data = crate::error::read_pe(path)?;
     if !data.starts_with(MZ_MAGIC) {
         return Err(PeError::NotPe {
             path: path.to_path_buf(),

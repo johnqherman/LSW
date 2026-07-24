@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::Path;
 
 use object::LittleEndian as LE;
@@ -21,7 +20,7 @@ pub struct Hardening {
 }
 
 pub fn hardening(path: &Path) -> Result<Hardening, PeError> {
-    let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+    let data = crate::error::read_pe(path)?;
     if !data.starts_with(MZ_MAGIC) {
         return Err(PeError::NotPe {
             path: path.to_path_buf(),

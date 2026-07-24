@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::Path;
 
 use object::LittleEndian as LE;
@@ -24,7 +23,7 @@ pub struct PeDetails {
 }
 
 pub fn details(path: &Path) -> Result<PeDetails, PeError> {
-    let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+    let data = crate::error::read_pe(path)?;
     if !data.starts_with(MZ_MAGIC) {
         return Err(PeError::NotPe {
             path: path.to_path_buf(),
