@@ -242,14 +242,14 @@ impl RspConn {
         const MAX_THREADS: usize = 100_000;
         let mut out = Vec::new();
         let mut reply = self.command("qfThreadInfo")?;
-        while let Some(b'm') = reply.first() {
+        'outer: while let Some(b'm') = reply.first() {
             for part in std::str::from_utf8(&reply[1..]).unwrap_or("").split(',') {
+                if out.len() >= MAX_THREADS {
+                    break 'outer;
+                }
                 if let Some(id) = parse_thread_id(part) {
                     out.push(id);
                 }
-            }
-            if out.len() >= MAX_THREADS {
-                break;
             }
             reply = self.command("qsThreadInfo")?;
         }
