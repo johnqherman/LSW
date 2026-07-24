@@ -39,24 +39,20 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
         });
     }
 
-    let mut grouped: std::collections::BTreeMap<String, Vec<String>> =
+    let mut grouped: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
         std::collections::BTreeMap::new();
     for (dll, func) in imports {
         let dll = dll.to_ascii_lowercase();
         if dll.is_empty() || !dll.chars().all(|c| c.is_ascii_graphic() && c != '\'') {
             continue;
         }
-        let clean = func.trim();
-        if clean.is_empty()
-            || clean.starts_with('#')
-            || !clean.chars().all(|c| c.is_ascii_graphic() && c != '\'')
+        if func.is_empty()
+            || func.starts_with('#')
+            || !func.chars().all(|c| c.is_ascii_graphic() && c != '\'')
         {
             continue;
         }
-        let entry = grouped.entry(dll).or_default();
-        if entry.len() < 256 && !entry.iter().any(|f| f == clean) {
-            entry.push(clean.to_owned());
-        }
+        grouped.entry(dll).or_default().insert(func);
     }
     if grouped.is_empty() {
         return Ok(Some(ImportProbe {
@@ -164,7 +160,9 @@ fn ps_dquote(s: &str) -> String {
     s.replace('`', "``").replace('$', "`$").replace('"', "`\"")
 }
 
-fn probe_script(grouped: &std::collections::BTreeMap<String, Vec<String>>) -> String {
+fn probe_script(
+    grouped: &std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+) -> String {
     let mut s = String::from(
         "$ErrorActionPreference='SilentlyContinue'\n\
          Add-Type @\"\n\
