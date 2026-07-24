@@ -23,7 +23,7 @@ fn pe_signature_offset(path: &Path, data: &[u8]) -> Result<usize, PeError> {
 }
 
 pub fn coff_timestamp(path: &Path) -> Result<u32, PeError> {
-    let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+    let data = crate::error::read_pe(path)?;
     let off = pe_signature_offset(path, &data)? + 8;
     Ok(u32::from_le_bytes([
         data[off],
@@ -34,7 +34,7 @@ pub fn coff_timestamp(path: &Path) -> Result<u32, PeError> {
 }
 
 pub fn set_coff_timestamp(path: &Path, value: u32) -> Result<(), PeError> {
-    let mut data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+    let mut data = crate::error::read_pe(path)?;
     let off = pe_signature_offset(path, &data)? + 8;
     data[off..off + 4].copy_from_slice(&value.to_le_bytes());
     fs::write(path, &data).map_err(|e| PeError::io(path, e))
