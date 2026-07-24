@@ -6,6 +6,18 @@ use object::{Object, ObjectSection};
 use crate::error::{Error, Result};
 
 const MAX_LINE_ROWS: usize = 8_000_000;
+const MAX_DWARF_NAME: usize = 4096;
+
+fn cap_len(mut s: String) -> String {
+    if s.len() > MAX_DWARF_NAME {
+        let mut end = MAX_DWARF_NAME;
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        s.truncate(end);
+    }
+    s
+}
 const MAX_FUNCS: usize = 2_000_000;
 const MAX_UNIT_SCAN: usize = 100_000;
 const MAX_PE_BYTES: u64 = 512 * 1024 * 1024;
@@ -112,10 +124,11 @@ impl DebugInfo {
                     continue;
                 }
                 let Some(line) = row.line() else { continue };
-                let file = row
-                    .file(header)
-                    .and_then(|f| file_name(&dwarf, &unit, header, f, &comp_dir))
-                    .unwrap_or_default();
+                let file = cap_len(
+                    row.file(header)
+                        .and_then(|f| file_name(&dwarf, &unit, header, f, &comp_dir))
+                        .unwrap_or_default(),
+                );
                 let addr = row.address();
                 let line = line.get() as u32;
                 lines
@@ -230,8 +243,9 @@ fn collect_functions<R: gimli::Reader>(
             continue;
         }
         *visited += 1;
-        let name =
-            func_name(dwarf, unit, entry, scan_budget).unwrap_or_else(|| "<anonymous>".to_owned());
+        let name = cap_len(
+            func_name(dwarf, unit, entry, scan_budget).unwrap_or_else(|| "<anonymous>".to_owned()),
+        );
         let Ok(mut ranges) = dwarf.die_ranges(unit, entry) else {
             continue;
         };
