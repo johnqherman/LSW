@@ -130,7 +130,8 @@ fn run_accept_loop(listener: UnixListener, path: &Path, dirs: &Dirs) -> Result<(
             }
             Err(e) => {
                 tracing::warn!("lswd accept error: {e}");
-                break;
+                let _ = std::fs::remove_file(path);
+                return Err(Error::io(path.to_path_buf(), e));
             }
         }
     }
@@ -258,7 +259,13 @@ impl DaemonClient {
 
     pub fn call(&mut self, method: &str) -> Result<serde_json::Value> {
         let id = self.next_id;
-        self.next_id += 1;
+        let Some(next) = self.next_id.checked_add(1) else {
+            return Err(Error::io(
+                self.path.clone(),
+                std::io::Error::other("request id space exhausted"),
+            ));
+        };
+        self.next_id = next;
         let mut line = serde_json::to_string(
             &serde_json::json!({ "jsonrpc": JSONRPC_VERSION, "id": id, "method": method }),
         )
@@ -280,9 +287,15 @@ impl DaemonClient {
         let mut reader = BufReader::new(&self.stream);
         let mut response = String::new();
         (&mut reader)
-            .take(MAX_RESPONSE_BYTES)
+            .take(MAX_RESPONSE_BYTES + 1)
             .read_line(&mut response)
             .map_err(|e| Error::io(self.path.clone(), e))?;
+        if !response.ends_with('\n') {
+            return Err(Error::DaemonUnavailable {
+                path: self.path.clone(),
+                detail: "daemon response was not newline-terminated within the size limit".into(),
+            });
+        }
 
         let value: serde_json::Value =
             serde_json::from_str(response.trim()).map_err(|e| Error::DaemonUnavailable {

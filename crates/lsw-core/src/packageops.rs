@@ -96,6 +96,7 @@ pub fn package(
         }
     }
 
+    let canon_root = project.root.canonicalize().ok();
     let mut files = Vec::new();
     for artifact in &build.artifacts {
         let source = project.root.join(artifact);
@@ -103,6 +104,17 @@ pub fn package(
             .file_name()
             .expect("artifacts always have file names")
             .to_owned();
+        let within = source
+            .canonicalize()
+            .ok()
+            .zip(canon_root.clone())
+            .is_some_and(|(s, root)| s.starts_with(&root));
+        if !within {
+            return Err(Error::InitFailed {
+                path: source.clone(),
+                detail: "refusing to package an artifact that resolves outside the project".into(),
+            });
+        }
         let dest = dir.join(&name);
         fs::copy(&source, &dest).map_err(|e| Error::io(source.clone(), e))?;
         files.push(name.to_string_lossy().into_owned());
