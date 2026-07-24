@@ -460,7 +460,8 @@ fn refresh_stale_cmake_build_dir(build_dir: &Path, config: &str) -> Result<()> {
     }
     let fingerprint = cmake_config_fingerprint(config);
     let marker = build_dir.join(".lsw-toolchain");
-    if fs::read_to_string(&marker).is_ok_and(|m| m.trim() == fingerprint) {
+    let recorded = read_capped(&marker, 1024 * 1024).and_then(|b| String::from_utf8(b).ok());
+    if recorded.is_some_and(|m| m.trim() == fingerprint) {
         return Ok(());
     }
     fs::remove_dir_all(build_dir).map_err(|e| Error::io(build_dir.to_path_buf(), e))?;
