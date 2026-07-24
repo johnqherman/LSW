@@ -92,13 +92,21 @@ fn exports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
     else {
         return Ok(out);
     };
-    for export in table.exports().map_err(|e| PeError::malformed(path, e))? {
-        if out.len() >= MAX_NAMES {
+    let ordinal_base = table.ordinal_base();
+    let count = table.addresses().len().min(MAX_NAMES);
+    let mut names: std::collections::HashMap<u32, &[u8]> = std::collections::HashMap::new();
+    for (name_pointer, ordinal_index) in table.name_iter() {
+        if names.len() >= MAX_NAMES {
             break;
         }
-        match export.name {
+        if let Ok(name) = table.name_from_pointer(name_pointer) {
+            names.entry(ordinal_index as u32).or_insert(name);
+        }
+    }
+    for i in 0..count {
+        match names.get(&(i as u32)) {
             Some(name) => out.push(decode_name(name)),
-            None => out.push(format!("#{}", export.ordinal)),
+            None => out.push(format!("#{}", ordinal_base.wrapping_add(i as u32))),
         }
     }
     Ok(out)
