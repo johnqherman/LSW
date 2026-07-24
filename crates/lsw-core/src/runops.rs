@@ -72,7 +72,7 @@ fn sandbox_spec(
                 let canon = bind
                     .canonicalize()
                     .map_err(|_| Error::UnsafeSandboxBind { path: bind.clone() })?;
-                if is_unsafe_bind(&canon) {
+                if is_unsafe_bind(&canon) || canon.to_str().is_none() {
                     return Err(Error::UnsafeSandboxBind { path: canon });
                 }
                 rw_binds.push(canon);
