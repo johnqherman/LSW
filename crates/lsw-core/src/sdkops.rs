@@ -129,10 +129,13 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<usize> {
     {
         let from = entry.path();
         let to = dst.join(entry.file_name());
-        let meta = match fs::metadata(&from) {
+        let meta = match fs::symlink_metadata(&from) {
             Ok(m) => m,
             Err(_) => continue,
         };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
         if meta.is_dir() {
             fs::create_dir_all(&to).map_err(|e| Error::io(to.clone(), e))?;
             count += copy_tree(&from, &to)?;

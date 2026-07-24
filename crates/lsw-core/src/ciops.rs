@@ -66,7 +66,7 @@ pub fn init_github(project_root: &Path) -> Result<PathBuf> {
     let dir = project_root.join(".github").join("workflows");
     std::fs::create_dir_all(&dir).map_err(|e| Error::io(dir.clone(), e))?;
     let path = dir.join("lsw.yml");
-    if path.exists() {
+    if std::fs::symlink_metadata(&path).is_ok() {
         return Err(Error::InitFailed {
             path: path.clone(),
             detail: "workflow already exists".into(),
