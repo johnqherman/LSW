@@ -116,11 +116,14 @@ fn run_accept_loop(listener: UnixListener, path: &Path, dirs: &Dirs) -> Result<(
                 active.fetch_add(1, Ordering::SeqCst);
                 let dirs = dirs.clone();
                 let running = Arc::clone(&running);
-                let active = Arc::clone(&active);
-                std::thread::spawn(move || {
-                    let _guard = ActiveGuard(active);
+                let guard = ActiveGuard(Arc::clone(&active));
+                let spawned = std::thread::Builder::new().spawn(move || {
+                    let _guard = guard;
                     handle_connection(stream, &dirs, &running);
                 });
+                if spawned.is_err() {
+                    tracing::warn!("lswd could not spawn handler thread; dropping connection");
+                }
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(ACCEPT_POLL);
@@ -262,13 +265,18 @@ impl DaemonClient {
         .expect("request serializes");
         line.push('\n');
         self.stream
+            .set_write_timeout(Some(CLIENT_IDLE_TIMEOUT))
+            .map_err(|e| Error::io(self.path.clone(), e))?;
+        self.stream
+            .set_read_timeout(Some(CLIENT_IDLE_TIMEOUT))
+            .map_err(|e| Error::io(self.path.clone(), e))?;
+        self.stream
             .write_all(line.as_bytes())
             .map_err(|e| Error::io(self.path.clone(), e))?;
         self.stream
             .flush()
             .map_err(|e| Error::io(self.path.clone(), e))?;
 
-        let _ = self.stream.set_read_timeout(Some(CLIENT_IDLE_TIMEOUT));
         let mut reader = BufReader::new(&self.stream);
         let mut response = String::new();
         (&mut reader)
