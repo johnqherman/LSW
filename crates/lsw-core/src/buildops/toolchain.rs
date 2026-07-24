@@ -83,14 +83,27 @@ pub(crate) fn run_step(
     run_step_with_env(project, env, tc, argv, &[], commands)
 }
 
+fn flag_is_bare(f: &str) -> bool {
+    f.chars().all(|c| {
+        c.is_ascii_alphanumeric()
+            || matches!(c, '/' | '.' | '-' | '_' | '=' | '+' | ',' | ':' | '@')
+    })
+}
+
 fn join_flags(flags: impl IntoIterator<Item = String>) -> String {
     flags
         .into_iter()
         .map(|f| {
-            if f.chars().any(char::is_whitespace) {
-                format!("\"{}\"", f.replace('\\', "\\\\").replace('"', "\\\""))
-            } else {
+            if flag_is_bare(&f) {
                 f
+            } else {
+                format!(
+                    "\"{}\"",
+                    f.replace('\\', "\\\\")
+                        .replace('"', "\\\"")
+                        .replace('$', "\\$")
+                        .replace('`', "\\`")
+                )
             }
         })
         .collect::<Vec<_>>()

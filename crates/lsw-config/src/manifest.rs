@@ -317,6 +317,12 @@ const MAX_MANIFEST_BYTES: u64 = 4 * 1024 * 1024;
 
 pub(crate) fn read_toml<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
     use std::io::Read;
+    if fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(ConfigError::read(
+            path,
+            std::io::Error::other("refusing to read a symlinked config file"),
+        ));
+    }
     let file = fs::File::open(path).map_err(|e| ConfigError::read(path, e))?;
     let mut bytes = Vec::new();
     file.take(MAX_MANIFEST_BYTES + 1)

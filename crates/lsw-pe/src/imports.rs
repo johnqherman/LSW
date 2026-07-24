@@ -10,7 +10,7 @@ use crate::MZ_MAGIC;
 use crate::error::PeError;
 
 const MAX_NAMES: usize = 65536;
-const MAX_NAME_LEN: usize = 4096;
+const MAX_NAME_LEN: usize = 512;
 
 fn decode_name(raw: &[u8]) -> String {
     String::from_utf8_lossy(&raw[..raw.len().min(MAX_NAME_LEN)]).into_owned()

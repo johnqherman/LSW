@@ -45,6 +45,16 @@ fn parse_network(value: &str) -> Option<lsw_runtime::NetworkMode> {
     }
 }
 
+fn is_unsafe_bind(canon: &std::path::Path) -> bool {
+    const SYSTEM_ROOTS: &[&str] = &[
+        "/", "/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64", "/proc", "/dev", "/sys", "/boot",
+        "/root", "/var", "/home", "/opt", "/srv",
+    ];
+    SYSTEM_ROOTS
+        .iter()
+        .any(|r| canon == std::path::Path::new(r))
+}
+
 fn sandbox_spec(
     env: &Environment,
     project: Option<&Project>,
@@ -56,6 +66,12 @@ fn sandbox_spec(
             let mut rw_binds = vec![env.layout.root.clone()];
             if let Some(p) = project {
                 rw_binds.push(p.root.clone());
+            }
+            for bind in &rw_binds {
+                let canon = bind.canonicalize().unwrap_or_else(|_| bind.clone());
+                if is_unsafe_bind(&canon) {
+                    return Err(Error::UnsafeSandboxBind { path: canon });
+                }
             }
             let network = match project {
                 Some(p) => parse_network(&p.manifest.sandbox.network).ok_or_else(|| {

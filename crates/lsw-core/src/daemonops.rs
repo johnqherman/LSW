@@ -199,9 +199,7 @@ fn dispatch(line: &str, dirs: &Dirs, running: &Arc<AtomicBool>) -> Option<Respon
         }
     };
     let id = request.id?;
-    if let Some(version) = &request.jsonrpc
-        && version != JSONRPC_VERSION
-    {
+    if request.jsonrpc.as_deref() != Some(JSONRPC_VERSION) {
         return Some(Response::err(
             id,
             -32600,
@@ -280,6 +278,12 @@ impl DaemonClient {
                 path: self.path.clone(),
                 detail: format!("malformed response: {e}"),
             })?;
+        if value.get("jsonrpc").and_then(|v| v.as_str()) != Some(JSONRPC_VERSION) {
+            return Err(Error::DaemonUnavailable {
+                path: self.path.clone(),
+                detail: "daemon response is not jsonrpc 2.0".to_owned(),
+            });
+        }
         if value.get("id").and_then(|v| v.as_u64()) != Some(id) {
             return Err(Error::DaemonUnavailable {
                 path: self.path.clone(),
@@ -296,10 +300,13 @@ impl DaemonClient {
                 detail: message.to_owned(),
             });
         }
-        Ok(value
-            .get("result")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null))
+        match value.get("result") {
+            Some(result) => Ok(result.clone()),
+            None => Err(Error::DaemonUnavailable {
+                path: self.path.clone(),
+                detail: "daemon response has neither result nor error".to_owned(),
+            }),
+        }
     }
 }
 
@@ -339,10 +346,20 @@ mod tests {
         assert_eq!(v["id"], 7);
         assert_eq!(v["result"]["pong"], true);
 
-        let unknown = dispatch(r#"{"id":1,"method":"nope"}"#, &dirs, &running);
+        let unknown = dispatch(
+            r#"{"jsonrpc":"2.0","id":1,"method":"nope"}"#,
+            &dirs,
+            &running,
+        );
         let e = serde_json::to_value(&unknown).unwrap();
         assert_eq!(e["error"]["code"], -32601);
         assert!(e["error"]["message"].as_str().unwrap().contains("nope"));
+
+        let missing_version = dispatch(r#"{"id":2,"method":"ping"}"#, &dirs, &running);
+        assert_eq!(
+            serde_json::to_value(&missing_version).unwrap()["error"]["code"],
+            -32600
+        );
 
         let bad = dispatch("not json", &dirs, &running);
         assert_eq!(serde_json::to_value(&bad).unwrap()["error"]["code"], -32700);
