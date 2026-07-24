@@ -130,33 +130,51 @@ impl Plugin {
             ));
         }
         {
-            let mut stdin = self
+            use std::io::Write;
+            use std::os::unix::io::AsRawFd;
+            let stdin = self
                 .stdin
-                .take()
+                .as_mut()
                 .ok_or_else(|| plugin_err(&self.name, "plugin stdin closed".into()))?;
-            let bytes = line.into_bytes();
-            let (tx, rx) = std::sync::mpsc::channel();
-            std::thread::spawn(move || {
-                use std::io::Write;
-                let res = stdin.write_all(&bytes).and_then(|()| stdin.flush());
-                let _ = tx.send((stdin, res));
-            });
-            match rx.recv_timeout(CALL_TIMEOUT) {
-                Ok((stdin, res)) => {
-                    self.stdin = Some(stdin);
-                    res.map_err(|e| plugin_err(&self.name, format!("write failed: {e}")))?;
-                }
-                Err(_) => {
-                    let _ = self.child.kill();
-                    return Err(plugin_err(
-                        &self.name,
-                        format!(
-                            "write did not complete within {}s; plugin killed",
-                            CALL_TIMEOUT.as_secs()
-                        ),
-                    ));
+            let fd = stdin.as_raw_fd();
+            unsafe {
+                let flags = libc::fcntl(fd, libc::F_GETFL);
+                if flags != -1 {
+                    libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
                 }
             }
+            let bytes = line.into_bytes();
+            let deadline = std::time::Instant::now() + CALL_TIMEOUT;
+            let mut written = 0;
+            while written < bytes.len() {
+                match stdin.write(&bytes[written..]) {
+                    Ok(0) => {
+                        self.stdin = None;
+                        return Err(plugin_err(&self.name, "plugin stdin closed".into()));
+                    }
+                    Ok(n) => written += n,
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        if std::time::Instant::now() >= deadline {
+                            self.stdin = None;
+                            let _ = self.child.kill();
+                            return Err(plugin_err(
+                                &self.name,
+                                format!(
+                                    "write did not complete within {}s; plugin killed",
+                                    CALL_TIMEOUT.as_secs()
+                                ),
+                            ));
+                        }
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                    Err(e) => {
+                        self.stdin = None;
+                        return Err(plugin_err(&self.name, format!("write failed: {e}")));
+                    }
+                }
+            }
+            let _ = stdin.flush();
         }
 
         let raw = match self.rx.recv_timeout(CALL_TIMEOUT) {
