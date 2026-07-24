@@ -11,6 +11,13 @@ use crate::project::Project;
 
 const MAX_ARTIFACTS: usize = 4096;
 
+fn strip_existing(path: &std::path::Path) -> Result<()> {
+    if fs::symlink_metadata(path).is_ok() {
+        fs::remove_file(path).map_err(|e| Error::io(path.to_path_buf(), e))?;
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackageTarget {
     PortableDirectory,
@@ -133,9 +140,7 @@ pub fn package(
                 });
             }
             let zip_path = dist.join(format!("{stem}.zip"));
-            if zip_path.exists() {
-                fs::remove_file(&zip_path).map_err(|e| Error::io(zip_path.clone(), e))?;
-            }
+            strip_existing(&zip_path)?;
             let status = Command::new("zip")
                 .args(["-r", "-q"])
                 .arg(&zip_path)
@@ -199,9 +204,7 @@ fn build_msi(
     fs::write(&wxs_path, wxs).map_err(|e| Error::io(wxs_path.clone(), e))?;
 
     let msi_path = dist.join(format!("{stem}.msi"));
-    if msi_path.exists() {
-        fs::remove_file(&msi_path).map_err(|e| Error::io(msi_path.clone(), e))?;
-    }
+    strip_existing(&msi_path)?;
 
     let arch = match env.manifest.target_arch {
         lsw_config::TargetArch::X86_64 => "x64",

@@ -145,6 +145,13 @@ fn ensure_signing_identity(publisher: &str) -> Result<PathBuf> {
     use sha2::Digest;
     let dirs = Dirs::resolve()?;
     let msix_dir = dirs.data.join("msix");
+    if std::fs::symlink_metadata(&msix_dir).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(Error::MsixSign {
+            detail:
+                "msix data directory is a symlink; refusing to write signing material through it"
+                    .into(),
+        });
+    }
     std::fs::create_dir_all(&msix_dir).map_err(|e| Error::io(msix_dir.clone(), e))?;
     let tag = format!("{:x}", sha2::Sha256::digest(publisher.as_bytes()));
     let tag = &tag[..16];
@@ -163,6 +170,11 @@ fn ensure_signing_identity(publisher: &str) -> Result<PathBuf> {
     let key_tmp = msix_dir.join(format!("signing-{tag}.key.{stamp}.tmp"));
     let cert_tmp = msix_dir.join(format!("signing-{tag}.cert.{stamp}.tmp"));
     let pfx_tmp = msix_dir.join(format!("signing-{tag}.pfx.{stamp}.tmp"));
+    for tmp in [&key_tmp, &cert_tmp, &pfx_tmp] {
+        if std::fs::symlink_metadata(tmp).is_ok() {
+            std::fs::remove_file(tmp).map_err(|e| Error::io(tmp.clone(), e))?;
+        }
+    }
     run_openssl(&[
         "req",
         "-x509",
