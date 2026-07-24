@@ -9,6 +9,7 @@ use crate::error::{Error, Result};
 const MAX_LISTING_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_DEP_DEPTH: usize = 64;
 const MAX_DEP_NODES: usize = 100_000;
+const MAX_DIR_ENTRIES: usize = 1_000_000;
 
 const SYSTEM_DLLS: &[&str] = &[
     "kernel32.dll",
@@ -51,7 +52,7 @@ fn resolve_dll(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
         let Ok(entries) = std::fs::read_dir(dir) else {
             continue;
         };
-        for entry in entries.flatten() {
+        for entry in entries.flatten().take(MAX_DIR_ENTRIES) {
             if entry.file_name().to_string_lossy().to_ascii_lowercase() == wanted
                 && entry.path().is_file()
             {
@@ -99,6 +100,7 @@ fn build(
     dirs: &[PathBuf],
     seen: &mut BTreeSet<String>,
     depth: usize,
+    nodes: &mut usize,
 ) -> Vec<DepNode> {
     let mut children = Vec::new();
     if depth >= MAX_DEP_DEPTH {
@@ -114,14 +116,24 @@ fn build(
         if dep.eq_ignore_ascii_case(name) {
             continue;
         }
-        children.push(node(&dep, dirs, seen, depth + 1));
+        if *nodes >= MAX_DEP_NODES {
+            break;
+        }
+        children.push(node(&dep, dirs, seen, depth + 1, nodes));
     }
     children
 }
 
-fn node(name: &str, dirs: &[PathBuf], seen: &mut BTreeSet<String>, depth: usize) -> DepNode {
+fn node(
+    name: &str,
+    dirs: &[PathBuf],
+    seen: &mut BTreeSet<String>,
+    depth: usize,
+    nodes: &mut usize,
+) -> DepNode {
+    *nodes += 1;
     let key = name.to_ascii_lowercase();
-    if is_system_dll(name) || seen.len() >= MAX_DEP_NODES {
+    if is_system_dll(name) || *nodes >= MAX_DEP_NODES {
         return DepNode {
             name: name.to_owned(),
             kind: DepKind::System,
@@ -139,7 +151,7 @@ fn node(name: &str, dirs: &[PathBuf], seen: &mut BTreeSet<String>, depth: usize)
                     children: Vec::new(),
                 };
             }
-            let children = build(name, &resolved, dirs, seen, depth);
+            let children = build(name, &resolved, dirs, seen, depth, nodes);
             DepNode {
                 name: name.to_owned(),
                 kind: DepKind::Resolved,
@@ -166,11 +178,12 @@ pub fn tree(env: Option<&Environment>, pe: &Path) -> Result<DepNode> {
     lsw_pe::detect(pe)?;
     let dirs = search_dirs(env, pe);
     let mut seen = BTreeSet::new();
+    let mut nodes = 0usize;
     let name = pe
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "root".to_owned());
-    let children = build(&name, pe, &dirs, &mut seen, 0);
+    let children = build(&name, pe, &dirs, &mut seen, 0, &mut nodes);
     Ok(DepNode {
         name,
         kind: DepKind::Root,
@@ -294,6 +307,7 @@ fn resolve(dirs: &lsw_config::Dirs, repo: &str, prefix: &str, name: &str) -> Res
     for entry in std::fs::read_dir(&extracted)
         .map_err(|e| Error::io(extracted.clone(), e))?
         .flatten()
+        .take(MAX_DIR_ENTRIES)
     {
         let desc_path = entry.path().join("desc");
         let Some(desc) = read_capped_string(&desc_path, 4 * 1024 * 1024) else {

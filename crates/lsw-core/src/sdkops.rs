@@ -92,6 +92,7 @@ pub fn list(dirs: &Dirs) -> Result<Vec<SdkSummary>> {
     for entry in fs::read_dir(&root)
         .map_err(|e| Error::io(root.clone(), e))?
         .flatten()
+        .take(100_000)
     {
         if !entry.path().is_dir() {
             continue;
