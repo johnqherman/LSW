@@ -67,10 +67,10 @@ fn lock_diff(recorded: &Lockfile, current: &Lockfile) -> String {
                 "  {label}: locked {} {} ({}...) but environment has {} {} ({}...)",
                 rec.provider,
                 rec.version,
-                &rec.sha256[..12.min(rec.sha256.len())],
+                rec.sha256.chars().take(12).collect::<String>(),
                 cur.provider,
                 cur.version,
-                &cur.sha256[..12.min(cur.sha256.len())],
+                cur.sha256.chars().take(12).collect::<String>(),
             ));
         }
     }
