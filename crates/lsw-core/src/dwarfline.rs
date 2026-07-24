@@ -72,13 +72,22 @@ impl DebugInfo {
         let mut lines: BTreeMap<(String, u32), Vec<(String, u64)>> = BTreeMap::new();
         let mut by_addr: Vec<(u64, Option<(String, u32)>)> = Vec::new();
         let mut funcs: Vec<(u64, u64, String)> = Vec::new();
+        let mut func_visited = 0usize;
+        let mut rows_seen = 0usize;
+        let mut scan_budget = MAX_UNIT_SCAN;
 
         let mut units = dwarf.units();
         while let Ok(Some(header)) = units.next() {
             let Ok(unit) = dwarf.unit(header) else {
                 continue;
             };
-            collect_functions(&dwarf, &unit, &mut funcs);
+            collect_functions(
+                &dwarf,
+                &unit,
+                &mut funcs,
+                &mut func_visited,
+                &mut scan_budget,
+            );
             let Some(program) = unit.line_program.clone() else {
                 continue;
             };
@@ -88,6 +97,10 @@ impl DebugInfo {
                 .unwrap_or_default();
             let mut rows = program.rows();
             while let Ok(Some((header, row))) = rows.next_row() {
+                if rows_seen >= MAX_LINE_ROWS {
+                    break;
+                }
+                rows_seen += 1;
                 if by_addr.len() >= MAX_LINE_ROWS {
                     break;
                 }
@@ -202,25 +215,29 @@ fn collect_functions<R: gimli::Reader>(
     dwarf: &gimli::Dwarf<R>,
     unit: &gimli::Unit<R>,
     out: &mut Vec<(u64, u64, String)>,
+    visited: &mut usize,
+    scan_budget: &mut usize,
 ) {
     let mut entries = unit.entries();
-    let mut visited = 0usize;
     while let Ok(Some((_, entry))) = entries.next_dfs() {
-        if out.len() >= MAX_FUNCS || visited >= MAX_FUNCS {
+        if out.len() >= MAX_FUNCS || *visited >= MAX_FUNCS {
             return;
         }
         if entry.tag() != gimli::DW_TAG_subprogram {
             continue;
         }
-        visited += 1;
-        let name = func_name(dwarf, unit, entry).unwrap_or_else(|| "<anonymous>".to_owned());
+        *visited += 1;
+        let name =
+            func_name(dwarf, unit, entry, scan_budget).unwrap_or_else(|| "<anonymous>".to_owned());
         let Ok(mut ranges) = dwarf.die_ranges(unit, entry) else {
             continue;
         };
+        let mut range_seen = 0usize;
         while let Ok(Some(range)) = ranges.next() {
-            if out.len() >= MAX_FUNCS {
+            if out.len() >= MAX_FUNCS || range_seen >= MAX_FUNCS {
                 return;
             }
+            range_seen += 1;
             if range.end > range.begin {
                 out.push((range.begin, range.end, name.clone()));
             }
@@ -268,8 +285,9 @@ fn func_name<R: gimli::Reader>(
     dwarf: &gimli::Dwarf<R>,
     unit: &gimli::Unit<R>,
     entry: &gimli::DebuggingInformationEntry<R>,
+    scan_budget: &mut usize,
 ) -> Option<String> {
-    func_name_at(dwarf, unit, entry, 0)
+    func_name_at(dwarf, unit, entry, 0, scan_budget)
 }
 
 fn func_name_at<R: gimli::Reader>(
@@ -277,6 +295,7 @@ fn func_name_at<R: gimli::Reader>(
     unit: &gimli::Unit<R>,
     entry: &gimli::DebuggingInformationEntry<R>,
     depth: u32,
+    scan_budget: &mut usize,
 ) -> Option<String> {
     if depth > 8 {
         return None;
@@ -294,7 +313,9 @@ fn func_name_at<R: gimli::Reader>(
                 }
                 next = origin_ref(&referenced);
             }
-            OriginRef::Info(offset) => return name_at_debug_info(dwarf, offset, depth + 1),
+            OriginRef::Info(offset) => {
+                return name_at_debug_info(dwarf, offset, depth + 1, scan_budget);
+            }
         }
     }
     None
@@ -304,17 +325,17 @@ fn name_at_debug_info<R: gimli::Reader>(
     dwarf: &gimli::Dwarf<R>,
     offset: gimli::DebugInfoOffset<R::Offset>,
     depth: u32,
+    scan_budget: &mut usize,
 ) -> Option<String> {
     if depth > 8 {
         return None;
     }
     let mut units = dwarf.units();
-    let mut scanned = 0usize;
     while let Ok(Some(header)) = units.next() {
-        if scanned >= MAX_UNIT_SCAN {
+        if *scan_budget == 0 {
             return None;
         }
-        scanned += 1;
+        *scan_budget -= 1;
         let Some(unit_offset) = offset.to_unit_offset(&header) else {
             continue;
         };
@@ -322,7 +343,7 @@ fn name_at_debug_info<R: gimli::Reader>(
             continue;
         };
         let entry = unit.entry(unit_offset).ok()?;
-        return func_name_at(dwarf, &unit, &entry, depth + 1);
+        return func_name_at(dwarf, &unit, &entry, depth + 1, scan_budget);
     }
     None
 }
