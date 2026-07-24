@@ -54,6 +54,7 @@ fn case_collisions(names: &[String]) -> Vec<String> {
 fn scan_case_collisions(root: &Path) -> usize {
     const SKIP: &[&str] = &["build", "target", ".git", "node_modules"];
     const MAX_DIRS: usize = 100_000;
+    const MAX_ENTRIES_PER_DIR: usize = 1_000_000;
     let mut stack = vec![root.to_path_buf()];
     let mut total = 0;
     let mut queued = 1usize;
@@ -62,7 +63,7 @@ fn scan_case_collisions(root: &Path) -> usize {
             continue;
         };
         let mut names = Vec::new();
-        for entry in entries.flatten() {
+        for entry in entries.flatten().take(MAX_ENTRIES_PER_DIR) {
             let name = entry.file_name().to_string_lossy().into_owned();
             let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
             if is_dir && !SKIP.contains(&name.as_str()) && queued < MAX_DIRS {
