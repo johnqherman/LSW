@@ -106,7 +106,7 @@ impl Winrm {
              <a:MessageID>{mid}</a:MessageID>\
              <w:Locale xml:lang=\"en-US\" s:mustUnderstand=\"false\"/>\
              <w:OperationTimeout>PT120S</w:OperationTimeout>",
-            addr = self.addr,
+            addr = xml(&self.addr),
             mid = self.message_id(),
         )
     }

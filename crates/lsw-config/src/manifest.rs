@@ -313,8 +313,15 @@ impl ProjectManifest {
     }
 }
 
+const MAX_MANIFEST_BYTES: u64 = 4 * 1024 * 1024;
+
 pub(crate) fn read_toml<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
-    let text = fs::read_to_string(path).map_err(|e| ConfigError::read(path, e))?;
+    use std::io::Read;
+    let file = fs::File::open(path).map_err(|e| ConfigError::read(path, e))?;
+    let mut text = String::new();
+    file.take(MAX_MANIFEST_BYTES)
+        .read_to_string(&mut text)
+        .map_err(|e| ConfigError::read(path, e))?;
     toml::from_str(&text).map_err(|source| ConfigError::Parse {
         path: path.to_path_buf(),
         source: Box::new(source),

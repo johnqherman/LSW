@@ -325,8 +325,9 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             let cross_hash = file_hash(&cross_file).map(|h| format!("{h}\n{mc}\n{mcxx}\n{mlink}"));
             let configured = project.root.join("build").join("meson-info").is_dir();
             let fp_path = project.root.join("build").join(".lsw-meson-cross");
-            let fp_match = configured
-                && std::fs::read_to_string(&fp_path).ok().as_deref() == cross_hash.as_deref();
+            let recorded_fp =
+                read_capped(&fp_path, 1024 * 1024).and_then(|b| String::from_utf8(b).ok());
+            let fp_match = configured && recorded_fp.as_deref() == cross_hash.as_deref();
             if !fp_match {
                 let mut setup = vec![
                     "meson".to_owned(),
@@ -339,7 +340,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
                 }
                 run_step(project, env, &tc, &setup, &mut commands)?;
                 if let Some(hash) = &cross_hash {
-                    let _ = std::fs::write(&fp_path, hash);
+                    safe_marker_write(&fp_path, hash);
                 }
             }
             run_step(
@@ -375,7 +376,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             .collect();
         if !touched.is_empty() {
             artifacts = touched;
-            let _ = fs::write(&manifest, encode_artifact_manifest(&artifacts));
+            safe_marker_write(&manifest, encode_artifact_manifest(&artifacts));
         } else if let Some(recorded) = read_capped(&manifest, 4 * 1024 * 1024) {
             let remembered: Vec<PathBuf> = decode_artifact_manifest(&recorded)
                 .into_iter()
@@ -470,11 +471,10 @@ fn refresh_stale_cmake_build_dir(build_dir: &Path, config: &str) -> Result<()> {
 
 fn write_cmake_toolchain_marker(build_dir: &Path, config: &str) {
     let _ = fs::create_dir_all(build_dir);
-    let marker = build_dir.join(".lsw-toolchain");
-    if fs::symlink_metadata(&marker).is_ok_and(|m| m.file_type().is_symlink()) {
-        let _ = fs::remove_file(&marker);
-    }
-    let _ = fs::write(&marker, cmake_config_fingerprint(config));
+    safe_marker_write(
+        &build_dir.join(".lsw-toolchain"),
+        cmake_config_fingerprint(config),
+    );
 }
 
 fn is_safe_artifact(rel: &Path) -> bool {
@@ -527,6 +527,15 @@ fn read_capped(path: &Path, max: u64) -> Option<Vec<u8>> {
     let mut buf = Vec::new();
     file.take(max).read_to_end(&mut buf).ok()?;
     Some(buf)
+}
+
+fn safe_marker_write(path: &Path, contents: impl AsRef<[u8]>) {
+    if fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
+        && fs::remove_file(path).is_err()
+    {
+        return;
+    }
+    let _ = fs::write(path, contents);
 }
 
 fn artifact_hashes(root: &Path) -> std::collections::HashMap<PathBuf, String> {
