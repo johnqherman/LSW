@@ -17,6 +17,7 @@ const REGISTER_NAMES: [&str; 17] = [
 ];
 
 const MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_STDERR_LINE: u64 = 1024 * 1024;
 const MAX_HEADER_BYTES: usize = 8 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1054,7 +1055,7 @@ fn read_gdb_port<R: Read + Send + 'static>(stream: R) -> Result<u16> {
         let mut forward = true;
         loop {
             let mut line = String::new();
-            match reader.read_line(&mut line) {
+            match (&mut reader).take(MAX_STDERR_LINE).read_line(&mut line) {
                 Ok(0) | Err(_) => break,
                 Ok(_) => {
                     if forward && tx.send(line).is_err() {
