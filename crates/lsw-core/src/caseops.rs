@@ -31,6 +31,7 @@ pub fn hazards(root: &Path) -> Vec<CaseHazard> {
 fn scan(dir: &Path, root: &Path, out: &mut Vec<CaseHazard>) {
     const MAX_DIRS: usize = 100_000;
     const MAX_HAZARDS: usize = 100_000;
+    const MAX_ENTRIES_PER_DIR: usize = 1_000_000;
     let mut stack = vec![dir.to_path_buf()];
     let mut queued = 1usize;
     while let Some(dir) = stack.pop() {
@@ -41,7 +42,7 @@ fn scan(dir: &Path, root: &Path, out: &mut Vec<CaseHazard>) {
             continue;
         };
         let mut folded: BTreeMap<Vec<u8>, Vec<String>> = BTreeMap::new();
-        for entry in entries.flatten() {
+        for entry in entries.flatten().take(MAX_ENTRIES_PER_DIR) {
             let raw = entry.file_name();
             let key = match raw.to_str() {
                 Some(s) => s.to_lowercase().into_bytes(),
@@ -56,6 +57,9 @@ fn scan(dir: &Path, root: &Path, out: &mut Vec<CaseHazard>) {
             folded.entry(key).or_default().push(name);
         }
         for (_, mut names) in folded {
+            if out.len() >= MAX_HAZARDS {
+                break;
+            }
             if names.len() > 1 {
                 names.sort();
                 let rel = dir.strip_prefix(root).unwrap_or(&dir);

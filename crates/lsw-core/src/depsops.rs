@@ -8,6 +8,7 @@ use crate::error::{Error, Result};
 
 const MAX_LISTING_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_DEP_DEPTH: usize = 64;
+const MAX_DEP_NODES: usize = 100_000;
 
 const SYSTEM_DLLS: &[&str] = &[
     "kernel32.dll",
@@ -120,7 +121,7 @@ fn build(
 
 fn node(name: &str, dirs: &[PathBuf], seen: &mut BTreeSet<String>, depth: usize) -> DepNode {
     let key = name.to_ascii_lowercase();
-    if is_system_dll(name) {
+    if is_system_dll(name) || seen.len() >= MAX_DEP_NODES {
         return DepNode {
             name: name.to_owned(),
             kind: DepKind::System,
@@ -262,6 +263,13 @@ fn refresh_db(dirs: &lsw_config::Dirs, repo: &str) -> Result<PathBuf> {
     Ok(extracted)
 }
 
+fn dep_root_contained(project: &crate::project::Project, root: &Path) -> bool {
+    match (root.canonicalize(), project.root.canonicalize()) {
+        (Ok(r), Ok(p)) => r.starts_with(&p),
+        _ => false,
+    }
+}
+
 fn read_capped_string(path: &Path, max: u64) -> Option<String> {
     use std::io::Read;
     let file = std::fs::File::open(path).ok()?;
@@ -365,13 +373,14 @@ pub fn add(
     }
 
     let root = deps_root(project, arch);
-    if std::fs::symlink_metadata(&root).is_ok_and(|m| m.file_type().is_symlink()) {
+    std::fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
+    if !dep_root_contained(project, &root) {
         return Err(Error::ExtractFailed {
             name: name.to_owned(),
-            detail: "dependency directory is a symlink; refusing to extract through it".to_owned(),
+            detail: "dependency directory resolves outside the project; refusing to extract"
+                .to_owned(),
         });
     }
-    std::fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
     let mut listing_child = std::process::Command::new("tar")
         .arg("--zstd")
         .arg("-tf")
@@ -463,7 +472,11 @@ pub fn remove(
     }
 
     let root = deps_root(project, arch);
-    if name.contains('/') || name.contains('\\') || name.contains("..") {
+    if name.contains('/')
+        || name.contains('\\')
+        || name.contains("..")
+        || !dep_root_contained(project, &root)
+    {
         manifest.save(&manifest_path)?;
         return Ok(true);
     }
