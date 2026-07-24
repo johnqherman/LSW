@@ -86,6 +86,12 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<RustInitRepo
         use std::io::Write;
         let path = root.join(rel);
         if let Some(dir) = path.parent() {
+            if fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_symlink()) {
+                return Err(Error::InitFailed {
+                    path: dir.to_path_buf(),
+                    detail: "path is a symlink; refusing to scaffold through it".into(),
+                });
+            }
             fs::create_dir_all(dir).map_err(|e| Error::io(dir.to_path_buf(), e))?;
         }
         let mut file = fs::OpenOptions::new()

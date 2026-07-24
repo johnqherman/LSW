@@ -282,7 +282,15 @@ impl ProjectManifest {
             what: "lsw.toml",
             source: Box::new(source),
         })?;
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            if fs::symlink_metadata(parent).is_ok_and(|m| m.file_type().is_symlink()) {
+                return Err(ConfigError::write(
+                    path,
+                    std::io::Error::other("parent directory is a symlink"),
+                ));
+            }
             fs::create_dir_all(parent).map_err(|e| ConfigError::write(path, e))?;
         }
         let mut file = fs::OpenOptions::new()

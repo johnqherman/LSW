@@ -365,6 +365,12 @@ pub fn add(
     }
 
     let root = deps_root(project, arch);
+    if std::fs::symlink_metadata(&root).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(Error::ExtractFailed {
+            name: name.to_owned(),
+            detail: "dependency directory is a symlink; refusing to extract through it".to_owned(),
+        });
+    }
     std::fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
     let mut listing_child = std::process::Command::new("tar")
         .arg("--zstd")
@@ -423,9 +429,18 @@ pub fn add(
     }
 
     let meta_dir = root.join(".lsw");
+    if std::fs::symlink_metadata(&meta_dir).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(Error::ExtractFailed {
+            name: name.to_owned(),
+            detail: "dependency metadata directory is a symlink".to_owned(),
+        });
+    }
     std::fs::create_dir_all(&meta_dir).map_err(|e| Error::io(meta_dir.clone(), e))?;
-    std::fs::write(meta_dir.join(format!("{name}.files")), files.join("\n"))
-        .map_err(|e| Error::io(meta_dir.clone(), e))?;
+    let files_path = meta_dir.join(format!("{name}.files"));
+    if std::fs::symlink_metadata(&files_path).is_ok_and(|m| m.file_type().is_symlink()) {
+        std::fs::remove_file(&files_path).map_err(|e| Error::io(files_path.clone(), e))?;
+    }
+    std::fs::write(&files_path, files.join("\n")).map_err(|e| Error::io(files_path.clone(), e))?;
 
     let manifest_path = project.root.join("lsw.toml");
     let mut manifest = lsw_config::ProjectManifest::load(&manifest_path)?;
