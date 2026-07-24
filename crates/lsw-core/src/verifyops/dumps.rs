@@ -45,6 +45,9 @@ pub(crate) fn collect_dump(
     if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") {
         return None;
     }
+    if std::fs::symlink_metadata(dump_local).is_ok_and(|m| m.file_type().is_symlink()) {
+        return None;
+    }
     std::fs::create_dir_all(dump_local).ok()?;
     let dest = dump_local.join(&name);
     if std::fs::symlink_metadata(&dest).is_ok_and(|m| m.file_type().is_symlink()) {
