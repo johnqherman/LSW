@@ -8,15 +8,16 @@ use crate::error::{Error, Result};
 const MAX_LINE_ROWS: usize = 8_000_000;
 const MAX_DWARF_NAME: usize = 4096;
 
-fn cap_len(mut s: String) -> String {
+fn cap_len(s: String) -> String {
     if s.len() > MAX_DWARF_NAME {
         let mut end = MAX_DWARF_NAME;
         while end > 0 && !s.is_char_boundary(end) {
             end -= 1;
         }
-        s.truncate(end);
+        s[..end].to_owned()
+    } else {
+        s
     }
-    s
 }
 const MAX_FUNCS: usize = 2_000_000;
 const MAX_UNIT_SCAN: usize = 100_000;
@@ -111,10 +112,7 @@ impl DebugInfo {
             let Some(program) = unit.line_program.clone() else {
                 continue;
             };
-            let comp_dir = unit
-                .comp_dir
-                .map(|d| d.to_string_lossy().into_owned())
-                .unwrap_or_default();
+            let comp_dir = unit.comp_dir.and_then(bounded_string).unwrap_or_default();
             let mut rows = program.rows();
             while let Ok(Some((header, row))) = rows.next_row() {
                 if rows_seen >= MAX_LINE_ROWS {
@@ -205,15 +203,14 @@ impl DebugInfo {
     }
 
     fn containing_func(&self, addr: u64) -> Option<&(u64, u64, String)> {
-        const MAX_OVERLAP_SCAN: usize = 10_000;
-        let idx = match self.funcs.binary_search_by_key(&addr, |(a, _, _)| *a) {
-            Ok(i) => i,
-            Err(0) => return None,
-            Err(i) => i - 1,
-        };
-        let start = idx.saturating_sub(MAX_OVERLAP_SCAN);
+        const MAX_OVERLAP_SCAN: usize = 1_000_000;
+        let upper = self.funcs.partition_point(|(a, _, _)| *a <= addr);
+        if upper == 0 {
+            return None;
+        }
+        let start = upper.saturating_sub(MAX_OVERLAP_SCAN);
         let mut best: Option<&(u64, u64, String)> = None;
-        for f in self.funcs[start..=idx].iter().rev() {
+        for f in self.funcs[start..upper].iter().rev() {
             if f.0 <= addr && addr < f.1 {
                 match best {
                     Some(b) if (b.1 - b.0) <= (f.1 - f.0) => {}
@@ -280,12 +277,13 @@ fn die_name<R: gimli::Reader>(
     entry: &gimli::DebuggingInformationEntry<R>,
 ) -> Option<String> {
     let attr = entry.attr(gimli::DW_AT_name).ok().flatten()?;
-    dwarf
-        .attr_string(unit, attr.value())
-        .ok()?
-        .to_string_lossy()
-        .ok()
-        .map(|c| c.into_owned())
+    bounded_string(dwarf.attr_string(unit, attr.value()).ok()?)
+}
+
+fn bounded_string<R: gimli::Reader>(reader: R) -> Option<String> {
+    let bytes = reader.to_slice().ok()?;
+    let end = bytes.len().min(MAX_DWARF_NAME);
+    Some(String::from_utf8_lossy(&bytes[..end]).into_owned())
 }
 
 enum OriginRef<R: gimli::Reader> {
@@ -388,23 +386,13 @@ fn file_name<R: gimli::Reader>(
     file: &gimli::FileEntry<R>,
     comp_dir: &str,
 ) -> Option<String> {
-    let path = dwarf
-        .attr_string(unit, file.path_name())
-        .ok()?
-        .to_string_lossy()
-        .ok()?
-        .into_owned();
+    let path = bounded_string(dwarf.attr_string(unit, file.path_name()).ok()?)?;
     if is_absolute(&path) {
         return Some(path);
     }
-    let dir = header.directory(file.directory_index()).and_then(|d| {
-        dwarf
-            .attr_string(unit, d)
-            .ok()?
-            .to_string_lossy()
-            .ok()
-            .map(|c| c.into_owned())
-    });
+    let dir = header
+        .directory(file.directory_index())
+        .and_then(|d| bounded_string(dwarf.attr_string(unit, d).ok()?));
     match dir {
         Some(dir) if is_absolute(&dir) => Some(format!("{dir}/{path}")),
         Some(dir) if !dir.is_empty() && dir != comp_dir => Some(format!("{comp_dir}/{dir}/{path}")),
