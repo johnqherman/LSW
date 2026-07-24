@@ -42,11 +42,15 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
     let mut grouped: std::collections::BTreeMap<String, Vec<String>> =
         std::collections::BTreeMap::new();
     for (dll, func) in imports {
+        let dll = dll.to_ascii_lowercase();
+        if dll.is_empty() || !dll.chars().all(|c| c.is_ascii_graphic() && c != '\'') {
+            continue;
+        }
         let clean = func.trim();
         if clean.is_empty() || !clean.chars().all(|c| c.is_ascii_graphic() && c != '\'') {
             continue;
         }
-        let entry = grouped.entry(dll.to_ascii_lowercase()).or_default();
+        let entry = grouped.entry(dll).or_default();
         if entry.len() < 256 && !entry.iter().any(|f| f == clean) {
             entry.push(clean.to_owned());
         }
