@@ -87,7 +87,13 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
         command.env("LSW_HEADLESS", "1");
     }
 
-    let output = command.output().map_err(|e| {
+    use std::io::Read;
+    const MAX_TEST_OUTPUT: u64 = 64 * 1024 * 1024;
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = command.spawn().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             Error::ToolMissing {
                 tool: spawn.to_owned(),
@@ -97,14 +103,39 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
             Error::io(project.root.clone(), e)
         }
     })?;
+    let drain = |pipe: Option<std::process::ChildStdout>| {
+        pipe.map(|mut p| {
+            std::thread::spawn(move || {
+                let mut b = Vec::new();
+                let _ = p.by_ref().take(MAX_TEST_OUTPUT).read_to_end(&mut b);
+                let _ = std::io::copy(&mut p, &mut std::io::sink());
+                b
+            })
+        })
+    };
+    let out_h = drain(child.stdout.take());
+    let err_h = {
+        child.stderr.take().map(|mut p| {
+            std::thread::spawn(move || {
+                let mut b = Vec::new();
+                let _ = p.by_ref().take(MAX_TEST_OUTPUT).read_to_end(&mut b);
+                let _ = std::io::copy(&mut p, &mut std::io::sink());
+                b
+            })
+        })
+    };
+    let status = child
+        .wait()
+        .map_err(|e| Error::io(project.root.clone(), e))?;
+    let out_stdout = out_h.and_then(|h| h.join().ok()).unwrap_or_default();
+    let out_stderr = err_h.and_then(|h| h.join().ok()).unwrap_or_default();
 
-    eprint!("{}", String::from_utf8_lossy(&output.stdout));
-    eprint!("{}", String::from_utf8_lossy(&output.stderr));
+    eprint!("{}", String::from_utf8_lossy(&out_stdout));
+    eprint!("{}", String::from_utf8_lossy(&out_stderr));
 
-    let (tests_passed, tests_failed) =
-        parse_ctest_summary(&String::from_utf8_lossy(&output.stdout));
+    let (tests_passed, tests_failed) = parse_ctest_summary(&String::from_utf8_lossy(&out_stdout));
 
-    let passed = output.status.success() && tests_failed.is_none_or(|f| f == 0);
+    let passed = status.success() && tests_failed.is_none_or(|f| f == 0);
 
     let _ = build_report;
     Ok(TestReport {
@@ -158,14 +189,23 @@ fn has_ctest_config(build_dir: &Path) -> bool {
 }
 
 fn configured_with_emulator(build_dir: &Path) -> bool {
-    std::fs::read_to_string(build_dir.join("CMakeCache.txt"))
-        .map(|cache| {
-            cache.lines().any(|l| {
-                l.starts_with("CMAKE_CROSSCOMPILING_EMULATOR")
-                    && l.split('=').nth(1).is_some_and(|v| !v.trim().is_empty())
-            })
-        })
-        .unwrap_or(false)
+    use std::io::Read;
+    let path = build_dir.join("CMakeCache.txt");
+    let Ok(file) = std::fs::File::open(&path) else {
+        return false;
+    };
+    let mut cache = String::new();
+    if file
+        .take(16 * 1024 * 1024)
+        .read_to_string(&mut cache)
+        .is_err()
+    {
+        return false;
+    }
+    cache.lines().any(|l| {
+        l.starts_with("CMAKE_CROSSCOMPILING_EMULATOR")
+            && l.split('=').nth(1).is_some_and(|v| !v.trim().is_empty())
+    })
 }
 
 fn parse_ctest_summary(stdout: &str) -> (Option<u32>, Option<u32>) {

@@ -561,10 +561,22 @@ fn find_artifacts(build_dir: &std::path::Path, project_root: &std::path::Path) -
 }
 
 fn walk(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+    const MAX_DEPTH: usize = 64;
+    const MAX_ARTIFACTS: usize = 100_000;
+    walk_depth(dir, out, MAX_DEPTH, MAX_ARTIFACTS);
+}
+
+fn walk_depth(dir: &std::path::Path, out: &mut Vec<PathBuf>, depth: usize, max: usize) {
+    if depth == 0 || out.len() >= max {
+        return;
+    }
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
+        if out.len() >= max {
+            return;
+        }
         let path = entry.path();
         let Ok(ftype) = entry.file_type() else {
             continue;
@@ -581,7 +593,7 @@ fn walk(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
             if name == "CMakeFiles" || cargo_internal {
                 continue;
             }
-            walk(&path, out);
+            walk_depth(&path, out, depth - 1, max);
         } else if ftype.is_file()
             && path
                 .extension()

@@ -29,42 +29,47 @@ pub fn hazards(root: &Path) -> Vec<CaseHazard> {
 }
 
 fn scan(dir: &Path, root: &Path, out: &mut Vec<CaseHazard>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    let mut folded: BTreeMap<Vec<u8>, Vec<String>> = BTreeMap::new();
-    let mut subdirs = Vec::new();
-    for entry in entries.flatten() {
-        let raw = entry.file_name();
-        let key = match raw.to_str() {
-            Some(s) => s.to_lowercase().into_bytes(),
-            None => raw.as_bytes().to_vec(),
+    const MAX_DIRS: usize = 100_000;
+    const MAX_HAZARDS: usize = 100_000;
+    let mut stack = vec![dir.to_path_buf()];
+    let mut queued = 1usize;
+    while let Some(dir) = stack.pop() {
+        if out.len() >= MAX_HAZARDS {
+            break;
+        }
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
         };
-        let name = raw.to_string_lossy().into_owned();
-        let path = entry.path();
-        let is_dir = path.is_dir();
-        folded.entry(key).or_default().push(name.clone());
-        if is_dir && !path.is_symlink() && !SKIP_DIRS.contains(&name.as_str()) {
-            subdirs.push(path);
+        let mut folded: BTreeMap<Vec<u8>, Vec<String>> = BTreeMap::new();
+        for entry in entries.flatten() {
+            let raw = entry.file_name();
+            let key = match raw.to_str() {
+                Some(s) => s.to_lowercase().into_bytes(),
+                None => raw.as_bytes().to_vec(),
+            };
+            let name = raw.to_string_lossy().into_owned();
+            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            if is_dir && !SKIP_DIRS.contains(&name.as_str()) && queued < MAX_DIRS {
+                queued += 1;
+                stack.push(entry.path());
+            }
+            folded.entry(key).or_default().push(name);
         }
-    }
-    for (_, mut names) in folded {
-        if names.len() > 1 {
-            names.sort();
-            let rel = dir.strip_prefix(root).unwrap_or(dir);
-            let label = rel.to_string_lossy();
-            out.push(CaseHazard {
-                dir: if label.is_empty() {
-                    ".".to_owned()
-                } else {
-                    label.into_owned()
-                },
-                names,
-            });
+        for (_, mut names) in folded {
+            if names.len() > 1 {
+                names.sort();
+                let rel = dir.strip_prefix(root).unwrap_or(&dir);
+                let label = rel.to_string_lossy();
+                out.push(CaseHazard {
+                    dir: if label.is_empty() {
+                        ".".to_owned()
+                    } else {
+                        label.into_owned()
+                    },
+                    names,
+                });
+            }
         }
-    }
-    for sub in subdirs {
-        scan(&sub, root, out);
     }
 }
 

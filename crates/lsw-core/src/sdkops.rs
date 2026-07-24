@@ -124,10 +124,28 @@ pub fn remove(dirs: &Dirs, name: &str) -> Result<()> {
 
 fn copy_tree(src: &Path, dst: &Path) -> Result<usize> {
     let mut count = 0;
+    copy_tree_depth(src, dst, 64, &mut count)?;
+    Ok(count)
+}
+
+fn copy_tree_depth(src: &Path, dst: &Path, depth: usize, count: &mut usize) -> Result<()> {
+    const MAX_FILES: usize = 1_000_000;
+    if depth == 0 {
+        return Err(Error::SdkImportFailed {
+            path: src.to_path_buf(),
+            detail: "SDK directory tree is too deep".into(),
+        });
+    }
     for entry in fs::read_dir(src)
         .map_err(|e| Error::io(src.to_path_buf(), e))?
         .flatten()
     {
+        if *count >= MAX_FILES {
+            return Err(Error::SdkImportFailed {
+                path: src.to_path_buf(),
+                detail: format!("SDK contains more than {MAX_FILES} files"),
+            });
+        }
         let from = entry.path();
         let to = dst.join(entry.file_name());
         let meta = match fs::symlink_metadata(&from) {
@@ -136,13 +154,13 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<usize> {
         };
         if meta.is_dir() {
             fs::create_dir_all(&to).map_err(|e| Error::io(to.clone(), e))?;
-            count += copy_tree(&from, &to)?;
+            copy_tree_depth(&from, &to, depth - 1, count)?;
         } else if meta.is_file() {
             fs::copy(&from, &to).map_err(|e| Error::io(from.clone(), e))?;
-            count += 1;
+            *count += 1;
         }
     }
-    Ok(count)
+    Ok(())
 }
 
 fn manifest_save(manifest: &SdkManifest, path: &Path) -> Result<()> {
