@@ -20,6 +20,7 @@ fn cap_len(mut s: String) -> String {
 }
 const MAX_FUNCS: usize = 2_000_000;
 const MAX_UNIT_SCAN: usize = 100_000;
+const MAX_STRING_BYTES: usize = 256 * 1024 * 1024;
 const MAX_PE_BYTES: u64 = 512 * 1024 * 1024;
 
 pub(crate) struct DebugInfo {
@@ -87,10 +88,13 @@ impl DebugInfo {
         let mut func_visited = 0usize;
         let mut rows_seen = 0usize;
         let mut scan_budget = MAX_UNIT_SCAN;
+        let mut string_bytes = 0usize;
 
         let mut units = dwarf.units();
         while let Ok(Some(header)) = units.next() {
-            if func_visited >= MAX_FUNCS && rows_seen >= MAX_LINE_ROWS && scan_budget == 0 {
+            if (func_visited >= MAX_FUNCS && rows_seen >= MAX_LINE_ROWS && scan_budget == 0)
+                || string_bytes >= MAX_STRING_BYTES
+            {
                 break;
             }
             let Ok(unit) = dwarf.unit(header) else {
@@ -102,6 +106,7 @@ impl DebugInfo {
                 &mut funcs,
                 &mut func_visited,
                 &mut scan_budget,
+                &mut string_bytes,
             );
             let Some(program) = unit.line_program.clone() else {
                 continue;
@@ -116,7 +121,7 @@ impl DebugInfo {
                     break;
                 }
                 rows_seen += 1;
-                if by_addr.len() >= MAX_LINE_ROWS {
+                if by_addr.len() >= MAX_LINE_ROWS || string_bytes >= MAX_STRING_BYTES {
                     break;
                 }
                 if row.end_sequence() {
@@ -131,6 +136,7 @@ impl DebugInfo {
                 );
                 let addr = row.address();
                 let line = line.get() as u32;
+                string_bytes = string_bytes.saturating_add(file.len().saturating_mul(2));
                 lines
                     .entry((norm(&file), line))
                     .or_default()
@@ -234,10 +240,11 @@ fn collect_functions<R: gimli::Reader>(
     out: &mut Vec<(u64, u64, String)>,
     visited: &mut usize,
     scan_budget: &mut usize,
+    string_bytes: &mut usize,
 ) {
     let mut entries = unit.entries();
     while let Ok(Some((_, entry))) = entries.next_dfs() {
-        if out.len() >= MAX_FUNCS || *visited >= MAX_FUNCS {
+        if out.len() >= MAX_FUNCS || *visited >= MAX_FUNCS || *string_bytes >= MAX_STRING_BYTES {
             return;
         }
         if entry.tag() != gimli::DW_TAG_subprogram {
@@ -252,11 +259,15 @@ fn collect_functions<R: gimli::Reader>(
         };
         let mut range_seen = 0usize;
         while let Ok(Some(range)) = ranges.next() {
-            if out.len() >= MAX_FUNCS || range_seen >= MAX_FUNCS {
+            if out.len() >= MAX_FUNCS
+                || range_seen >= MAX_FUNCS
+                || *string_bytes >= MAX_STRING_BYTES
+            {
                 return;
             }
             range_seen += 1;
             if range.end > range.begin {
+                *string_bytes = string_bytes.saturating_add(name.len());
                 out.push((range.begin, range.end, name.clone()));
             }
         }
