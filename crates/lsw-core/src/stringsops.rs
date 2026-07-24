@@ -49,7 +49,13 @@ pub fn extract_strings(data: &[u8], min_len: usize) -> Vec<String> {
 }
 
 pub fn strings(path: &Path, min_len: usize) -> Result<Vec<String>> {
-    let data = std::fs::read(path).map_err(|e| Error::io(path.to_path_buf(), e))?;
+    use std::io::Read;
+    const MAX_INPUT: u64 = 256 * 1024 * 1024;
+    let file = std::fs::File::open(path).map_err(|e| Error::io(path.to_path_buf(), e))?;
+    let mut data = Vec::new();
+    file.take(MAX_INPUT)
+        .read_to_end(&mut data)
+        .map_err(|e| Error::io(path.to_path_buf(), e))?;
     Ok(extract_strings(&data, min_len.max(1)))
 }
 
