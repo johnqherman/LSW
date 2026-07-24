@@ -45,6 +45,7 @@ fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
     let mut descriptors = table
         .descriptors()
         .map_err(|e| PeError::malformed(path, e))?;
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut visited = 0usize;
     while let Some(descriptor) = descriptors
         .next()
@@ -58,7 +59,7 @@ fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
             .name(descriptor.name.get(LE))
             .map_err(|e| PeError::malformed(path, e))?;
         let name = decode_name(raw);
-        if !dlls.iter().any(|seen| seen.eq_ignore_ascii_case(&name)) {
+        if seen.insert(name.to_ascii_lowercase()) {
             dlls.push(name);
         }
     }
