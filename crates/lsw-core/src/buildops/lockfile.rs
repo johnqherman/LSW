@@ -8,6 +8,12 @@ use crate::project::Project;
 
 pub(crate) fn stamp_build_dir(project: &Project, env: &Environment) -> Result<()> {
     let build_dir = project.root.join("build");
+    if fs::symlink_metadata(&build_dir).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(Error::InitFailed {
+            path: build_dir.clone(),
+            detail: "build/ is a symlink; refusing to build through it".into(),
+        });
+    }
     let marker = build_dir.join(".lsw-env");
     let owner = super::read_capped(&marker, 1024 * 1024).and_then(|b| String::from_utf8(b).ok());
     if build_dir.is_dir()
