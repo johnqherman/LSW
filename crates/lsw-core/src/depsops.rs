@@ -277,6 +277,11 @@ fn refresh_db(dirs: &lsw_config::Dirs, repo: &str) -> Result<PathBuf> {
 }
 
 fn dep_root_contained(project: &crate::project::Project, root: &Path) -> bool {
+    let is_symlink =
+        |p: &Path| std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink());
+    if is_symlink(&project.root.join("deps")) || is_symlink(root) {
+        return false;
+    }
     match (root.canonicalize(), project.root.canonicalize()) {
         (Ok(r), Ok(p)) => r.starts_with(&p),
         _ => false,
