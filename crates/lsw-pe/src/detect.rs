@@ -37,7 +37,7 @@ pub fn detect(path: &Path) -> Result<BinaryKind, PeError> {
         return Ok(BinaryKind::Script);
     }
     if prefix.starts_with(MZ_MAGIC) {
-        let data = fs::read(path).map_err(|e| PeError::io(path, e))?;
+        let data = crate::error::read_pe(path)?;
         return parse_pe_info(path, &data).map(BinaryKind::Pe);
     }
     Ok(BinaryKind::Unknown)

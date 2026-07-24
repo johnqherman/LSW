@@ -41,3 +41,21 @@ impl PeError {
         }
     }
 }
+
+pub(crate) const MAX_PE_BYTES: u64 = 512 * 1024 * 1024;
+
+pub(crate) fn read_pe(path: &Path) -> Result<Vec<u8>, PeError> {
+    use std::io::Read;
+    let file = std::fs::File::open(path).map_err(|e| PeError::io(path, e))?;
+    let mut data = Vec::new();
+    file.take(MAX_PE_BYTES + 1)
+        .read_to_end(&mut data)
+        .map_err(|e| PeError::io(path, e))?;
+    if data.len() as u64 > MAX_PE_BYTES {
+        return Err(PeError::malformed(
+            path,
+            format!("file exceeds {MAX_PE_BYTES}-byte limit for PE parsing"),
+        ));
+    }
+    Ok(data)
+}
