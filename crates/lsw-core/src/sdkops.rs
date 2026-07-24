@@ -123,13 +123,20 @@ pub fn remove(dirs: &Dirs, name: &str) -> Result<()> {
 }
 
 fn copy_tree(src: &Path, dst: &Path) -> Result<usize> {
-    let mut count = 0;
-    copy_tree_depth(src, dst, 64, &mut count)?;
-    Ok(count)
+    let mut files = 0;
+    let mut visited = 0;
+    copy_tree_depth(src, dst, 64, &mut files, &mut visited)?;
+    Ok(files)
 }
 
-fn copy_tree_depth(src: &Path, dst: &Path, depth: usize, count: &mut usize) -> Result<()> {
-    const MAX_FILES: usize = 1_000_000;
+fn copy_tree_depth(
+    src: &Path,
+    dst: &Path,
+    depth: usize,
+    files: &mut usize,
+    visited: &mut usize,
+) -> Result<()> {
+    const MAX_ENTRIES: usize = 2_000_000;
     if depth == 0 {
         return Err(Error::SdkImportFailed {
             path: src.to_path_buf(),
@@ -140,12 +147,13 @@ fn copy_tree_depth(src: &Path, dst: &Path, depth: usize, count: &mut usize) -> R
         .map_err(|e| Error::io(src.to_path_buf(), e))?
         .flatten()
     {
-        if *count >= MAX_FILES {
+        if *visited >= MAX_ENTRIES {
             return Err(Error::SdkImportFailed {
                 path: src.to_path_buf(),
-                detail: format!("SDK contains more than {MAX_FILES} files"),
+                detail: format!("SDK contains more than {MAX_ENTRIES} entries"),
             });
         }
+        *visited += 1;
         let from = entry.path();
         let to = dst.join(entry.file_name());
         let meta = match fs::symlink_metadata(&from) {
@@ -154,10 +162,10 @@ fn copy_tree_depth(src: &Path, dst: &Path, depth: usize, count: &mut usize) -> R
         };
         if meta.is_dir() {
             fs::create_dir_all(&to).map_err(|e| Error::io(to.clone(), e))?;
-            copy_tree_depth(&from, &to, depth - 1, count)?;
+            copy_tree_depth(&from, &to, depth - 1, files, visited)?;
         } else if meta.is_file() {
             fs::copy(&from, &to).map_err(|e| Error::io(from.clone(), e))?;
-            *count += 1;
+            *files += 1;
         }
     }
     Ok(())
