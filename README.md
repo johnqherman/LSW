@@ -5,17 +5,46 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](#license)
 [![msrv](https://img.shields.io/badge/rustc-1.85+-blue.svg)](rust-toolchain.toml)
 
-LSW is a Linux-native development environment for building, running, inspecting,
-debugging, packaging, and verifying Microsoft Windows applications without
-leaving Linux. It is conceptually the inverse of WSL: where WSL runs a Linux
-environment on Windows, LSW builds, runs, and ships Windows software on Linux.
+**Build, test, and package Windows applications from Linux - with one
+workflow.**
 
-LSW composes existing, mature technology - Wine as the execution runtime,
-Clang/MinGW-w64 (GNU ABI) or clang-cl (MSVC ABI) as the cross toolchain,
-CMake, Meson, Cargo, Zig, .NET, and more as build orchestrators - behind one coherent CLI
-with isolated per-environment Wine prefixes, declarative `lsw.toml` project
-configuration, `lsw.lock` reproducibility pinning, and deterministic
-Linux<->Windows path mapping. C, C++, and Rust are first-class languages.
+```
+$ cd existing-project
+$ lsw setup
+Detected Cmake project 'hello'
+Created lsw.toml
+Created environment 'windows-x64'
+  toolchain llvm-mingw clang version 22.1.8
+  runtime   wine 11.13
+
+Ready:
+  lsw build
+
+$ lsw check
+  + configuration    lsw.toml valid
+  + environment      windows-x64 (llvm-mingw clang version 22.1.8, wine 11.13)
+  + build            1 artifact(s) via Cmake
+  + wine execution   1 test(s) passed under wine
+  + dependencies     all DLL imports resolved (1 artifact(s))
+  + hardening        ASLR + DEP enabled (1 artifact(s))
+
+all checks passed
+
+$ lsw package
+Packaged: dist/hello-x86_64
+  hello.exe
+Archive:  dist/hello-x86_64.zip
+```
+
+LSW configures the tools you already use - CMake, Meson, Cargo, Zig, .NET,
+Clang/MinGW-w64, and Wine - it does not replace them. It puts them behind one
+coherent CLI with isolated per-environment Wine prefixes, declarative
+`lsw.toml` project configuration, `lsw.lock` reproducibility pinning, and
+deterministic Linux<->Windows path mapping. C, C++, and Rust are first-class
+languages; MSVC-ABI builds work with a user-supplied Windows SDK.
+
+Conceptually LSW is the inverse of WSL: where WSL runs a Linux environment on
+Windows, LSW builds, runs, and ships Windows software on Linux.
 
 ## Install
 
@@ -29,82 +58,56 @@ integration is optional. If you do not want it, use only `cargo install lsw`.
 
 ## Quickstart
 
+In an existing project (CMake, Meson, Cargo, Zig, Make, or .NET):
+
+```
+lsw setup                     # detect project, create env, write lsw.toml
+lsw build                     # cross-compile to build/<name>.exe (real PE)
+lsw run                       # build + run the executable through Wine
+lsw check                     # build, wine execution, deps, hardening
+lsw package                   # assemble dist/<name>-<arch>[.zip]
+```
+
+Starting from nothing:
+
 ```
 lsw init hello && cd hello    # scaffold lsw.toml + CMake hello project
-lsw env create win11-x64      # isolated Wine prefix + toolchain probe
-lsw use win11-x64             # select the active environment
-lsw build                     # cross-compile to build/hello.exe (real PE)
-lsw run build/hello.exe       # execute locally through the Wine runtime
-lsw test                      # run tests under the runtime (honest compat status)
-lsw inspect build/hello.exe   # PE format, arch, subsystem, sections, imports
-lsw audit build/hello.exe     # security hardening (ASLR/DEP/CFG/signed)
-lsw package                   # assemble dist/<name>-<arch>[.zip]
-lsw doctor                    # diagnose host / runtime / toolchain / project
-lsw watch                     # rebuild automatically on source changes
+lsw setup                     # create + wire the default environment
+lsw check                     # validate the whole pipeline
 ```
 
 `lsw init --template gui|dll|console` selects the scaffold. The default is
 `console`. The `gui` template uses WinMain. The `dll` template makes a shared
 library.
 
-## Command reference
+Useful next commands: `lsw test` (test suite under Wine with honest
+compatibility status), `lsw inspect` / `lsw audit` (PE analysis of the built
+artifact), `lsw doctor` (host diagnosis), `lsw watch` (rebuild on change),
+`lsw verify --native-windows` (run artifacts on a real Windows host).
 
-- **Build / run** - `lsw build [--system cmake|cargo|make|ninja|meson|zig|dotnet]
-  [--reproducible] [--update-lock] [--aot]` builds the project. `lsw run
-  [--host|--windows] [--sandbox strict] [--headless] <program>` starts a
-  program. `lsw exec ... <cmd>` runs one command. `lsw test [--headless]` runs
-  the tests and shows the true compatibility status. `lsw shell [--windows]`
-  opens a shell.
-- **Binary analysis** - `lsw inspect <pe>` shows the format, the architecture,
-  the subsystem, the entry point, the sections, the embedded
-  manifest/version-info/icon, and the imports. `lsw audit <pe>` shows the
-  hardening flags. `lsw exports <dll>` lists the exports. `lsw deps tree <pe>`
-  shows the transitive DLL tree. `lsw crash <dump.dmp>` decodes a Windows
-  minidump and shows the exception, the module, and the address. `lsw diff
-  a.exe b.exe` compares two binaries. `lsw strings <file>` lists the strings.
-  `lsw sbom <pe>` writes a CycloneDX SBOM. `lsw sign <pe>` adds an Authenticode
-  signature.
-- **Dependencies** - `lsw deps add|remove|list <name>` installs prebuilt
-  mingw-w64 libraries (headers, import/static libraries, DLLs) from the
-  upstream package set into the project `deps/` sysroot. LSW records them in
-  `[dependencies]`. Builds find the include paths and the library paths
-  automatically.
-- **Paths** - `lsw path --windows|--linux <path>` converts a path.
-- **Environment state** - `lsw env create|list|clone|restore|remove`,
-  `lsw registry get|set|seed|export|import|reset`, `lsw ps`,
-  `lsw kill <pid>|--all`, `lsw service create|start|stop|query|delete`.
-- **Compatibility** - `lsw compat [--db] [--native] <pe>` makes a measured
-  report of the imported DLLs, the imported API functions, and the runtime
-  trace. The `--native` option adds a real Windows verdict and a capability
-  probe for each DLL and function on the `[verify]` host.
-  `lsw compat-query <dll|module!func>` queries one item. `lsw trace <pe>` shows
-  the DLL loads, the registry and filesystem access, and the unsupported APIs.
-- **Debugging** - `lsw debug <pe> [--gdb [--no-start]]` starts winedbg or a
-  gdb-remote stub. Each gdb or lldb can attach to the stub. `lsw debug --native
-  <pe>` runs the binary under cdb on the `[verify]` Windows host and returns a
-  real backtrace.
-- **Native verification** - `lsw verify --native-windows` builds the project.
-  Then it runs the artifacts on a real Windows host. Configure the host in
-  `[verify]`. The transports are SSH, WinRM, and WinRM-over-TLS
-  (`transport = "ssh"|"winrm"|"https"`). The WS-Man transports read
-  `LSW_WINRM_PASSWORD`. The `https` transport uses port 5986. The result is
-  `WINDOWS_VERIFIED` or `WINDOWS_UNAVAILABLE`. This result is not the same as
-  the local Wine result.
-- **Integration** - `lsw ide env` writes JSON for editor plugins. The VS Code,
-  Neovim, and JetBrains front-ends are in `editors/`. `lsw dap` is a Debug
-  Adapter Protocol server on stdio. `lsw plugin list` shows the out-of-process
-  `lsw-provider-*` JSON-RPC providers. A reference implementation is in
-  `crates/lsw-provider-example`. `lswd` is an optional daemon with `lsw daemon
-  status|stop`. Normal use does not need the daemon.
-- **Ergonomics / tooling** - `lsw completions bash|zsh|fish|powershell|elvish`
-  writes shell completions. `lsw man [--dir <out>]` writes man pages.
-  `lsw explain LSW2004` explains an error code. `lsw watch` builds again when
-  the source changes. `lsw config check` examines `lsw.toml`. `lsw ci init
-  github` writes a GitHub Actions workflow.
+Advanced workflows (multiple environments, other architectures, MSVC ABI) use
+`lsw env create <name> [--arch <arch>] [--sdk <name>]` and `lsw use <name>`
+directly; `lsw setup` is a convenience over the same machinery.
 
-Most report commands have a `--format json` option for machine consumption. The
-editor front-ends in `editors/` (a VS Code extension, a Neovim plugin, and
-JetBrains External Tools) use `lsw ide env` and `lsw dap`.
+## Commands
+
+```
+Getting started:  setup  init  doctor  check
+Build / run:      build  run  exec  test  shell  watch
+Analysis:         inspect  audit  exports  deps  diff  size  strings  sbom  crash
+Compatibility:    compat  compat-query  trace
+Debugging:        debug  dap
+Ship:             package  sign  verify  ci
+Environments:     env  use  registry  ps  kill  service  sdk  path
+Languages:        rust  dotnet
+Tooling:          ide  plugin  daemon  config  explain  completions  man  install
+```
+
+The full command reference with flags and semantics is in
+[docs/reference/commands.md](docs/reference/commands.md). Most report commands
+have a `--format json` option for machine consumption. The editor front-ends
+in `editors/` (a VS Code extension, a Neovim plugin, and JetBrains External
+Tools) use `lsw ide env` and `lsw dap`.
 
 ## Languages and build systems
 
@@ -122,8 +125,8 @@ and self-contained apps:
 
 ```
 lsw dotnet init hello-cs && cd hello-cs # scaffold a C# console project
-lsw env create win && lsw build         # dotnet publish -r <rid> --self-contained
-lsw run bin/.../hello-cs.exe            # runs under Wine
+lsw setup && lsw build                  # dotnet publish -r <rid> --self-contained
+lsw run                                 # runs under Wine
 lsw dotnet doctor                       # report C#->Windows toolchain readiness
 ```
 
@@ -148,8 +151,8 @@ current scope is x86_64 console apps. The host needs `clang` and `lld-link`.
 
 ```
 lsw rust init hello-rs && cd hello-rs   # scaffold a cargo project for Windows
-lsw env create win && lsw build         # cargo build --target <arch>-pc-windows-gnu
-lsw run target/.../hello-rs.exe         # runs under Wine
+lsw setup && lsw build                  # cargo build --target <arch>-pc-windows-gnu
+lsw run                                 # runs under Wine
 lsw rust doctor                         # report Rust->Windows toolchain readiness
 ```
 
