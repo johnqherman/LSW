@@ -44,6 +44,26 @@ jobs:
           lsw build
           lsw test --headless
 
+  # Reproducible-build verification (opt-in): builds twice and fails if the
+  # artifacts are not byte-identical. Uncomment to enable.
+  #
+  # reproducible:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Install toolchain and runtime
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y wine64 mingw-w64 cmake ninja-build
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - name: Install lsw
+  #       run: cargo install lsw
+  #     - name: Verify reproducibility
+  #       run: |
+  #         lsw env create ci
+  #         lsw use ci
+  #         lsw verify --reproducible
+
   # Native Windows verification (opt-in): needs a self-hosted or hosted
   # Windows runner reachable over SSH from the Linux job, wired via [verify]
   # in lsw.toml. Uncomment and configure to turn WINDOWS_UNAVAILABLE into

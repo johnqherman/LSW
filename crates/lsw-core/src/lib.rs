@@ -46,6 +46,7 @@ pub mod pluginops;
 pub mod project;
 pub mod psops;
 pub mod registryops;
+pub mod reproops;
 pub mod runops;
 pub mod rustops;
 pub mod sbomops;

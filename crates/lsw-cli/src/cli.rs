@@ -104,9 +104,15 @@ pub(crate) enum Cmd {
     },
     /// Build, then verify artifacts on a real Windows host.
     Verify {
-        /// Run on native Windows (the only supported mode today).
+        /// Run on native Windows.
         #[arg(long)]
         native_windows: bool,
+        /// Build twice and prove the artifacts are byte-identical.
+        #[arg(long, conflicts_with = "native_windows")]
+        reproducible: bool,
+        /// With --reproducible: limit the check to one artifact (name or path).
+        #[arg(requires = "reproducible")]
+        artifact: Option<String>,
     },
     /// Interactive shell: Linux with Windows-target env, or cmd.exe.
     Shell {
