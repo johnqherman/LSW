@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::ExitCode;
 
 use lsw_core::Dirs;
@@ -111,7 +111,7 @@ fn verify_reproducible(
 }
 
 pub(crate) fn compat(
-    program: &PathBuf,
+    program: &Path,
     args: &[String],
     db: &bool,
     native: &bool,
@@ -130,7 +130,7 @@ pub(crate) fn compat(
         }
         Some(lsw_core::verifyops::run_on_host(
             &p,
-            std::slice::from_ref(program),
+            &[program.to_path_buf()],
             args,
         )?)
     } else {

@@ -332,8 +332,11 @@ pub(crate) fn strings(file: &Path, min: &usize, format: Format) -> lsw_core::Res
 pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     match op {
         DepsCmd::Tree { file } => {
+            let Some(file) = crate::cmd::resolve_pe(file, dirs)? else {
+                return Ok(ExitCode::FAILURE);
+            };
             let env = active_env(dirs).ok().map(|(_, e)| e);
-            let root = lsw_core::depsops::tree(env.as_ref(), file)?;
+            let root = lsw_core::depsops::tree(env.as_ref(), &file)?;
             if format == Format::Json {
                 println!(
                     "{}",
