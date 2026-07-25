@@ -121,6 +121,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             command,
         } => cmd::build::exec(host, windows, sandbox, headless, command, &dirs),
         Cmd::Test { headless } => cmd::build::test(headless, &dirs, cli.format),
+        Cmd::Check { headless } => cmd::tooling::check(*headless, &dirs, cli.format),
         Cmd::Verify {
             native_windows,
             reproducible,

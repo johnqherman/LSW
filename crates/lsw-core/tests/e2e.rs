@@ -333,3 +333,34 @@ fn e2e_setup_bootstraps_project_and_environment() {
     assert!(!again.environment_created);
     assert_eq!(again.environment, first.environment);
 }
+
+#[test]
+fn e2e_check_passes_on_console_template() {
+    if !e2e_enabled() || !base_tools_present() {
+        eprintln!("skipping e2e: set LSW_TEST_E2E=1 with wine/cmake/mingw on PATH");
+        return;
+    }
+    let c = corpus();
+    let init = lsw_core::init(&c.root, Some("checked"), Template::Console).unwrap();
+    let mut project = Project::discover(&init.root).unwrap();
+    create_env(&c, "checked");
+    lsw_core::use_environment(&c.dirs, &mut project, "checked").unwrap();
+
+    let report = lsw_core::checkops::check(
+        &c.dirs,
+        &init.root,
+        &lsw_core::checkops::CheckOptions { headless: true },
+        &mut |_| {},
+    )
+    .unwrap();
+    assert!(report.ok, "steps: {:?}", report.steps);
+    assert_eq!(report.steps.len(), 6);
+    assert!(
+        report
+            .steps
+            .iter()
+            .all(|s| s.status != lsw_core::checkops::StepStatus::Skip),
+        "no step should be skipped on the console template: {:?}",
+        report.steps
+    );
+}

@@ -19,6 +19,7 @@ pub(crate) fn diagnostic_stdio() -> std::process::Stdio {
 pub mod auditops;
 pub mod buildops;
 pub mod caseops;
+pub mod checkops;
 pub mod ciops;
 pub mod compatdb;
 pub mod compatops;
