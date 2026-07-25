@@ -154,7 +154,8 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             program,
             args,
             relay,
-        } => cmd::verify::trace(program, args, relay, &dirs, cli.format),
+            filter,
+        } => cmd::verify::trace(program, args, relay, filter, &dirs, cli.format),
         Cmd::Package { target, verify } => {
             cmd::package::package(target, *verify, &dirs, cli.format)
         }
