@@ -6,19 +6,23 @@ use lsw_core::Dirs;
 use crate::cli::Format;
 use crate::{active_env, exit_from_status};
 
+pub(crate) struct DebugFlags {
+    pub(crate) gdb: bool,
+    pub(crate) no_start: bool,
+    pub(crate) native: bool,
+    pub(crate) analyze: bool,
+    pub(crate) interactive: bool,
+}
+
 pub(crate) fn debug(
     program: &Path,
     args: &[String],
-    gdb: &bool,
-    no_start: &bool,
-    native: &bool,
-    analyze: &bool,
-    interactive: &bool,
+    flags: &DebugFlags,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
-    if *native {
+    if flags.native {
         let cfg = &p.manifest.verify;
         if cfg.host.is_some() {
             match cfg.transport.as_deref().unwrap_or("ssh") {
@@ -38,13 +42,13 @@ pub(crate) fn debug(
         }
         const NO_HOST: &str =
             "no [verify] host configured in lsw.toml; native debugging needs a Windows host";
-        if *interactive {
+        if flags.interactive {
             return match lsw_core::verifyops::native_interactive(&p, program)? {
                 None => Ok(crate::usage_failure(format, NO_HOST)),
                 Some(status) => Ok(crate::exit_from_status(status)),
             };
         }
-        if *analyze {
+        if flags.analyze {
             return match lsw_core::verifyops::native_analyze(&p, program)? {
                 None => Ok(crate::usage_failure(format, NO_HOST)),
                 Some(a) => {
@@ -109,8 +113,8 @@ pub(crate) fn debug(
         program,
         args,
         &lsw_core::debugops::DebugOptions {
-            gdb: *gdb,
-            no_start: *no_start,
+            gdb: flags.gdb,
+            no_start: flags.no_start,
         },
     )?;
     Ok(exit_from_status(status))

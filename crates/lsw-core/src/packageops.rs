@@ -381,6 +381,24 @@ fn render_wxs(name: &str, files: &[String]) -> String {
     )
 }
 
+fn deterministic_guid(seed: &str) -> String {
+    let hex = lsw_toolchain::sha256_bytes(seed.as_bytes());
+    let b = hex.as_bytes();
+    let s = |start: usize, len: usize| -> String {
+        std::str::from_utf8(&b[start..start + len])
+            .unwrap()
+            .to_ascii_uppercase()
+    };
+    format!(
+        "{}-{}-{}-{}-{}",
+        s(0, 8),
+        s(8, 4),
+        s(12, 4),
+        s(16, 4),
+        s(20, 12)
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -482,22 +500,4 @@ mod tests {
         assert!(bundled.is_empty());
         assert_eq!(assumed.into_iter().collect::<Vec<_>>(), vec!["builtin.dll"]);
     }
-}
-
-fn deterministic_guid(seed: &str) -> String {
-    let hex = lsw_toolchain::sha256_bytes(seed.as_bytes());
-    let b = hex.as_bytes();
-    let s = |start: usize, len: usize| -> String {
-        std::str::from_utf8(&b[start..start + len])
-            .unwrap()
-            .to_ascii_uppercase()
-    };
-    format!(
-        "{}-{}-{}-{}-{}",
-        s(0, 8),
-        s(8, 4),
-        s(12, 4),
-        s(16, 4),
-        s(20, 12)
-    )
 }

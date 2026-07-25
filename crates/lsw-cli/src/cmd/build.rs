@@ -53,8 +53,7 @@ pub(crate) fn build(
 pub(crate) fn run(
     program: &Option<PathBuf>,
     args: &[String],
-    host: &bool,
-    windows: &bool,
+    domain: lsw_core::Domain,
     sandbox: &Option<SandboxArg>,
     headless: &bool,
     dump_on_crash: &bool,
@@ -90,7 +89,6 @@ pub(crate) fn run(
             }
         }
     };
-    let domain = domain_from_flags(*host, *windows);
     let report = lsw_core::run(
         &env,
         Some(&p),
@@ -108,7 +106,7 @@ pub(crate) fn run(
     Ok(exit_from_status(report.status))
 }
 
-fn capture_crash_dump(env: &lsw_core::Environment, program: &PathBuf, args: &[String]) {
+fn capture_crash_dump(env: &lsw_core::Environment, program: &std::path::Path, args: &[String]) {
     let dump = lsw_core::dumpops::dump_path_for(program);
     eprintln!("[lsw] re-running under winedbg to capture a crash dump");
     match lsw_core::dumpops::capture_wine_dump(env, program, args, &dump, false) {
