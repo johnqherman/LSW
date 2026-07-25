@@ -195,7 +195,11 @@ pub(crate) fn diff(a: &Path, b: &Path, format: Format) -> lsw_core::Result<ExitC
         );
     } else {
         let mut any = false;
-        for (label, d) in [("imports", &report.imports), ("exports", &report.exports)] {
+        for (label, d) in [
+            ("imports", &report.imports),
+            ("exports", &report.exports),
+            ("section", &report.sections),
+        ] {
             for x in &d.added {
                 println!("+ {label} {x}");
                 any = true;
@@ -205,11 +209,88 @@ pub(crate) fn diff(a: &Path, b: &Path, format: Format) -> lsw_core::Result<ExitC
                 any = true;
             }
         }
+        for r in &report.resized {
+            println!("~ section {} {:+} bytes", r.name, r.raw_size_delta);
+            any = true;
+        }
+        if report.size_delta != 0 {
+            println!("~ file size {:+} bytes", report.size_delta);
+            any = true;
+        }
         if !any {
-            println!("no import/export differences (this compares the PE API surface, not bytes)");
+            println!(
+                "no import/export/section differences (this compares the PE surface, not bytes)"
+            );
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+pub(crate) fn size(
+    file: &Path,
+    baseline: &Option<std::path::PathBuf>,
+    max_growth: &Option<f64>,
+    format: Format,
+) -> lsw_core::Result<ExitCode> {
+    let report = lsw_core::sizeops::size(file, baseline.as_deref(), *max_growth)?;
+    if format == Format::Json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).expect("serializes")
+        );
+    } else {
+        println!(
+            "\nLSW SIZE  {}  ({} bytes)\n",
+            report.file, report.file_size
+        );
+        let with_baseline = report.baseline.is_some();
+        if with_baseline {
+            println!(
+                "{:<14} {:>12} {:>7}  {:>12} {:>10}",
+                "bucket", "bytes", "%", "baseline", "delta"
+            );
+        } else {
+            println!("{:<14} {:>12} {:>7}", "bucket", "bytes", "%");
+        }
+        for b in &report.buckets {
+            if with_baseline {
+                let growth = b
+                    .growth_percent
+                    .map(|g| format!(" ({g:+.1}%)"))
+                    .unwrap_or_default();
+                println!(
+                    "{:<14} {:>12} {:>6.1}%  {:>12} {:>+10}{growth}",
+                    b.name,
+                    b.bytes,
+                    b.percent,
+                    b.baseline_bytes.unwrap_or(0),
+                    b.delta.unwrap_or(0)
+                );
+            } else {
+                println!("{:<14} {:>12} {:>6.1}%", b.name, b.bytes, b.percent);
+            }
+        }
+        if let Some(base_size) = report.baseline_size {
+            println!(
+                "\nfile size: {} -> {} ({:+} bytes)",
+                base_size,
+                report.file_size,
+                report.file_size as i64 - base_size as i64
+            );
+        }
+        if !report.exceeded.is_empty() {
+            println!(
+                "\n{} bucket(s) grew beyond the --max-growth limit: {}",
+                color::red("FAIL:"),
+                report.exceeded.join(", ")
+            );
+        }
+    }
+    Ok(if report.exceeded.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
 }
 
 pub(crate) fn strings(file: &Path, min: &usize, format: Format) -> lsw_core::Result<ExitCode> {

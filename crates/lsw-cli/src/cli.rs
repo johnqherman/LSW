@@ -124,8 +124,18 @@ pub(crate) enum Cmd {
     Exports { file: PathBuf },
     /// Generate a CycloneDX SBOM for a PE (imports + toolchain provenance).
     Sbom { file: PathBuf },
-    /// Diff two PEs by imports and exports.
+    /// Diff two PEs by imports, exports, sections, and size.
     Diff { a: PathBuf, b: PathBuf },
+    /// Break down a PE's size by section bucket (code, data, resources, ...).
+    Size {
+        file: PathBuf,
+        /// Compare against a prior build of the same binary.
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+        /// With --baseline: fail if any bucket grows more than this percent.
+        #[arg(long, requires = "baseline")]
+        max_growth: Option<f64>,
+    },
     /// Extract printable ASCII and UTF-16 strings from a file.
     Strings {
         file: PathBuf,

@@ -13,6 +13,7 @@ pub struct SectionInfo {
     pub name: String,
     pub virtual_size: u32,
     pub raw_size: u32,
+    pub raw_offset: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,6 +51,7 @@ fn details_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<PeDetai
                 .to_owned(),
             virtual_size: section.virtual_size.get(LE),
             raw_size: section.size_of_raw_data.get(LE),
+            raw_offset: section.pointer_to_raw_data.get(LE),
         });
     }
     Ok(PeDetails {
