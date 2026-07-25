@@ -14,6 +14,55 @@ pub(crate) fn watch(dirs: &Dirs) -> lsw_core::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
+pub(crate) fn check(headless: bool, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
+    use lsw_core::checkops::{CheckOptions, StepStatus};
+    let json = format == Format::Json;
+    if !json {
+        println!("\n{}", color::bold("LSW CHECK"));
+        println!();
+    }
+    let mut progress = |step: &lsw_core::checkops::CheckStep| {
+        if json {
+            return;
+        }
+        let mark = match step.status {
+            StepStatus::Pass => color::green("+"),
+            StepStatus::Fail => color::red("X"),
+            StepStatus::Skip => color::dim("-"),
+        };
+        println!("  {mark} {:<16} {}", step.name, step.detail);
+    };
+    let report = lsw_core::checkops::check(
+        dirs,
+        &crate::cwd()?,
+        &CheckOptions { headless },
+        &mut progress,
+    )?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).expect("serializes")
+        );
+    } else {
+        println!();
+        if report.ok {
+            println!("{}", color::green("all checks passed"));
+        } else {
+            let failed = report
+                .steps
+                .iter()
+                .filter(|s| s.status == StepStatus::Fail)
+                .count();
+            println!("{}", color::red(&format!("{failed} check(s) failed")));
+        }
+    }
+    Ok(if report.ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
 pub(crate) fn doctor(dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     let p = project().ok();
     let report = lsw_core::doctor(dirs, p.as_ref())?;

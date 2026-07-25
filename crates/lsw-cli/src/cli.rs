@@ -109,6 +109,12 @@ pub(crate) enum Cmd {
         #[arg(long)]
         headless: bool,
     },
+    /// Validate the project: build, wine execution, deps, hardening.
+    Check {
+        /// CI mode: no interactive display (exports LSW_HEADLESS=1).
+        #[arg(long)]
+        headless: bool,
+    },
     /// Build, then verify artifacts on a real Windows host.
     Verify {
         /// Run on native Windows.
