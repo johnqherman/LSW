@@ -12,6 +12,8 @@ use crate::error::{Error, Result};
 
 const TRACE_TIMEOUT: Duration = Duration::from_secs(120);
 const TRACE_MAX_OUTPUT: usize = 32 * 1024 * 1024;
+const TRACE_MAX_EVENTS: usize = 100_000;
+const TRACE_MAX_FIELD: usize = 512;
 
 fn drain_capped(mut reader: impl Read + Send + 'static) -> mpsc::Receiver<Vec<u8>> {
     let (tx, rx) = mpsc::channel();
@@ -34,6 +36,24 @@ fn drain_capped(mut reader: impl Read + Send + 'static) -> mpsc::Receiver<Vec<u8
     rx
 }
 
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TraceEventKind {
+    Dll,
+    Registry,
+    Filesystem,
+    Call,
+    Unsupported,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TraceEvent {
+    pub at_ms: u64,
+    pub kind: TraceEventKind,
+    pub verb: String,
+    pub path_or_key: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct TraceReport {
     pub imported_dlls: Vec<String>,
@@ -42,12 +62,15 @@ pub struct TraceReport {
     pub registry_access: Vec<String>,
     pub filesystem_access: Vec<String>,
     pub unsupported: Vec<String>,
+    pub timeline: Vec<TraceEvent>,
+    pub timeline_truncated: bool,
     pub exit_code: Option<i32>,
 }
 
 #[derive(Debug, Default)]
 pub struct TraceOptions {
     pub relay: bool,
+    pub filter: Option<String>,
 }
 
 pub fn trace(
@@ -72,9 +95,9 @@ pub fn trace(
     })?;
 
     let channels = if opts.relay {
-        "+loaddll,+reg,+file,+relay,fixme-all"
+        "+timestamp,+loaddll,+reg,+file,+relay,fixme-all"
     } else {
-        "+loaddll,+reg,+file,fixme-all"
+        "+timestamp,+loaddll,+reg,+file,fixme-all"
     };
 
     let mut child = Command::new(&wine)
@@ -113,7 +136,7 @@ pub fn trace(
         .unwrap_or_default();
 
     let stderr = String::from_utf8_lossy(&stderr_bytes);
-    let parsed = parse_wine_trace(&stderr);
+    let parsed = parse_wine_trace(&stderr, opts.filter.as_deref());
 
     eprint!("{}", String::from_utf8_lossy(&stdout_bytes));
     if timed_out {
@@ -130,6 +153,8 @@ pub fn trace(
         registry_access: parsed.registry,
         filesystem_access: parsed.filesystem,
         unsupported: parsed.unsupported,
+        timeline: parsed.timeline,
+        timeline_truncated: parsed.timeline_truncated,
         exit_code: status.and_then(|s| s.code()),
     })
 }
@@ -140,51 +165,144 @@ struct ParsedTrace {
     registry: Vec<String>,
     filesystem: Vec<String>,
     unsupported: Vec<String>,
+    timeline: Vec<TraceEvent>,
+    timeline_truncated: bool,
 }
 
-fn extract_channel_op(line: &str, tag: &str) -> Option<String> {
-    let after = line.split_once(tag).map(|(_, r)| r)?.trim_start();
-    let op: String = after
-        .chars()
-        .take_while(|c| c.is_alphanumeric() || *c == '_')
-        .collect();
-    if op.is_empty() { None } else { Some(op) }
+pub(crate) fn glob_match(pattern: &str, text: &str) -> bool {
+    let p: Vec<char> = pattern.to_ascii_lowercase().chars().collect();
+    let t: Vec<char> = text.to_ascii_lowercase().chars().collect();
+    let (mut pi, mut ti) = (0usize, 0usize);
+    let (mut star, mut mark) = (usize::MAX, 0usize);
+    while ti < t.len() {
+        if pi < p.len() && (p[pi] == '?' || p[pi] == t[ti]) {
+            pi += 1;
+            ti += 1;
+        } else if pi < p.len() && p[pi] == '*' {
+            star = pi;
+            mark = ti;
+            pi += 1;
+        } else if star != usize::MAX {
+            pi = star + 1;
+            mark += 1;
+            ti = mark;
+        } else {
+            return false;
+        }
+    }
+    while pi < p.len() && p[pi] == '*' {
+        pi += 1;
+    }
+    pi == p.len()
 }
 
-fn parse_wine_trace(stderr: &str) -> ParsedTrace {
+fn line_timestamp(line: &str) -> (Option<u64>, &str) {
+    let Some((head, rest)) = line.split_once(':') else {
+        return (None, line);
+    };
+    let Some((secs, millis)) = head.split_once('.') else {
+        return (None, line);
+    };
+    let numeric = !secs.is_empty()
+        && !millis.is_empty()
+        && secs.chars().all(|c| c.is_ascii_digit())
+        && millis.chars().all(|c| c.is_ascii_digit());
+    match (numeric, secs.parse::<u64>(), millis.parse::<u64>()) {
+        (true, Ok(s), Ok(m)) => (Some(s * 1000 + m), rest),
+        _ => (None, line),
+    }
+}
+
+fn extract_quoted(line: &str) -> Option<String> {
+    let start = line.find('"')?;
+    let rest = &line[start + 1..];
+    let end = rest.find('"')?;
+    Some(rest[..end].chars().take(TRACE_MAX_FIELD).collect())
+}
+
+fn parse_wine_trace(stderr: &str, filter: Option<&str>) -> ParsedTrace {
     let mut loaded = BTreeSet::new();
     let mut calls = BTreeSet::new();
     let mut registry = BTreeSet::new();
     let mut filesystem = BTreeSet::new();
     let mut unsupported = BTreeSet::new();
+    let mut timeline = Vec::new();
+    let mut timeline_truncated = false;
+    let mut first_ts: Option<u64> = None;
 
-    for line in stderr.lines() {
-        let line = line.trim();
+    let mut push_event = |at: Option<u64>,
+                          first_ts: &mut Option<u64>,
+                          kind: TraceEventKind,
+                          verb: String,
+                          path_or_key: String| {
+        if let Some(f) = filter
+            && !glob_match(f, &path_or_key)
+            && !glob_match(f, &verb)
+        {
+            return;
+        }
+        if timeline.len() >= TRACE_MAX_EVENTS {
+            timeline_truncated = true;
+            return;
+        }
+        let at_ms = match at {
+            Some(t) => {
+                let base = *first_ts.get_or_insert(t);
+                t.saturating_sub(base)
+            }
+            None => timeline
+                .last()
+                .map(|e: &TraceEvent| e.at_ms)
+                .unwrap_or_default(),
+        };
+        timeline.push(TraceEvent {
+            at_ms,
+            kind,
+            verb,
+            path_or_key,
+        });
+    };
+
+    for raw in stderr.lines() {
+        let (ts, line) = line_timestamp(raw.trim());
 
         if line.contains("trace:loaddll:") {
             if let Some(name) = extract_module_name(line) {
+                let path = extract_quoted(line).unwrap_or_else(|| name.clone());
                 loaded.insert(name);
+                push_event(
+                    ts,
+                    &mut first_ts,
+                    TraceEventKind::Dll,
+                    "Loaded".to_owned(),
+                    path,
+                );
             }
             continue;
         }
 
         if line.contains("trace:reg:") {
             if let Some(op) = extract_channel_op(line, "trace:reg:") {
-                registry.insert(op);
+                registry.insert(op.clone());
+                let key = extract_quoted(line).unwrap_or_default();
+                push_event(ts, &mut first_ts, TraceEventKind::Registry, op, key);
             }
             continue;
         }
 
         if line.contains("trace:file:") {
             if let Some(op) = extract_channel_op(line, "trace:file:") {
-                filesystem.insert(op);
+                filesystem.insert(op.clone());
+                let path = extract_quoted(line).unwrap_or_default();
+                push_event(ts, &mut first_ts, TraceEventKind::Filesystem, op, path);
             }
             continue;
         }
 
         if let Some(after) = line.split_once("Call ").map(|(_, r)| r) {
             if let Some(call) = extract_relay_call(after) {
-                calls.insert(call);
+                calls.insert(call.clone());
+                push_event(ts, &mut first_ts, TraceEventKind::Call, call, String::new());
             }
             continue;
         }
@@ -194,7 +312,14 @@ fn parse_wine_trace(stderr: &str) -> ParsedTrace {
             || lower.contains("unimplemented")
             || lower.contains("no implementation for");
         if unimplemented && let Some(sym) = extract_unimplemented(line) {
-            unsupported.insert(sym);
+            unsupported.insert(sym.clone());
+            push_event(
+                ts,
+                &mut first_ts,
+                TraceEventKind::Unsupported,
+                sym,
+                String::new(),
+            );
         }
     }
 
@@ -204,7 +329,18 @@ fn parse_wine_trace(stderr: &str) -> ParsedTrace {
         registry: registry.into_iter().collect(),
         filesystem: filesystem.into_iter().collect(),
         unsupported: unsupported.into_iter().collect(),
+        timeline,
+        timeline_truncated,
     }
+}
+
+fn extract_channel_op(line: &str, tag: &str) -> Option<String> {
+    let after = line.split_once(tag).map(|(_, r)| r)?.trim_start();
+    let op: String = after
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    if op.is_empty() { None } else { Some(op) }
 }
 
 fn extract_module_name(line: &str) -> Option<String> {
@@ -270,15 +406,18 @@ mod tests {
 002c:trace:loaddll:build_ntdll_module Loaded L"C:\\windows\\system32\\ntdll.dll" at 0x7c00: builtin
 irrelevant line
 "#;
-        let p = parse_wine_trace(stderr);
+        let p = parse_wine_trace(stderr, None);
         assert_eq!(p.loaded, vec!["kernel32.dll", "ntdll.dll"]);
+        assert_eq!(p.timeline.len(), 2);
+        assert_eq!(p.timeline[0].kind, TraceEventKind::Dll);
+        assert!(p.timeline[0].path_or_key.ends_with("kernel32.dll"));
     }
 
     #[test]
     fn parses_relay_calls() {
         let stderr = "0024:Call kernel32.CreateFileW(0x1,0x2) ret=00401000\n\
                       0024:Call user32.MessageBoxA(0,\"hi\") ret=0";
-        let p = parse_wine_trace(stderr);
+        let p = parse_wine_trace(stderr, None);
         assert!(p.calls.contains(&"kernel32!CreateFileW".to_owned()));
         assert!(p.calls.contains(&"user32!MessageBoxA".to_owned()));
     }
@@ -287,7 +426,7 @@ irrelevant line
     fn parses_unimplemented() {
         let stderr =
             "err:module:import_dll No implementation for dxgi.dll.SomeNewFn imported from ...";
-        let p = parse_wine_trace(stderr);
+        let p = parse_wine_trace(stderr, None);
         assert_eq!(p.unsupported, vec!["dxgi!SomeNewFn"]);
     }
 
@@ -297,14 +436,76 @@ irrelevant line
                       0024:trace:reg:RegQueryValueExW (...)\n\
                       0024:trace:file:CreateFileW L\"C:\\\\x\"\n\
                       0024:trace:file:CreateFileW L\"C:\\\\y\"";
-        let p = parse_wine_trace(stderr);
+        let p = parse_wine_trace(stderr, None);
         assert_eq!(p.registry, vec!["RegOpenKeyExW", "RegQueryValueExW"]);
         assert_eq!(p.filesystem, vec!["CreateFileW"]);
+        assert_eq!(p.timeline.len(), 4);
     }
 
     #[test]
     fn ignores_unrelated_output() {
-        let p = parse_wine_trace("just some program stdout\nnothing to see");
+        let p = parse_wine_trace("just some program stdout\nnothing to see", None);
         assert!(p.loaded.is_empty() && p.calls.is_empty() && p.unsupported.is_empty());
+        assert!(p.timeline.is_empty());
+    }
+
+    #[test]
+    fn timeline_uses_relative_timestamps() {
+        let stderr = "184520.100:0024:trace:file:CreateFileW L\"C:\\\\first\"\n\
+                      184520.350:0024:trace:file:ReadFile L\"C:\\\\second\"";
+        let p = parse_wine_trace(stderr, None);
+        assert_eq!(p.timeline.len(), 2);
+        assert_eq!(p.timeline[0].at_ms, 0);
+        assert_eq!(p.timeline[1].at_ms, 250);
+    }
+
+    #[test]
+    fn lines_without_timestamps_still_produce_events() {
+        let stderr = "0024:trace:file:CreateFileW L\"C:\\\\x\"";
+        let p = parse_wine_trace(stderr, None);
+        assert_eq!(p.timeline.len(), 1);
+        assert_eq!(p.timeline[0].at_ms, 0);
+    }
+
+    #[test]
+    fn filter_narrows_timeline_but_not_dedup_sets() {
+        let stderr = "0024:trace:file:CreateFileW L\"C:\\\\app\\\\data.ini\"\n\
+                      0024:trace:file:ReadFile L\"C:\\\\other\\\\thing.txt\"\n\
+                      0024:trace:reg:RegOpenKeyExW L\"Software\\\\App\"";
+        let p = parse_wine_trace(stderr, Some("*data.ini"));
+        assert_eq!(p.timeline.len(), 1);
+        assert_eq!(p.timeline[0].verb, "CreateFileW");
+        assert_eq!(p.filesystem, vec!["CreateFileW", "ReadFile"]);
+        assert_eq!(p.registry, vec!["RegOpenKeyExW"]);
+    }
+
+    #[test]
+    fn filter_matches_verbs_too() {
+        let stderr = "0024:trace:reg:RegOpenKeyExW L\"Software\"\n\
+                      0024:trace:reg:RegCloseKey (1)";
+        let p = parse_wine_trace(stderr, Some("RegOpen*"));
+        assert_eq!(p.timeline.len(), 1);
+    }
+
+    #[test]
+    fn glob_matcher_covers_star_and_question() {
+        assert!(glob_match("*", "anything"));
+        assert!(glob_match("*.dll", "KERNEL32.DLL"));
+        assert!(glob_match("C:\\*\\data.???", "c:\\app\\data.ini"));
+        assert!(glob_match("reg?pen*", "RegOpenKeyExW"));
+        assert!(!glob_match("*.dll", "app.exe"));
+        assert!(!glob_match("abc", "abcd"));
+        assert!(glob_match("", ""));
+        assert!(!glob_match("", "x"));
+    }
+
+    #[test]
+    fn line_timestamp_parses_prefix_and_leaves_rest() {
+        let (ts, rest) = line_timestamp("184520.856:0024:trace:file:CreateFileW");
+        assert_eq!(ts, Some(184_520_856));
+        assert_eq!(rest, "0024:trace:file:CreateFileW");
+        let (ts, rest) = line_timestamp("0024:trace:file:CreateFileW");
+        assert_eq!(ts, None);
+        assert_eq!(rest, "0024:trace:file:CreateFileW");
     }
 }

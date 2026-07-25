@@ -102,7 +102,15 @@ fn compat_inner(
     args: &[String],
     record_to: Option<&lsw_config::Dirs>,
 ) -> Result<CompatReport> {
-    let trace = traceops::trace(env, program, args, &TraceOptions { relay: false })?;
+    let trace = traceops::trace(
+        env,
+        program,
+        args,
+        &TraceOptions {
+            relay: false,
+            filter: None,
+        },
+    )?;
 
     let imported: Vec<String> = trace
         .imported_dlls

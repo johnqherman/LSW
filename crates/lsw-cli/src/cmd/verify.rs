@@ -246,10 +246,19 @@ pub(crate) fn compat_query(key: &str, dirs: &Dirs, format: Format) -> lsw_core::
     Ok(ExitCode::SUCCESS)
 }
 
+fn csv_field(s: &str) -> String {
+    if s.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_owned()
+    }
+}
+
 pub(crate) fn trace(
     program: &Path,
     args: &[String],
     relay: &bool,
+    filter: &Option<String>,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
@@ -258,9 +267,33 @@ pub(crate) fn trace(
         &env,
         program,
         args,
-        &lsw_core::traceops::TraceOptions { relay: *relay },
+        &lsw_core::traceops::TraceOptions {
+            relay: *relay,
+            filter: filter.clone(),
+        },
     )?;
-    if format == Format::Json {
+    if format == Format::Csv {
+        let kind = |k: lsw_core::traceops::TraceEventKind| match k {
+            lsw_core::traceops::TraceEventKind::Dll => "dll",
+            lsw_core::traceops::TraceEventKind::Registry => "registry",
+            lsw_core::traceops::TraceEventKind::Filesystem => "filesystem",
+            lsw_core::traceops::TraceEventKind::Call => "call",
+            lsw_core::traceops::TraceEventKind::Unsupported => "unsupported",
+        };
+        println!("at_ms,kind,verb,path_or_key");
+        for e in &report.timeline {
+            println!(
+                "{},{},{},{}",
+                e.at_ms,
+                kind(e.kind),
+                csv_field(&e.verb),
+                csv_field(&e.path_or_key)
+            );
+        }
+        if report.timeline_truncated {
+            eprintln!("lsw: timeline truncated at the event cap");
+        }
+    } else if format == Format::Json {
         println!(
             "{}",
             serde_json::to_string_pretty(&report).expect("serializes")
@@ -298,6 +331,15 @@ pub(crate) fn trace(
                 println!("  X {u}");
             }
         }
+        let truncated = if report.timeline_truncated {
+            " (truncated at cap)"
+        } else {
+            ""
+        };
+        println!(
+            "Timeline: {} event(s){truncated}; export with --format csv or --format json",
+            report.timeline.len()
+        );
     }
     Ok(match report.exit_code {
         Some(0) => ExitCode::SUCCESS,

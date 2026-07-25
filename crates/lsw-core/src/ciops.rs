@@ -22,6 +22,7 @@ pub fn github_workflow(project_name: &str) -> String {
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -44,25 +45,24 @@ jobs:
           lsw build
           lsw test --headless
 
-  # Reproducible-build verification (opt-in): builds twice and fails if the
-  # artifacts are not byte-identical. Uncomment to enable.
-  #
-  # reproducible:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Install toolchain and runtime
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y wine64 mingw-w64 cmake ninja-build
-  #     - uses: dtolnay/rust-toolchain@stable
-  #     - name: Install lsw
-  #       run: cargo install lsw
-  #     - name: Verify reproducibility
-  #       run: |
-  #         lsw env create ci
-  #         lsw use ci
-  #         lsw verify --reproducible
+  reproducible:
+    name: reproducible build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain and runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wine64 mingw-w64 cmake ninja-build
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install lsw
+        run: cargo install lsw
+      - name: Verify reproducibility
+        run: |
+          lsw env create ci
+          lsw use ci
+          lsw verify --reproducible
 
   # Native Windows verification (opt-in): needs a self-hosted or hosted
   # Windows runner reachable over SSH from the Linux job, wired via [verify]
@@ -116,6 +116,8 @@ mod tests {
         assert!(yaml.contains("lsw build"));
         assert!(yaml.contains("lsw test --headless"));
         assert!(yaml.contains("mingw-w64"));
+        assert!(yaml.contains("lsw verify --reproducible"));
+        assert!(yaml.contains("workflow_dispatch"));
     }
 
     #[test]

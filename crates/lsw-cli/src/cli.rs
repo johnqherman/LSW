@@ -28,6 +28,8 @@ pub(crate) struct Cli {
 pub(crate) enum Format {
     Human,
     Json,
+    /// Timeline CSV (lsw trace only; other commands fall back to human output).
+    Csv,
 }
 
 #[derive(Subcommand)]
@@ -219,6 +221,9 @@ pub(crate) enum Cmd {
         /// Also capture the full (very verbose) relay call trace.
         #[arg(long)]
         relay: bool,
+        /// Keep only timeline events whose path/key or verb matches this glob.
+        #[arg(long)]
+        filter: Option<String>,
     },
     /// Build and assemble a distributable package.
     Package {
