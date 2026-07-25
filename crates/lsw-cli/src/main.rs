@@ -86,6 +86,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
     let dirs = Dirs::resolve()?;
 
     match &cli.command {
+        Cmd::Setup => cmd::project::setup(&dirs, cli.format),
         Cmd::Init { name, template } => cmd::project::init(name, template),
         Cmd::Env(op) => cmd::project::env(op, &dirs, cli.format),
         Cmd::Use { name } => cmd::project::use_env(name, &dirs),
