@@ -80,6 +80,9 @@ pub(crate) enum Cmd {
         /// Run GUI programs under a virtual display (headless CI).
         #[arg(long)]
         headless: bool,
+        /// On nonzero/signal exit, capture a minidump at <program>.dmp and decode it.
+        #[arg(long)]
+        dump_on_crash: bool,
     },
     /// Run a command in an explicit execution domain.
     Exec {
@@ -125,7 +128,12 @@ pub(crate) enum Cmd {
     /// Inspect a PE binary: format, architecture, subsystem, imports.
     Inspect { file: PathBuf },
     /// Decode a Windows crash dump: exception, faulting module, address.
-    Crash { file: PathBuf },
+    Crash {
+        file: PathBuf,
+        /// Treat the file as a PE: launch it and force a dump without a bug.
+        #[arg(long)]
+        force: bool,
+    },
     /// Audit a PE's security hardening (ASLR, DEP, CFG, SafeSEH, signing).
     Audit { file: PathBuf },
     /// List the exported symbols of a PE (mirror of imports).

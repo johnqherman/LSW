@@ -1,8 +1,12 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use minidump::{Minidump, MinidumpException, MinidumpModuleList, MinidumpSystemInfo, Module};
 
+use crate::envops::Environment;
 use crate::error::{Error, Result};
+
+const DUMP_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone)]
 pub struct DumpSummary {
@@ -61,6 +65,86 @@ pub fn analyze(path: &Path) -> Result<DumpSummary> {
         cpu: format!("{:?}", system.cpu),
         module_count,
     })
+}
+
+pub fn dump_path_for(pe: &Path) -> PathBuf {
+    let name = pe
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "program".to_owned());
+    pe.with_file_name(format!("{name}.dmp"))
+}
+
+pub fn capture_wine_dump(
+    env: &Environment,
+    program: &Path,
+    args: &[String],
+    out: &Path,
+    break_immediately: bool,
+) -> Result<bool> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    if !program.is_file() {
+        return Err(Error::NotExecutable {
+            program: program.to_path_buf(),
+            detail: "file not found".into(),
+        });
+    }
+    let program = std::path::absolute(program).map_err(|e| Error::io(program.to_path_buf(), e))?;
+    let winedbg = find_winedbg().ok_or_else(|| Error::ToolMissing {
+        tool: "winedbg".into(),
+        fix: "install wine (winedbg ships with it)".into(),
+    })?;
+    let out_abs = std::path::absolute(out).map_err(|e| Error::io(out.to_path_buf(), e))?;
+    if std::fs::symlink_metadata(&out_abs).is_ok() {
+        std::fs::remove_file(&out_abs).map_err(|e| Error::io(out_abs.clone(), e))?;
+    }
+    let windows_out = format!("Z:{}", out_abs.display());
+    let script = if break_immediately {
+        format!("minidump \"{windows_out}\"\nquit\n")
+    } else {
+        format!("cont\nminidump \"{windows_out}\"\nquit\n")
+    };
+
+    let mut command = Command::new(&winedbg);
+    lsw_runtime::scrub_wine_env(&mut command);
+    command
+        .arg(&program)
+        .args(args)
+        .env("WINEPREFIX", env.layout.prefix())
+        .env("WINEDEBUG", "fixme-all")
+        .env("WINEDLLOVERRIDES", "winemenubuilder.exe=d")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let mut child = command.spawn().map_err(|e| Error::io(winedbg.clone(), e))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(script.as_bytes());
+    }
+    let deadline = Instant::now() + DUMP_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(_) => break,
+        }
+    }
+    Ok(out_abs.is_file())
+}
+
+fn find_winedbg() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|d| d.join("winedbg"))
+        .find(|c| c.is_file())
 }
 
 fn basename(path: &str) -> String {
