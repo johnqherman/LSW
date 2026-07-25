@@ -285,9 +285,13 @@ fn e2e_msi_package_and_install_verify() {
     let project = Project::discover(&init.root).unwrap();
     let env = create_env(&c, "installer");
 
-    let report =
-        lsw_core::packageops::package(&project, &env, lsw_core::packageops::PackageTarget::Msi)
-            .unwrap();
+    let report = lsw_core::packageops::package(
+        &project,
+        &env,
+        lsw_core::packageops::PackageTarget::Msi,
+        false,
+    )
+    .unwrap();
     let msi = report.msi.expect("an .msi artifact");
 
     let verify = lsw_core::installops::verify_msi(

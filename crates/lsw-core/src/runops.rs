@@ -397,7 +397,7 @@ fn shell_invocation(powershell: bool) -> (PathBuf, Vec<String>) {
 
 const WINE_BUILTIN_MARKER: &[u8; 16] = b"Wine builtin DLL";
 
-fn is_real_windows_binary(path: &Path) -> bool {
+pub(crate) fn is_real_windows_binary(path: &Path) -> bool {
     use std::io::Read;
     let Ok(mut file) = std::fs::File::open(path) else {
         return false;

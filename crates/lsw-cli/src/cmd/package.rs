@@ -9,6 +9,7 @@ use crate::{active_env, cwd};
 pub(crate) fn package(
     target: &PackageTargetArg,
     verify: bool,
+    bundle_deps: bool,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
@@ -27,7 +28,7 @@ pub(crate) fn package(
         PackageTargetArg::Msi => lsw_core::packageops::PackageTarget::Msi,
         PackageTargetArg::Msix => lsw_core::packageops::PackageTarget::Msix,
     };
-    let report = lsw_core::packageops::package(&p, &env, target)?;
+    let report = lsw_core::packageops::package(&p, &env, target, bundle_deps)?;
     let verified = if verify && let Some(msi) = &report.msi {
         Some(lsw_core::installops::verify_msi(
             dirs,
@@ -50,6 +51,9 @@ pub(crate) fn package(
                     "msi": opt_path(&report.msi),
                     "msix": opt_path(&report.msix),
                     "files": report.files,
+                    "bundled": report.bundled,
+                    "assumed_system": report.assumed_system,
+                    "missing": report.missing,
                 },
                 "verified": verified.map(|c| serde_json::json!({
                     "files": c.files.len(),
@@ -63,6 +67,24 @@ pub(crate) fn package(
     println!("Packaged: {}", report.directory.display());
     for f in &report.files {
         println!("  {f}");
+    }
+    if !report.bundled.is_empty() {
+        println!("Bundled dependencies:");
+        for d in &report.bundled {
+            println!("  + {d}");
+        }
+    }
+    if !report.assumed_system.is_empty() {
+        println!(
+            "Assumed present on target Windows: {}",
+            report.assumed_system.join(", ")
+        );
+    }
+    if !report.missing.is_empty() {
+        println!("Unresolved dependencies (NOT bundled):");
+        for d in &report.missing {
+            println!("  ! {d}");
+        }
     }
     if let Some(zip) = &report.zip {
         println!("Archive:  {}", zip.display());

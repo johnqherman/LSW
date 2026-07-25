@@ -33,12 +33,16 @@ pub struct PackageReport {
     pub msi: Option<PathBuf>,
     pub msix: Option<PathBuf>,
     pub files: Vec<String>,
+    pub bundled: Vec<String>,
+    pub assumed_system: Vec<String>,
+    pub missing: Vec<String>,
 }
 
 pub fn package(
     project: &Project,
     env: &Environment,
     target: PackageTarget,
+    bundle_deps: bool,
 ) -> Result<PackageReport> {
     let build = buildops::build(
         project,
@@ -127,6 +131,12 @@ pub fn package(
         files.push(name.to_string_lossy().into_owned());
     }
 
+    let (bundled, assumed_system, missing) = if bundle_deps {
+        bundle_dependencies(project, env, &dir, &mut files)?
+    } else {
+        (Vec::new(), Vec::new(), Vec::new())
+    };
+
     let mut zip = None;
     let mut msi = None;
     let mut msix = None;
@@ -177,7 +187,99 @@ pub fn package(
         msi,
         msix,
         files,
+        bundled,
+        assumed_system,
+        missing,
     })
+}
+
+fn bundle_dependencies(
+    project: &Project,
+    env: &Environment,
+    dir: &std::path::Path,
+    files: &mut Vec<String>,
+) -> Result<(Vec<String>, Vec<String>, Vec<String>)> {
+    let mut search = vec![dir.to_path_buf()];
+    if let Some((_, _, bin)) = crate::depsops::dep_dirs(project, env.manifest.target_arch)
+        && bin.is_dir()
+    {
+        search.push(bin);
+    }
+    let sysroot = &env.manifest.toolchain.sysroot;
+    search.push(sysroot.join("bin"));
+    search.extend(crate::depsops::vc_runtime_dirs(sysroot));
+
+    let mut present: std::collections::BTreeSet<String> =
+        files.iter().map(|f| f.to_ascii_lowercase()).collect();
+    let mut bundled = std::collections::BTreeSet::new();
+    let mut assumed_system = std::collections::BTreeSet::new();
+    let mut missing = std::collections::BTreeSet::new();
+
+    let roots: Vec<String> = files.clone();
+    for name in &roots {
+        let is_pe = std::path::Path::new(name)
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("exe") || e.eq_ignore_ascii_case("dll"));
+        if !is_pe {
+            continue;
+        }
+        let node = crate::depsops::tree_with_dirs(&search, &dir.join(name))?;
+        collect_bundle(
+            &node,
+            dir,
+            &mut present,
+            files,
+            &mut bundled,
+            &mut assumed_system,
+            &mut missing,
+        )?;
+    }
+
+    Ok((
+        bundled.into_iter().collect(),
+        assumed_system.into_iter().collect(),
+        missing.into_iter().collect(),
+    ))
+}
+
+fn collect_bundle(
+    node: &crate::depsops::DepNode,
+    dir: &std::path::Path,
+    present: &mut std::collections::BTreeSet<String>,
+    files: &mut Vec<String>,
+    bundled: &mut std::collections::BTreeSet<String>,
+    assumed_system: &mut std::collections::BTreeSet<String>,
+    missing: &mut std::collections::BTreeSet<String>,
+) -> Result<()> {
+    use crate::depsops::DepKind;
+    match node.kind {
+        DepKind::Root | DepKind::Seen => {}
+        DepKind::System => {
+            assumed_system.insert(node.name.to_ascii_lowercase());
+        }
+        DepKind::Missing => {
+            missing.insert(node.name.to_ascii_lowercase());
+        }
+        DepKind::Resolved => {
+            let lower = node.name.to_ascii_lowercase();
+            if !present.contains(&lower) {
+                let source = PathBuf::from(node.path.as_deref().unwrap_or_default());
+                if crate::runops::is_real_windows_binary(&source) {
+                    let dest = dir.join(&lower);
+                    fs::copy(&source, &dest).map_err(|e| Error::io(source.clone(), e))?;
+                    present.insert(lower.clone());
+                    files.push(lower.clone());
+                    bundled.insert(lower);
+                } else {
+                    assumed_system.insert(lower);
+                }
+            }
+        }
+    }
+    for child in &node.children {
+        collect_bundle(child, dir, present, files, bundled, assumed_system, missing)?;
+    }
+    Ok(())
 }
 
 fn build_msi(
@@ -277,6 +379,109 @@ fn render_wxs(name: &str, files: &[String]) -> String {
          \x20 </Product>\n\
          </Wix>\n"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::depsops::{DepKind, DepNode};
+
+    fn node(name: &str, kind: DepKind, path: Option<PathBuf>, children: Vec<DepNode>) -> DepNode {
+        DepNode {
+            name: name.to_owned(),
+            kind,
+            path: path.map(|p| p.display().to_string()),
+            children,
+        }
+    }
+
+    #[test]
+    fn collect_bundle_copies_resolved_skips_system_and_records_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pkg = tmp.path().join("pkg");
+        std::fs::create_dir_all(&pkg).unwrap();
+        let src = tmp.path().join("libfoo-1.dll");
+        let mut image = vec![0u8; 128];
+        image[..2].copy_from_slice(b"MZ");
+        std::fs::write(&src, &image).unwrap();
+
+        let tree = node(
+            "app.exe",
+            DepKind::Root,
+            None,
+            vec![
+                node("KERNEL32.dll", DepKind::System, None, vec![]),
+                node("libFoo-1.dll", DepKind::Resolved, Some(src.clone()), vec![]),
+                node("gone.dll", DepKind::Missing, None, vec![]),
+            ],
+        );
+
+        let mut present = std::collections::BTreeSet::from(["app.exe".to_owned()]);
+        let mut files = vec!["app.exe".to_owned()];
+        let mut bundled = std::collections::BTreeSet::new();
+        let mut assumed = std::collections::BTreeSet::new();
+        let mut missing = std::collections::BTreeSet::new();
+        collect_bundle(
+            &tree,
+            &pkg,
+            &mut present,
+            &mut files,
+            &mut bundled,
+            &mut assumed,
+            &mut missing,
+        )
+        .unwrap();
+
+        assert!(pkg.join("libfoo-1.dll").is_file());
+        assert!(files.contains(&"libfoo-1.dll".to_owned()));
+        assert_eq!(
+            bundled.into_iter().collect::<Vec<_>>(),
+            vec!["libfoo-1.dll"]
+        );
+        assert_eq!(
+            assumed.into_iter().collect::<Vec<_>>(),
+            vec!["kernel32.dll"]
+        );
+        assert_eq!(missing.into_iter().collect::<Vec<_>>(), vec!["gone.dll"]);
+    }
+
+    #[test]
+    fn collect_bundle_treats_wine_builtins_as_system() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pkg = tmp.path().join("pkg");
+        std::fs::create_dir_all(&pkg).unwrap();
+        let src = tmp.path().join("builtin.dll");
+        let mut image = vec![0u8; 128];
+        image[..2].copy_from_slice(b"MZ");
+        image[64..80].copy_from_slice(b"Wine builtin DLL");
+        std::fs::write(&src, &image).unwrap();
+
+        let tree = node(
+            "app.exe",
+            DepKind::Root,
+            None,
+            vec![node("builtin.dll", DepKind::Resolved, Some(src), vec![])],
+        );
+        let mut present = std::collections::BTreeSet::new();
+        let mut files = Vec::new();
+        let mut bundled = std::collections::BTreeSet::new();
+        let mut assumed = std::collections::BTreeSet::new();
+        let mut missing = std::collections::BTreeSet::new();
+        collect_bundle(
+            &tree,
+            &pkg,
+            &mut present,
+            &mut files,
+            &mut bundled,
+            &mut assumed,
+            &mut missing,
+        )
+        .unwrap();
+
+        assert!(!pkg.join("builtin.dll").exists());
+        assert!(bundled.is_empty());
+        assert_eq!(assumed.into_iter().collect::<Vec<_>>(), vec!["builtin.dll"]);
+    }
 }
 
 fn deterministic_guid(seed: &str) -> String {

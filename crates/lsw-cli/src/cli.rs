@@ -233,6 +233,9 @@ pub(crate) enum Cmd {
         /// Install-test the MSI in a scratch environment (msi target only).
         #[arg(long)]
         verify: bool,
+        /// Copy each artifact's non-system DLL closure into the package.
+        #[arg(long)]
+        bundle_deps: bool,
     },
     /// List the environment's Windows/runtime processes.
     Ps {
