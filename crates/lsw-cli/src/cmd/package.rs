@@ -105,9 +105,33 @@ pub(crate) fn package(
     Ok(ExitCode::SUCCESS)
 }
 
-pub(crate) fn sign(file: &Path, publisher: &Option<String>) -> lsw_core::Result<ExitCode> {
-    lsw_core::signops::sign(file, publisher.as_deref())?;
-    println!("signed {}", file.display());
+pub(crate) fn sign(
+    file: &Path,
+    publisher: &Option<String>,
+    pfx: &Option<PathBuf>,
+    pfx_pass_env: &Option<String>,
+    timestamp_url: &Option<String>,
+) -> lsw_core::Result<ExitCode> {
+    lsw_core::signops::sign(
+        file,
+        &lsw_core::signops::SignOptions {
+            publisher: publisher.clone(),
+            pfx: pfx.clone(),
+            pfx_pass_env: pfx_pass_env.clone(),
+            timestamp_url: timestamp_url.clone(),
+        },
+    )?;
+    let identity = if pfx.is_some() {
+        "PFX certificate"
+    } else {
+        "self-signed dev identity"
+    };
+    let stamped = if timestamp_url.is_some() {
+        ", timestamped"
+    } else {
+        ""
+    };
+    println!("signed {} ({identity}{stamped})", file.display());
     Ok(ExitCode::SUCCESS)
 }
 

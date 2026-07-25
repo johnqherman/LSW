@@ -64,6 +64,38 @@ jobs:
           lsw use ci
           lsw verify --reproducible
 
+  # Signs release binaries with a real certificate. Opt-in via manual
+  # dispatch; needs two repository secrets:
+  #   LSW_PFX_B64      base64 of your PKCS#12 certificate
+  #   LSW_PFX_PASSWORD its passphrase
+  sign:
+    name: sign artifacts
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain and runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wine64 mingw-w64 cmake ninja-build osslsigncode
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install lsw
+        run: cargo install lsw
+      - name: Build and sign
+        env:
+          LSW_PFX_B64: ${{{{ secrets.LSW_PFX_B64 }}}}
+          LSW_PFX_PASSWORD: ${{{{ secrets.LSW_PFX_PASSWORD }}}}
+        run: |
+          lsw env create ci
+          lsw use ci
+          lsw build
+          printf '%s' "$LSW_PFX_B64" | base64 -d > signing.pfx
+          for exe in build/*.exe; do
+            lsw sign "$exe" --pfx signing.pfx --pfx-pass-env LSW_PFX_PASSWORD \
+              --timestamp-url http://timestamp.digicert.com
+          done
+          rm -f signing.pfx
+
   # Native Windows verification (opt-in): needs a self-hosted or hosted
   # Windows runner reachable over SSH from the Linux job, wired via [verify]
   # in lsw.toml. Uncomment and configure to turn WINDOWS_UNAVAILABLE into
@@ -118,6 +150,8 @@ mod tests {
         assert!(yaml.contains("mingw-w64"));
         assert!(yaml.contains("lsw verify --reproducible"));
         assert!(yaml.contains("workflow_dispatch"));
+        assert!(yaml.contains("--pfx-pass-env LSW_PFX_PASSWORD"));
+        assert!(yaml.contains("${{ secrets.LSW_PFX_B64 }}"));
     }
 
     #[test]

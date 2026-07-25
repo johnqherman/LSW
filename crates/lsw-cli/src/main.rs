@@ -132,7 +132,13 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Deps(op) => cmd::inspect::deps(op, &dirs, cli.format),
         Cmd::Ci(op) => cmd::config::ci(op),
         Cmd::Config(op) => cmd::config::config(op, cli.format),
-        Cmd::Sign { file, publisher } => cmd::package::sign(file, publisher),
+        Cmd::Sign {
+            file,
+            publisher,
+            pfx,
+            pfx_pass_env,
+            timestamp_url,
+        } => cmd::package::sign(file, publisher, pfx, pfx_pass_env, timestamp_url),
         Cmd::Path { windows, linux } => cmd::package::path(windows, linux, &dirs, cli.format),
         Cmd::Registry(op) => cmd::state::registry(op, &dirs, cli.format),
         Cmd::Debug {

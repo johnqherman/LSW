@@ -114,28 +114,106 @@ pub fn build_msix(
     Ok(msix)
 }
 
+pub enum SignIdentity<'a> {
+    DevCert {
+        publisher: &'a str,
+    },
+    Pfx {
+        path: &'a Path,
+        pass: Option<String>,
+    },
+}
+
 pub fn authenticode_sign(unsigned: &Path, out: &Path, publisher: &str) -> Result<()> {
+    authenticode_sign_with(unsigned, out, &SignIdentity::DevCert { publisher }, None)
+}
+
+struct PassFile {
+    path: PathBuf,
+}
+
+impl PassFile {
+    fn write(pass: &str) -> Result<Self> {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let path = std::env::temp_dir().join(format!("lsw-sign-pass-{}", std::process::id()));
+        if std::fs::symlink_metadata(&path).is_ok() {
+            std::fs::remove_file(&path).map_err(|e| Error::io(path.clone(), e))?;
+        }
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)
+            .map_err(|e| Error::io(path.clone(), e))?;
+        file.write_all(pass.as_bytes())
+            .map_err(|e| Error::io(path.clone(), e))?;
+        Ok(PassFile { path })
+    }
+}
+
+impl Drop for PassFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+pub fn authenticode_sign_with(
+    unsigned: &Path,
+    out: &Path,
+    identity: &SignIdentity,
+    timestamp_url: Option<&str>,
+) -> Result<()> {
     if which("osslsigncode").is_none() {
         return Err(Error::ToolMissing {
             tool: "osslsigncode".into(),
-            fix: "install osslsigncode (AUR or https://github.com/mtrojnar/osslsigncode) to sign MSIX packages".into(),
+            fix: "install osslsigncode (AUR or https://github.com/mtrojnar/osslsigncode) to sign binaries and MSIX packages".into(),
         });
     }
-    let pfx = ensure_signing_identity(publisher)?;
+    if let Some(url) = timestamp_url
+        && !url.starts_with("http://")
+        && !url.starts_with("https://")
+    {
+        return Err(Error::MsixSign {
+            detail: format!("timestamp URL '{url}' must start with http:// or https://"),
+        });
+    }
     if std::fs::symlink_metadata(out).is_ok() {
         std::fs::remove_file(out).map_err(|e| Error::io(out.to_path_buf(), e))?;
     }
-    let output = std::process::Command::new("osslsigncode")
-        .arg("sign")
-        .args(["-pkcs12"])
-        .arg(&pfx)
-        .args(["-pass", "lsw"])
+    let mut command = std::process::Command::new("osslsigncode");
+    command.arg("sign").arg("-pkcs12");
+    let mut pass_guard = None;
+    match identity {
+        SignIdentity::DevCert { publisher } => {
+            command.arg(ensure_signing_identity(publisher)?);
+            command.args(["-pass", "lsw"]);
+        }
+        SignIdentity::Pfx { path, pass } => {
+            if !path.is_file() {
+                return Err(Error::MsixSign {
+                    detail: format!("PFX file {} does not exist", path.display()),
+                });
+            }
+            command.arg(path);
+            if let Some(pass) = pass {
+                let guard = PassFile::write(pass)?;
+                command.arg("-readpass").arg(&guard.path);
+                pass_guard = Some(guard);
+            }
+        }
+    }
+    if let Some(url) = timestamp_url {
+        command.args(["-ts", url]);
+    }
+    let output = command
         .arg("-in")
         .arg(unsigned)
         .arg("-out")
         .arg(out)
         .output()
         .map_err(|e| Error::io(PathBuf::from("osslsigncode"), e))?;
+    drop(pass_guard);
     if !output.status.success() {
         return Err(Error::MsixSign {
             detail: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
