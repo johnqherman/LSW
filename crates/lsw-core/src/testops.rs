@@ -212,16 +212,20 @@ fn parse_ctest_summary(stdout: &str) -> (Option<u32>, Option<u32>) {
     let mut result = (None, None);
     for line in stdout.lines() {
         let line = line.trim();
-        let Some(rest) = line.split("tests passed, ").nth(1) else {
-            continue;
-        };
-        let failed: Option<u32> = rest.split_whitespace().next().and_then(|n| n.parse().ok());
-        let total: Option<u32> = rest.rsplit(' ').next().and_then(|n| n.parse().ok());
-        let passed = match (total, failed) {
-            (Some(t), Some(f)) => Some(t.saturating_sub(f)),
-            _ => None,
-        };
-        result = (passed, failed);
+        if let Some(rest) = line.split("tests passed, ").nth(1) {
+            let failed: Option<u32> = rest.split_whitespace().next().and_then(|n| n.parse().ok());
+            let total: Option<u32> = rest.rsplit(' ').next().and_then(|n| n.parse().ok());
+            let passed = match (total, failed) {
+                (Some(t), Some(f)) => Some(t.saturating_sub(f)),
+                _ => None,
+            };
+            result = (passed, failed);
+        } else if line.starts_with("100%") && line.contains("tests passed out of ") {
+            let total: Option<u32> = line.rsplit(' ').next().and_then(|n| n.parse().ok());
+            if let Some(t) = total {
+                result = (Some(t), Some(0));
+            }
+        }
     }
     result
 }
@@ -239,6 +243,9 @@ mod tests {
         assert_eq!((p, f), (Some(2), Some(2)));
 
         assert_eq!(parse_ctest_summary("no summary here"), (None, None));
+
+        let (p, f) = parse_ctest_summary("100% tests passed out of 1");
+        assert_eq!((p, f), (Some(1), Some(0)));
     }
 
     #[test]
