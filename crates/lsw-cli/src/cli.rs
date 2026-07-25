@@ -134,7 +134,10 @@ pub(crate) enum Cmd {
         windows: bool,
     },
     /// Inspect a PE binary: format, architecture, subsystem, imports.
-    Inspect { file: PathBuf },
+    Inspect {
+        /// PE file; omit to build and use the project's artifact.
+        file: Option<PathBuf>,
+    },
     /// Decode a Windows crash dump: exception, faulting module, address.
     Crash {
         file: PathBuf,
@@ -143,16 +146,26 @@ pub(crate) enum Cmd {
         force: bool,
     },
     /// Audit a PE's security hardening (ASLR, DEP, CFG, SafeSEH, signing).
-    Audit { file: PathBuf },
+    Audit {
+        /// PE file; omit to build and use the project's artifact.
+        file: Option<PathBuf>,
+    },
     /// List the exported symbols of a PE (mirror of imports).
-    Exports { file: PathBuf },
+    Exports {
+        /// PE file; omit to build and use the project's artifact.
+        file: Option<PathBuf>,
+    },
     /// Generate a CycloneDX SBOM for a PE (imports + toolchain provenance).
-    Sbom { file: PathBuf },
+    Sbom {
+        /// PE file; omit to build and use the project's artifact.
+        file: Option<PathBuf>,
+    },
     /// Diff two PEs by imports, exports, sections, and size.
     Diff { a: PathBuf, b: PathBuf },
     /// Break down a PE's size by section bucket (code, data, resources, ...).
     Size {
-        file: PathBuf,
+        /// PE file; omit to build and use the project's artifact.
+        file: Option<PathBuf>,
         /// Compare against a prior build of the same binary.
         #[arg(long)]
         baseline: Option<PathBuf>,
@@ -162,7 +175,8 @@ pub(crate) enum Cmd {
     },
     /// Extract printable ASCII and UTF-16 strings from a file.
     Strings {
-        file: PathBuf,
+        /// File to scan; omit to build and use the project's artifact.
+        file: Option<PathBuf>,
         /// Minimum string length.
         #[arg(long, default_value_t = 4)]
         min: usize,
@@ -229,7 +243,8 @@ pub(crate) enum Cmd {
     Dap,
     /// Measured compatibility report (imports + runtime trace).
     Compat {
-        program: PathBuf,
+        /// Program to measure; omit to build and use the project's artifact.
+        program: Option<PathBuf>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
         /// Record observations into the persistent compatibility database.
@@ -246,7 +261,8 @@ pub(crate) enum Cmd {
     },
     /// Trace a Windows binary's DLL loads and API calls under the runtime.
     Trace {
-        program: PathBuf,
+        /// Program to trace; omit to build and use the project's artifact.
+        program: Option<PathBuf>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
         /// Also capture the full (very verbose) relay call trace.
@@ -327,7 +343,10 @@ pub(crate) enum Cmd {
 #[derive(Subcommand)]
 pub(crate) enum DepsCmd {
     /// Print the transitive DLL dependency tree.
-    Tree { file: PathBuf },
+    Tree {
+        /// PE file; omit to build and use the project's artifact.
+        file: Option<PathBuf>,
+    },
     /// Install a mingw-w64 library (headers, import/static libs, DLLs).
     Add { name: String },
     /// Remove an installed library.

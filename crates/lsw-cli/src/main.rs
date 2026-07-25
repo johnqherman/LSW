@@ -82,6 +82,16 @@ pub(crate) fn active_env(dirs: &Dirs) -> lsw_core::Result<(Project, lsw_core::En
     Ok((p, env))
 }
 
+fn with_pe<F>(file: &Option<PathBuf>, dirs: &Dirs, f: F) -> lsw_core::Result<ExitCode>
+where
+    F: FnOnce(&std::path::Path) -> lsw_core::Result<ExitCode>,
+{
+    match cmd::resolve_pe(file, dirs)? {
+        Some(p) => f(&p),
+        None => Ok(ExitCode::FAILURE),
+    }
+}
+
 fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
     let dirs = Dirs::resolve()?;
 
@@ -128,18 +138,24 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             artifact,
         } => cmd::verify::verify(native_windows, reproducible, artifact, &dirs, cli.format),
         Cmd::Shell { windows } => cmd::build::shell(windows, &dirs),
-        Cmd::Inspect { file } => cmd::inspect::inspect(file, &dirs, cli.format),
+        Cmd::Inspect { file } => {
+            with_pe(file, &dirs, |f| cmd::inspect::inspect(f, &dirs, cli.format))
+        }
         Cmd::Crash { file, force } => cmd::inspect::crash(file, *force, &dirs, cli.format),
-        Cmd::Audit { file } => cmd::inspect::audit(file, cli.format),
-        Cmd::Exports { file } => cmd::inspect::exports(file, cli.format),
-        Cmd::Sbom { file } => cmd::inspect::sbom(file),
+        Cmd::Audit { file } => with_pe(file, &dirs, |f| cmd::inspect::audit(f, cli.format)),
+        Cmd::Exports { file } => with_pe(file, &dirs, |f| cmd::inspect::exports(f, cli.format)),
+        Cmd::Sbom { file } => with_pe(file, &dirs, cmd::inspect::sbom),
         Cmd::Diff { a, b } => cmd::inspect::diff(a, b, cli.format),
         Cmd::Size {
             file,
             baseline,
             max_growth,
-        } => cmd::inspect::size(file, baseline, max_growth, cli.format),
-        Cmd::Strings { file, min } => cmd::inspect::strings(file, min, cli.format),
+        } => with_pe(file, &dirs, |f| {
+            cmd::inspect::size(f, baseline, max_growth, cli.format)
+        }),
+        Cmd::Strings { file, min } => {
+            with_pe(file, &dirs, |f| cmd::inspect::strings(f, min, cli.format))
+        }
         Cmd::Deps(op) => cmd::inspect::deps(op, &dirs, cli.format),
         Cmd::Ci(op) => cmd::config::ci(op),
         Cmd::Config(op) => cmd::config::config(op, cli.format),
@@ -179,14 +195,18 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             args,
             db,
             native,
-        } => cmd::verify::compat(program, args, db, native, &dirs, cli.format),
+        } => with_pe(program, &dirs, |f| {
+            cmd::verify::compat(f, args, db, native, &dirs, cli.format)
+        }),
         Cmd::CompatQuery { key } => cmd::verify::compat_query(key, &dirs, cli.format),
         Cmd::Trace {
             program,
             args,
             relay,
             filter,
-        } => cmd::verify::trace(program, args, relay, filter, &dirs, cli.format),
+        } => with_pe(program, &dirs, |f| {
+            cmd::verify::trace(f, args, relay, filter, &dirs, cli.format)
+        }),
         Cmd::Package {
             target,
             verify,
