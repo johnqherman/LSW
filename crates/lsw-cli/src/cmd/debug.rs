@@ -12,6 +12,8 @@ pub(crate) fn debug(
     gdb: &bool,
     no_start: &bool,
     native: &bool,
+    analyze: &bool,
+    interactive: &bool,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
@@ -34,12 +36,51 @@ pub(crate) fn debug(
                 }
             }
         }
+        const NO_HOST: &str =
+            "no [verify] host configured in lsw.toml; native debugging needs a Windows host";
+        if *interactive {
+            return match lsw_core::verifyops::native_interactive(&p, program)? {
+                None => Ok(crate::usage_failure(format, NO_HOST)),
+                Some(status) => Ok(crate::exit_from_status(status)),
+            };
+        }
+        if *analyze {
+            return match lsw_core::verifyops::native_analyze(&p, program)? {
+                None => Ok(crate::usage_failure(format, NO_HOST)),
+                Some(a) => {
+                    if format == Format::Json {
+                        println!("{}", serde_json::to_string_pretty(&a).expect("serializes"));
+                    } else {
+                        println!("Native crash analysis on {}", a.host);
+                        if let Some(b) = &a.bucket_id {
+                            println!("Bucket:    {b}");
+                        }
+                        if let Some(c) = &a.failure_class {
+                            println!("Exception: {c}");
+                        }
+                        if let Some(s) = &a.symbol {
+                            println!("Symbol:    {s}");
+                        }
+                        if let Some(i) = &a.image {
+                            println!("Image:     {i}");
+                        }
+                        if a.bucket_id.is_none() && a.frames.is_empty() {
+                            println!("(no failure bucket; the program may not have crashed)");
+                        }
+                        if !a.frames.is_empty() {
+                            println!("Stack:");
+                            for f in &a.frames {
+                                println!("  #{:<2} {}", f.index, f.call_site);
+                            }
+                        }
+                    }
+                    Ok(ExitCode::SUCCESS)
+                }
+            };
+        }
         match lsw_core::verifyops::native_backtrace(&p, program)? {
             None => {
-                return Ok(crate::usage_failure(
-                    format,
-                    "no [verify] host configured in lsw.toml; native debugging needs a Windows host",
-                ));
+                return Ok(crate::usage_failure(format, NO_HOST));
             }
             Some(bt) => {
                 if format == Format::Json {

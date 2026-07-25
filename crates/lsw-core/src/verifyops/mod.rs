@@ -56,7 +56,10 @@ mod backtrace;
 mod dumps;
 mod probe;
 
-pub use backtrace::{NativeBacktrace, NativeFrame, native_backtrace};
+pub use backtrace::{
+    NativeAnalysis, NativeBacktrace, NativeFrame, native_analyze, native_backtrace,
+    native_interactive,
+};
 pub use probe::{DllProbe, ImportProbe, probe_imports};
 
 use dumps::{collect_dump, newest_dump};

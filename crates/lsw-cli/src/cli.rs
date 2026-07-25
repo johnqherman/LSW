@@ -202,6 +202,12 @@ pub(crate) enum Cmd {
         /// Run on the [verify] Windows host under cdb for a real backtrace.
         #[arg(long, conflicts_with_all = ["gdb", "no_start"])]
         native: bool,
+        /// With --native: run cdb's !analyze -v (accepts a .exe or a .dmp).
+        #[arg(long, requires = "native", conflicts_with = "interactive")]
+        analyze: bool,
+        /// With --native: attach an interactive cdb session over the transport.
+        #[arg(long, requires = "native")]
+        interactive: bool,
     },
     /// Run a Debug Adapter Protocol server over stdio for IDEs.
     Dap,
