@@ -106,8 +106,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         } => cmd::build::run(
             program,
             args,
-            host,
-            windows,
+            crate::cli::domain_from_flags(*host, *windows),
             sandbox,
             headless,
             dump_on_crash,
@@ -162,11 +161,13 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         } => cmd::debug::debug(
             program,
             args,
-            gdb,
-            no_start,
-            native,
-            analyze,
-            interactive,
+            &cmd::debug::DebugFlags {
+                gdb: *gdb,
+                no_start: *no_start,
+                native: *native,
+                analyze: *analyze,
+                interactive: *interactive,
+            },
             &dirs,
             cli.format,
         ),
