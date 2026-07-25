@@ -324,9 +324,9 @@ pub(crate) fn trace(
             }
         }
         if report.unsupported.is_empty() {
-            println!("Unsupported APIs: none observed");
+            println!("Unsupported APIs: none observed in this Wine execution");
         } else {
-            println!("Unsupported APIs:");
+            println!("Unsupported APIs (observed in this Wine execution):");
             for u in &report.unsupported {
                 println!("  X {u}");
             }
@@ -339,6 +339,9 @@ pub(crate) fn trace(
         println!(
             "Timeline: {} event(s){truncated}; export with --format csv or --format json",
             report.timeline.len()
+        );
+        println!(
+            "\nObservations cover this Wine execution only; they are not a native-Windows compatibility guarantee (see: lsw verify --native-windows)."
         );
     }
     Ok(match report.exit_code {
