@@ -160,12 +160,21 @@ pub(crate) enum Cmd {
     /// Validate lsw.toml settings.
     #[command(subcommand)]
     Config(ConfigCmd),
-    /// Authenticode-sign a PE with a cached self-signed identity.
+    /// Authenticode-sign a PE (self-signed by default, or a real PFX cert).
     Sign {
         file: PathBuf,
         /// Certificate subject (default: a self-signed LSW identity).
-        #[arg(long)]
+        #[arg(long, conflicts_with = "pfx")]
         publisher: Option<String>,
+        /// Sign with this PKCS#12 certificate instead of the dev identity.
+        #[arg(long)]
+        pfx: Option<PathBuf>,
+        /// Environment variable holding the PFX passphrase (never a flag).
+        #[arg(long, requires = "pfx")]
+        pfx_pass_env: Option<String>,
+        /// RFC3161 timestamping authority so the signature outlives the cert.
+        #[arg(long)]
+        timestamp_url: Option<String>,
     },
     /// Translate paths between Linux and Windows views.
     Path {
