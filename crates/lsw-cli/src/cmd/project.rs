@@ -5,6 +5,49 @@ use lsw_core::{Dirs, EnvCreateOptions};
 use crate::cli::{EnvCmd, Format, TemplateArg};
 use crate::{cwd, project};
 
+pub(crate) fn setup(dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
+    let json = format == Format::Json;
+    if !json {
+        println!("Detecting project and preparing a Windows-target environment...");
+    }
+    let report = lsw_core::setupops::setup(dirs, &cwd()?)?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).expect("serializes")
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+    match &report.build_system {
+        Some(s) => println!("Detected {s} project '{}'", report.project_name),
+        None => println!(
+            "No build system detected in '{}' (scaffold one with: lsw init)",
+            report.project_name
+        ),
+    }
+    println!(
+        "{} lsw.toml",
+        if report.manifest_created {
+            "Created"
+        } else {
+            "Found"
+        }
+    );
+    println!(
+        "{} environment '{}'",
+        if report.environment_created {
+            "Created"
+        } else {
+            "Using"
+        },
+        report.environment
+    );
+    println!("  toolchain {}", report.toolchain);
+    println!("  runtime   {}", report.runtime);
+    println!("\nReady:\n  lsw build");
+    Ok(ExitCode::SUCCESS)
+}
+
 pub(crate) fn init(name: &Option<String>, template: &TemplateArg) -> lsw_core::Result<ExitCode> {
     let report = lsw_core::init(&cwd()?, name.as_deref(), (*template).into())?;
     println!("Initialized LSW project at {}", report.root.display());

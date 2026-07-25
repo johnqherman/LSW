@@ -52,6 +52,7 @@ pub mod rustops;
 pub mod sbomops;
 pub mod sdkops;
 pub mod serviceops;
+pub mod setupops;
 pub mod signops;
 pub mod sizeops;
 pub mod stringsops;

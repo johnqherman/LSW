@@ -305,3 +305,31 @@ fn e2e_msi_package_and_install_verify() {
     assert!(verify.uninstall_clean);
     assert!(!verify.files.is_empty());
 }
+
+#[test]
+fn e2e_setup_bootstraps_project_and_environment() {
+    if !e2e_enabled() || !base_tools_present() {
+        eprintln!("skipping e2e: set LSW_TEST_E2E=1 with wine/cmake/mingw on PATH");
+        return;
+    }
+    let c = corpus();
+    let dir = c.root.join("fresh");
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(
+        dir.join("CMakeLists.txt"),
+        "cmake_minimum_required(VERSION 3.20)\nproject(fresh C)\nadd_executable(fresh src/main.c)\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("src/main.c"), "int main(void){return 0;}\n").unwrap();
+
+    let first = lsw_core::setupops::setup(&c.dirs, &dir).unwrap();
+    assert!(first.manifest_created);
+    assert!(first.environment_created);
+    assert_eq!(first.environment, lsw_core::setupops::DEFAULT_ENV_NAME);
+    assert_eq!(first.build_system.as_deref(), Some("Cmake"));
+
+    let again = lsw_core::setupops::setup(&c.dirs, &dir).unwrap();
+    assert!(!again.manifest_created);
+    assert!(!again.environment_created);
+    assert_eq!(again.environment, first.environment);
+}

@@ -34,6 +34,8 @@ pub(crate) enum Format {
 
 #[derive(Subcommand)]
 pub(crate) enum Cmd {
+    /// Detect the project, create a default environment, and wire lsw.toml.
+    Setup,
     /// Scaffold a new project (lsw.toml + CMake template).
     Init {
         /// Project name; omit to initialize the current directory.
