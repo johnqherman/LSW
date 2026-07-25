@@ -32,10 +32,25 @@ pub struct NativeBacktrace {
     pub frames: Vec<NativeFrame>,
 }
 
-pub fn native_backtrace(
-    project: &Project,
-    program: &std::path::Path,
-) -> Result<Option<NativeBacktrace>> {
+#[derive(Debug, Serialize)]
+pub struct NativeAnalysis {
+    pub host: String,
+    pub bucket_id: Option<String>,
+    pub failure_class: Option<String>,
+    pub symbol: Option<String>,
+    pub image: Option<String>,
+    pub frames: Vec<NativeFrame>,
+}
+
+struct RemoteCdb {
+    host: String,
+    identity: Option<String>,
+    cdb: String,
+    remote_target: String,
+    is_dump: bool,
+}
+
+fn prep_remote(project: &Project, target: &std::path::Path) -> Result<Option<RemoteCdb>> {
     let cfg = &project.manifest.verify;
     let Some(host) = cfg.host.clone() else {
         return Ok(None);
@@ -52,14 +67,17 @@ pub fn native_backtrace(
         });
     }
     let identity = cfg.identity_file.as_deref().map(expand_tilde);
-    let name = program
+    let name = target
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     validate_windows_name(&name)?;
+    let is_dump = target
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("dmp"));
 
     let want_x86 = matches!(
-        lsw_pe::detect(program),
+        lsw_pe::detect(target),
         Ok(lsw_pe::BinaryKind::Pe(info)) if info.machine == lsw_pe::Machine::X86
     );
     let paths = if want_x86 { CDB_X86 } else { CDB_X64 };
@@ -94,7 +112,7 @@ pub fn native_backtrace(
     let scp = super::capped_output(
         Command::new("scp")
             .args(ssh_opts(identity.as_deref()))
-            .arg(program)
+            .arg(target)
             .arg(format!("{host}:{remote_fwd}/{name}")),
     )
     .map_err(|e| Error::io(PathBuf::from("scp"), e))?;
@@ -104,21 +122,39 @@ pub fn native_backtrace(
             detail: String::from_utf8_lossy(&scp.stderr).trim().to_owned(),
         });
     }
+    Ok(Some(RemoteCdb {
+        host,
+        identity,
+        cdb,
+        remote_target,
+        is_dump,
+    }))
+}
 
+fn run_remote_cdb(remote: &RemoteCdb, script: &str) -> Result<String> {
+    let invocation = if remote.is_dump {
+        format!(
+            "cmd /c \"\"{}\" -z \"{}\" -c \"{script}\"\"",
+            remote.cdb, remote.remote_target
+        )
+    } else {
+        format!(
+            "cmd /c \"\"{}\" -c \"{script}\" \"{}\"\"",
+            remote.cdb, remote.remote_target
+        )
+    };
     let out = super::capped_output(
         Command::new("ssh")
-            .args(ssh_opts(identity.as_deref()))
-            .arg(&host)
-            .arg(format!(
-                "cmd /c \"\"{cdb}\" -c \"sxe av; g; kn 100; q\" \"{remote_target}\"\""
-            )),
+            .args(ssh_opts(remote.identity.as_deref()))
+            .arg(&remote.host)
+            .arg(invocation),
     )
     .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
     if !out.status.success() {
         let detail = String::from_utf8_lossy(&out.stderr);
         let detail = detail.trim();
         return Err(Error::ProbeFailed {
-            host,
+            host: remote.host.clone(),
             detail: if detail.is_empty() {
                 format!("remote cdb exited with {}", out.status)
             } else {
@@ -126,8 +162,56 @@ pub fn native_backtrace(
             },
         });
     }
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    Ok(Some(parse_backtrace(host, &stdout)))
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+pub fn native_backtrace(
+    project: &Project,
+    program: &std::path::Path,
+) -> Result<Option<NativeBacktrace>> {
+    let Some(remote) = prep_remote(project, program)? else {
+        return Ok(None);
+    };
+    let stdout = run_remote_cdb(&remote, "sxe av; g; kn 100; q")?;
+    Ok(Some(parse_backtrace(remote.host, &stdout)))
+}
+
+pub fn native_analyze(
+    project: &Project,
+    target: &std::path::Path,
+) -> Result<Option<NativeAnalysis>> {
+    let Some(remote) = prep_remote(project, target)? else {
+        return Ok(None);
+    };
+    let script = if remote.is_dump {
+        "!analyze -v; q"
+    } else {
+        "sxe av; g; !analyze -v; q"
+    };
+    let stdout = run_remote_cdb(&remote, script)?;
+    Ok(Some(parse_analysis(remote.host, &stdout)))
+}
+
+pub fn native_interactive(
+    project: &Project,
+    target: &std::path::Path,
+) -> Result<Option<std::process::ExitStatus>> {
+    let Some(remote) = prep_remote(project, target)? else {
+        return Ok(None);
+    };
+    let invocation = if remote.is_dump {
+        format!("\"{}\" -z \"{}\"", remote.cdb, remote.remote_target)
+    } else {
+        format!("\"{}\" \"{}\"", remote.cdb, remote.remote_target)
+    };
+    let status = Command::new("ssh")
+        .arg("-t")
+        .args(ssh_opts(remote.identity.as_deref()))
+        .arg(&remote.host)
+        .arg(format!("cmd /c \"{invocation}\""))
+        .status()
+        .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    Ok(Some(status))
 }
 
 fn detect_cdb(host: &str, identity: Option<&str>, paths: &[&str]) -> Result<Option<String>> {
@@ -158,6 +242,55 @@ fn detect_cdb(host: &str, identity: Option<&str>, paths: &[&str]) -> Result<Opti
         }
     }
     Ok(None)
+}
+
+fn analysis_value(line: &str, key: &str) -> Option<String> {
+    let rest = line.strip_prefix(key)?.strip_prefix(':')?.trim();
+    if rest.is_empty() {
+        None
+    } else {
+        Some(rest.to_owned())
+    }
+}
+
+fn parse_analysis(host: String, stdout: &str) -> NativeAnalysis {
+    let mut bucket_id = None;
+    let mut failure_class = None;
+    let mut symbol = None;
+    let mut image = None;
+    let mut frames = Vec::new();
+    let mut in_stack = false;
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("STACK_TEXT:") {
+            in_stack = true;
+            continue;
+        }
+        if in_stack {
+            match trimmed.rsplit_once(" : ") {
+                Some((_, site)) if !trimmed.is_empty() => {
+                    frames.push(NativeFrame {
+                        index: frames.len(),
+                        call_site: site.trim().to_owned(),
+                    });
+                    continue;
+                }
+                _ => in_stack = false,
+            }
+        }
+        bucket_id = bucket_id.or_else(|| analysis_value(trimmed, "FAILURE_BUCKET_ID"));
+        failure_class = failure_class.or_else(|| analysis_value(trimmed, "EXCEPTION_CODE_STR"));
+        symbol = symbol.or_else(|| analysis_value(trimmed, "SYMBOL_NAME"));
+        image = image.or_else(|| analysis_value(trimmed, "IMAGE_NAME"));
+    }
+    NativeAnalysis {
+        host,
+        bucket_id,
+        failure_class,
+        symbol,
+        image,
+        frames,
+    }
 }
 
 fn parse_backtrace(host: String, stdout: &str) -> NativeBacktrace {
@@ -198,5 +331,56 @@ fn parse_backtrace(host: String, stdout: &str) -> NativeBacktrace {
         host,
         exception,
         frames,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_analysis_extracts_bucket_and_stack() {
+        let stdout = "\
+Some banner text\n\
+EXCEPTION_CODE_STR:  c0000005\n\
+FAILURE_BUCKET_ID:  INVALID_POINTER_READ_c0000005_app.exe!crash_me\n\
+SYMBOL_NAME:  app!crash_me+12\n\
+IMAGE_NAME:  app.exe\n\
+STACK_TEXT:  \n\
+00000049`2d2ff8a0 00007ff6`d9de1234 : 0000000000000000 : app!crash_me+0x12\n\
+00000049`2d2ff8e0 00007ffc`aabbccdd : 0000000000000001 : app!main+0x34\n\
+\n\
+FOLLOWUP_NAME:  MachineOwner\n";
+        let a = parse_analysis("winbox".into(), stdout);
+        assert_eq!(
+            a.bucket_id.as_deref(),
+            Some("INVALID_POINTER_READ_c0000005_app.exe!crash_me")
+        );
+        assert_eq!(a.failure_class.as_deref(), Some("c0000005"));
+        assert_eq!(a.symbol.as_deref(), Some("app!crash_me+12"));
+        assert_eq!(a.image.as_deref(), Some("app.exe"));
+        assert_eq!(a.frames.len(), 2);
+        assert_eq!(a.frames[0].call_site, "app!crash_me+0x12");
+        assert_eq!(a.frames[1].call_site, "app!main+0x34");
+    }
+
+    #[test]
+    fn parse_analysis_handles_missing_fields() {
+        let a = parse_analysis("winbox".into(), "no analyze output at all");
+        assert!(a.bucket_id.is_none());
+        assert!(a.frames.is_empty());
+    }
+
+    #[test]
+    fn parse_backtrace_reads_exception_and_frames() {
+        let stdout = "\
+(1a2b.3c4d): Access violation - code c0000005 (first chance)\n\
+ # Child-SP          RetAddr           Call Site\n\
+Child             RetAddr\n\
+00 00000049`2d2ff8a0 00007ff6`d9de1234 app!crash_me+0x12\n\
+01 00000049`2d2ff8e0 00007ffc`aabbccdd app!main+0x34\n";
+        let bt = parse_backtrace("winbox".into(), stdout);
+        assert_eq!(bt.frames.len(), 2);
+        assert_eq!(bt.frames[0].call_site, "app!crash_me+0x12");
     }
 }
