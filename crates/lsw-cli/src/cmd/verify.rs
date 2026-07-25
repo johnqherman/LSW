@@ -8,12 +8,17 @@ use crate::cli::Format;
 
 pub(crate) fn verify(
     native_windows: &bool,
+    reproducible: &bool,
+    artifact: &Option<String>,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
+    if *reproducible {
+        return verify_reproducible(&p, &env, artifact.as_deref(), format);
+    }
     if !*native_windows {
-        eprintln!("note: only --native-windows verification is supported");
+        eprintln!("note: only --native-windows and --reproducible verification are supported");
     }
     let report = lsw_core::verifyops::verify(&p, &env)?;
     if format == Format::Json {
@@ -60,6 +65,48 @@ pub(crate) fn verify(
         lsw_core::verifyops::VerifyStatus::WindowsVerified => ExitCode::SUCCESS,
         lsw_core::verifyops::VerifyStatus::WindowsUnavailable => ExitCode::FAILURE,
         lsw_core::verifyops::VerifyStatus::WindowsFailed => ExitCode::FAILURE,
+    })
+}
+
+fn verify_reproducible(
+    p: &lsw_core::Project,
+    env: &lsw_core::Environment,
+    artifact: Option<&str>,
+    format: Format,
+) -> lsw_core::Result<ExitCode> {
+    let report = lsw_core::reproops::verify_reproducible(p, env, artifact)?;
+    if format == Format::Json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).expect("serializes")
+        );
+    } else {
+        println!("\nLSW REPRODUCIBLE-BUILD CHECK (built twice)\n");
+        for a in &report.artifacts {
+            if a.identical {
+                println!("  {:<32} IDENTICAL  sha256={}", a.artifact, a.sha256[0]);
+            } else {
+                println!("  {:<32} DIFFERS", a.artifact);
+                println!("      first:  {}", a.sha256[0]);
+                println!("      second: {}", a.sha256[1]);
+                for d in &a.diverging_sections {
+                    println!("      {:<16} {}", d.name, d.detail);
+                }
+            }
+        }
+        println!(
+            "\nStatus: {}",
+            if report.identical {
+                "REPRODUCIBLE"
+            } else {
+                "NOT REPRODUCIBLE"
+            }
+        );
+    }
+    Ok(if report.identical {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
     })
 }
 

@@ -111,7 +111,11 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             command,
         } => cmd::build::exec(host, windows, sandbox, headless, command, &dirs),
         Cmd::Test { headless } => cmd::build::test(headless, &dirs, cli.format),
-        Cmd::Verify { native_windows } => cmd::verify::verify(native_windows, &dirs, cli.format),
+        Cmd::Verify {
+            native_windows,
+            reproducible,
+            artifact,
+        } => cmd::verify::verify(native_windows, reproducible, artifact, &dirs, cli.format),
         Cmd::Shell { windows } => cmd::build::shell(windows, &dirs),
         Cmd::Inspect { file } => cmd::inspect::inspect(file, &dirs, cli.format),
         Cmd::Crash { file } => cmd::inspect::crash(file, cli.format),
