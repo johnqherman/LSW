@@ -162,10 +162,10 @@ pub(crate) fn audit(file: &Path, format: Format) -> lsw_core::Result<ExitCode> {
     } else {
         println!("\n{}  {}\n", color::bold("LSW AUDIT"), file.display());
         for c in &report.checks {
-            let mark = if c.enabled {
-                color::green("+")
-            } else {
-                color::red("X")
+            let mark = match c.status {
+                lsw_core::auditops::AuditStatus::Enabled => color::green("+"),
+                lsw_core::auditops::AuditStatus::Disabled => color::red("X"),
+                lsw_core::auditops::AuditStatus::NotApplicable => color::dim("-"),
             };
             println!("  {mark} {:<22} {}", c.name, c.detail);
         }

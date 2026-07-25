@@ -178,6 +178,8 @@ mod tests {
         assert!(h.aslr, "mingw enables DYNAMICBASE by default");
         assert!(h.dep, "mingw enables NXCOMPAT by default");
         assert!(!h.signed, "a freshly built exe is unsigned");
+        assert!(h.seh.is_none(), "SafeSEH does not apply to x64 images");
+        assert!(h.high_entropy_va.is_some(), "HEVA applies to x64 images");
     }
 
     #[test]

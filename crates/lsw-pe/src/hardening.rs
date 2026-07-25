@@ -11,11 +11,11 @@ use crate::error::PeError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Hardening {
     pub aslr: bool,
-    pub high_entropy_va: bool,
+    pub high_entropy_va: Option<bool>,
     pub dep: bool,
     pub cfg: bool,
     pub force_integrity: bool,
-    pub seh: bool,
+    pub seh: Option<bool>,
     pub signed: bool,
 }
 
@@ -114,12 +114,14 @@ fn hardening_typed<Pe: ImageNtHeaders>(
     let lc = load_config(&file, data, is_64);
     let se_off = std::mem::offset_of!(pe::ImageLoadConfigDirectory32, sehandler_count) + 4;
     let seh = if is_64 {
-        true
+        None
     } else {
-        has(pe::IMAGE_DLLCHARACTERISTICS_NO_SEH)
-            || lc
-                .as_ref()
-                .is_some_and(|c| c.size >= se_off && c.se_table != 0 && c.se_count > 0)
+        Some(
+            has(pe::IMAGE_DLLCHARACTERISTICS_NO_SEH)
+                || lc
+                    .as_ref()
+                    .is_some_and(|c| c.size >= se_off && c.se_table != 0 && c.se_count > 0),
+        )
     };
     let gf_off = if is_64 {
         std::mem::offset_of!(pe::ImageLoadConfigDirectory64, guard_flags) + 4
@@ -154,7 +156,7 @@ fn hardening_typed<Pe: ImageNtHeaders>(
         .unwrap_or(false);
     Ok(Hardening {
         aslr: has(pe::IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE) && !relocs_stripped,
-        high_entropy_va: is_64 && has(pe::IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA),
+        high_entropy_va: is_64.then(|| has(pe::IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA)),
         dep: has(pe::IMAGE_DLLCHARACTERISTICS_NX_COMPAT),
         cfg,
         force_integrity: has(pe::IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY),
