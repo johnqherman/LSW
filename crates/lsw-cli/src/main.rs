@@ -119,6 +119,11 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Exports { file } => cmd::inspect::exports(file, cli.format),
         Cmd::Sbom { file } => cmd::inspect::sbom(file),
         Cmd::Diff { a, b } => cmd::inspect::diff(a, b, cli.format),
+        Cmd::Size {
+            file,
+            baseline,
+            max_growth,
+        } => cmd::inspect::size(file, baseline, max_growth, cli.format),
         Cmd::Strings { file, min } => cmd::inspect::strings(file, min, cli.format),
         Cmd::Deps(op) => cmd::inspect::deps(op, &dirs, cli.format),
         Cmd::Ci(op) => cmd::config::ci(op),
