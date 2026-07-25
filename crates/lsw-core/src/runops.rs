@@ -387,11 +387,37 @@ fn resolve_program(program: &Path, domain: Domain) -> Result<ResolvedProgram> {
     })
 }
 
-fn shell_invocation(powershell: bool) -> (PathBuf, Vec<String>) {
+fn safe_dos_path(path: &str) -> bool {
+    path.chars().all(|c| {
+        c.is_ascii_alphanumeric() || matches!(c, '\\' | ':' | '.' | '_' | '-' | '+' | '~' | ' ')
+    })
+}
+
+fn dos_cwd(env: &Environment, project: Option<&Project>) -> Option<String> {
+    let project = project?;
+    let cwd = std::env::current_dir().ok()?;
+    let windows = crate::envops::mapper(env, project).to_windows(&cwd).ok()?;
+    (windows.starts_with("C:\\") && safe_dos_path(&windows)).then_some(windows)
+}
+
+fn shell_invocation(powershell: bool, dos_cwd: Option<&str>) -> (PathBuf, Vec<String>) {
     if powershell {
-        (PathBuf::from("powershell.exe"), vec!["-NoExit".to_owned()])
+        let mut args = vec!["-NoExit".to_owned()];
+        if let Some(dir) = dos_cwd {
+            args.extend([
+                "-Command".to_owned(),
+                "Set-Location".to_owned(),
+                "-LiteralPath".to_owned(),
+                dir.to_owned(),
+            ]);
+        }
+        (PathBuf::from("powershell.exe"), args)
     } else {
-        (PathBuf::from("cmd.exe"), vec!["/k".to_owned()])
+        let mut args = vec!["/k".to_owned()];
+        if let Some(dir) = dos_cwd {
+            args.extend(["cd".to_owned(), "/d".to_owned(), dir.to_owned()]);
+        }
+        (PathBuf::from("cmd.exe"), args)
     }
 }
 
@@ -494,7 +520,8 @@ pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Res
         if let Some(p) = project {
             crate::envops::link_project(env, p)?;
         }
-        let (program, args) = shell_invocation(has_powershell(env));
+        let (program, args) =
+            shell_invocation(has_powershell(env), dos_cwd(env, project).as_deref());
         let request = ExecutionRequest {
             program: program.clone(),
             args,
@@ -542,13 +569,50 @@ mod tests {
 
     #[test]
     fn shell_invocation_carries_no_untrusted_path() {
-        let (prog, args) = shell_invocation(true);
+        let (prog, args) = shell_invocation(true, None);
         assert_eq!(prog, PathBuf::from("powershell.exe"));
         assert_eq!(args, vec!["-NoExit"]);
 
-        let (prog, args) = shell_invocation(false);
+        let (prog, args) = shell_invocation(false, None);
         assert_eq!(prog, PathBuf::from("cmd.exe"));
         assert_eq!(args, vec!["/k"]);
+    }
+
+    #[test]
+    fn shell_invocation_changes_to_the_project_dos_dir() {
+        let (_, args) = shell_invocation(false, Some("C:\\src\\demo"));
+        assert_eq!(args, vec!["/k", "cd", "/d", "C:\\src\\demo"]);
+
+        let (_, args) = shell_invocation(true, Some("C:\\src\\demo"));
+        assert_eq!(
+            args,
+            vec![
+                "-NoExit",
+                "-Command",
+                "Set-Location",
+                "-LiteralPath",
+                "C:\\src\\demo"
+            ]
+        );
+    }
+
+    #[test]
+    fn dos_paths_with_shell_metachars_are_rejected() {
+        assert!(safe_dos_path("C:\\src\\demo"));
+        assert!(safe_dos_path("C:\\src\\my app-1.2_x+~"));
+        for bad in [
+            "C:\\src\\a&calc",
+            "C:\\src\\a|b",
+            "C:\\src\\a\"b",
+            "C:\\src\\a$b",
+            "C:\\src\\a`b",
+            "C:\\src\\a;b",
+            "C:\\src\\a(b)",
+            "C:\\src\\a^b",
+            "C:\\src\\a%b%",
+        ] {
+            assert!(!safe_dos_path(bad), "accepted {bad:?}");
+        }
     }
 
     #[test]
