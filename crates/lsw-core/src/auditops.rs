@@ -4,10 +4,28 @@ use serde::Serialize;
 
 use crate::error::{Error, Result};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuditStatus {
+    Enabled,
+    Disabled,
+    NotApplicable,
+}
+
+impl AuditStatus {
+    fn from_flag(enabled: bool) -> Self {
+        if enabled {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct AuditCheck {
     pub name: String,
-    pub enabled: bool,
+    pub status: AuditStatus,
     pub detail: String,
 }
 
@@ -17,11 +35,18 @@ pub struct AuditReport {
     pub hardened: bool,
 }
 
-fn check(name: &str, enabled: bool, detail: &str) -> AuditCheck {
+fn check(name: &str, status: AuditStatus, detail: &str) -> AuditCheck {
     AuditCheck {
         name: name.to_owned(),
-        enabled,
+        status,
         detail: detail.to_owned(),
+    }
+}
+
+fn tri(name: &str, value: Option<bool>, detail: &str, na_detail: &str) -> AuditCheck {
+    match value {
+        Some(v) => check(name, AuditStatus::from_flag(v), detail),
+        None => check(name, AuditStatus::NotApplicable, na_detail),
     }
 }
 
@@ -36,29 +61,39 @@ pub fn audit(path: &Path) -> Result<AuditReport> {
     let checks = vec![
         check(
             "ASLR (DYNAMICBASE)",
-            h.aslr,
+            AuditStatus::from_flag(h.aslr),
             "image can be loaded at a randomized base",
         ),
-        check(
+        tri(
             "High-entropy ASLR",
             h.high_entropy_va,
             "64-bit address space randomization",
+            "64-bit-only mitigation; this is a 32-bit image",
         ),
-        check("DEP (NXCOMPAT)", h.dep, "data pages are non-executable"),
-        check("Control Flow Guard", h.cfg, "indirect-call target checking"),
         check(
+            "DEP (NXCOMPAT)",
+            AuditStatus::from_flag(h.dep),
+            "data pages are non-executable",
+        ),
+        check(
+            "Control Flow Guard",
+            AuditStatus::from_flag(h.cfg),
+            "indirect-call target checking",
+        ),
+        tri(
             "SafeSEH",
             h.seh,
             "structured exception handlers are validated",
+            "x86-only mitigation; x64 uses table-based exception handling",
         ),
         check(
             "Forced integrity",
-            h.force_integrity,
+            AuditStatus::from_flag(h.force_integrity),
             "signature is checked at load time",
         ),
         check(
             "Authenticode signed",
-            h.signed,
+            AuditStatus::from_flag(h.signed),
             "embedded certificate table present",
         ),
     ];
