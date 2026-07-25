@@ -169,6 +169,10 @@ fn node(
 }
 
 pub fn tree(env: Option<&Environment>, pe: &Path) -> Result<DepNode> {
+    tree_with_dirs(&search_dirs(env, pe), pe)
+}
+
+pub fn tree_with_dirs(dirs: &[PathBuf], pe: &Path) -> Result<DepNode> {
     if !pe.is_file() {
         return Err(Error::NotExecutable {
             program: pe.to_path_buf(),
@@ -176,20 +180,62 @@ pub fn tree(env: Option<&Environment>, pe: &Path) -> Result<DepNode> {
         });
     }
     lsw_pe::detect(pe)?;
-    let dirs = search_dirs(env, pe);
     let mut seen = BTreeSet::new();
     let mut nodes = 0usize;
     let name = pe
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "root".to_owned());
-    let children = build(&name, pe, &dirs, &mut seen, 0, &mut nodes);
+    let children = build(&name, pe, dirs, &mut seen, 0, &mut nodes);
     Ok(DepNode {
         name,
         kind: DepKind::Root,
         path: Some(pe.display().to_string()),
         children,
     })
+}
+
+pub(crate) fn is_vc_runtime_dll(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".dll")
+        && (lower.starts_with("vcruntime")
+            || lower.starts_with("msvcp")
+            || lower.starts_with("concrt"))
+}
+
+pub(crate) fn vc_runtime_dirs(sysroot: &Path) -> Vec<PathBuf> {
+    const MAX_SCAN_DEPTH: usize = 6;
+    const MAX_SCAN_ENTRIES: usize = 50_000;
+    let mut out = BTreeSet::new();
+    let mut budget = MAX_SCAN_ENTRIES;
+    scan_vc_dirs(sysroot, MAX_SCAN_DEPTH, &mut budget, &mut out);
+    out.into_iter().collect()
+}
+
+fn scan_vc_dirs(dir: &Path, depth: usize, budget: &mut usize, out: &mut BTreeSet<PathBuf>) {
+    if depth == 0 || *budget == 0 {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if *budget == 0 {
+            return;
+        }
+        *budget -= 1;
+        let Ok(ftype) = entry.file_type() else {
+            continue;
+        };
+        if ftype.is_symlink() {
+            continue;
+        }
+        if ftype.is_dir() {
+            scan_vc_dirs(&entry.path(), depth - 1, budget, out);
+        } else if ftype.is_file() && is_vc_runtime_dll(&entry.file_name().to_string_lossy()) {
+            out.insert(dir.to_path_buf());
+        }
+    }
 }
 
 const MIRROR: &str = "https://repo.msys2.org/mingw";

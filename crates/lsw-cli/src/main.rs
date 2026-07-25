@@ -156,9 +156,11 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             relay,
             filter,
         } => cmd::verify::trace(program, args, relay, filter, &dirs, cli.format),
-        Cmd::Package { target, verify } => {
-            cmd::package::package(target, *verify, &dirs, cli.format)
-        }
+        Cmd::Package {
+            target,
+            verify,
+            bundle_deps,
+        } => cmd::package::package(target, *verify, *bundle_deps, &dirs, cli.format),
         Cmd::Ps { all } => cmd::state::ps(*all, &dirs, cli.format),
         Cmd::Kill { pid, all } => cmd::state::kill(pid, all, &dirs),
         Cmd::Service(op) => cmd::state::service(op, &dirs, cli.format),
