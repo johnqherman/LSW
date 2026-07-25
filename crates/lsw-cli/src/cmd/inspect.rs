@@ -95,8 +95,29 @@ pub(crate) fn inspect(file: &Path, dirs: &Dirs, format: Format) -> lsw_core::Res
     Ok(ExitCode::SUCCESS)
 }
 
-pub(crate) fn crash(file: &Path, format: Format) -> lsw_core::Result<ExitCode> {
-    let s = lsw_core::dumpops::analyze(file)?;
+pub(crate) fn crash(
+    file: &Path,
+    force: bool,
+    dirs: &Dirs,
+    format: Format,
+) -> lsw_core::Result<ExitCode> {
+    let file = if force {
+        let (_p, env) = active_env(dirs)?;
+        let dump = lsw_core::dumpops::dump_path_for(file);
+        let written = lsw_core::dumpops::capture_wine_dump(&env, file, &[], &dump, true)?;
+        if !written {
+            eprintln!(
+                "error: winedbg did not produce a dump for {}",
+                file.display()
+            );
+            return Ok(ExitCode::FAILURE);
+        }
+        eprintln!("[lsw] dump written to {}", dump.display());
+        dump
+    } else {
+        file.to_path_buf()
+    };
+    let s = lsw_core::dumpops::analyze(&file)?;
     if format == Format::Json {
         println!(
             "{}",

@@ -57,6 +57,7 @@ pub(crate) fn run(
     windows: &bool,
     sandbox: &Option<SandboxArg>,
     headless: &bool,
+    dump_on_crash: &bool,
     dirs: &Dirs,
 ) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
@@ -101,7 +102,33 @@ pub(crate) fn run(
     )?;
     crate::note_crash(&report.status);
     note_runtime_domain(&report);
+    if *dump_on_crash && !report.status.success() {
+        capture_crash_dump(&env, &program, args);
+    }
     Ok(exit_from_status(report.status))
+}
+
+fn capture_crash_dump(env: &lsw_core::Environment, program: &PathBuf, args: &[String]) {
+    let dump = lsw_core::dumpops::dump_path_for(program);
+    eprintln!("[lsw] re-running under winedbg to capture a crash dump");
+    match lsw_core::dumpops::capture_wine_dump(env, program, args, &dump, false) {
+        Ok(true) => {
+            eprintln!("[lsw] crash dump written to {}", dump.display());
+            match lsw_core::dumpops::analyze(&dump) {
+                Ok(s) => {
+                    eprintln!("[lsw] exception: {} at {:#x}", s.reason, s.crash_address);
+                    if let (Some(m), Some(off)) = (&s.faulting_module, s.faulting_offset) {
+                        eprintln!("[lsw] faulting:  {m}+{off:#x}");
+                    }
+                }
+                Err(e) => eprintln!("[lsw] dump written but not decodable: {e}"),
+            }
+        }
+        Ok(false) => {
+            eprintln!("[lsw] no dump produced (the crash did not reproduce under winedbg)")
+        }
+        Err(e) => eprintln!("[lsw] dump capture failed: {e}"),
+    }
 }
 
 pub(crate) fn exec(
