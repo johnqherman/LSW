@@ -85,6 +85,33 @@ fn row(label: &str, value: impl Into<String>, status: Status) -> Row {
     }
 }
 
+fn vc_runtime_row(project: &Project, env: &envops::Environment) -> Option<Row> {
+    let dynamic = project.manifest.toolchain.link == lsw_config::LinkMode::Dynamic;
+    let msvc_abi = env.manifest.toolchain.provider == "clang-cl";
+    if !dynamic || !msvc_abi {
+        return None;
+    }
+    let found = crate::depsops::vc_runtime_dirs(&env.manifest.toolchain.sysroot);
+    Some(if found.is_empty() {
+        row(
+            "VC++ runtime",
+            "dynamic MSVC-ABI build but no vcruntime/msvcp DLLs in the SDK sysroot; \
+             import the redist DLLs into your SDK splat (lsw sdk import) so \
+             `lsw package --bundle-deps` can ship them, or use static linking (default)",
+            Status::Warn,
+        )
+    } else {
+        row(
+            "VC++ runtime",
+            format!(
+                "redist DLLs found in the SDK sysroot ({} dir(s)); bundle with lsw package --bundle-deps",
+                found.len()
+            ),
+            Status::Ok,
+        )
+    })
+}
+
 pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
     let mut sections = Vec::new();
 
@@ -192,6 +219,9 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
                     ),
                     Status::Ok,
                 ));
+                if let Some(vc_row) = vc_runtime_row(p, &env) {
+                    rows.push(vc_row);
+                }
             }
             Err(e) => rows.push(row("Environment", e.to_string(), Status::Fail)),
         }
