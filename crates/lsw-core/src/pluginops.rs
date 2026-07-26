@@ -252,9 +252,8 @@ impl Drop for Plugin {
         drop(self.stdin.take());
         for _ in 0..20 {
             match self.child.try_wait() {
-                Ok(Some(_)) => break,
+                Ok(Some(_)) | Err(_) => break,
                 Ok(None) => std::thread::sleep(Duration::from_millis(25)),
-                Err(_) => break,
             }
         }
         if matches!(self.child.try_wait(), Ok(None)) {

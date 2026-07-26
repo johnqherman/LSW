@@ -30,10 +30,9 @@ fn main() -> ExitCode {
         Ok(code) => code,
         Err(e) => {
             if cli.format == Format::Json {
-                let payload = serde_json::json!({
+                cmd::emit_json(&serde_json::json!({
                     "error": { "code": e.code(), "message": e.to_string() }
-                });
-                println!("{payload}");
+                }));
             } else {
                 eprintln!("error: {e}");
             }
@@ -48,10 +47,7 @@ pub(crate) fn cwd() -> lsw_core::Result<PathBuf> {
 
 pub(crate) fn usage_failure(format: Format, message: &str) -> ExitCode {
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::json!({ "error": { "code": "LSW0000", "message": message } })
-        );
+        cmd::emit_json(&serde_json::json!({ "error": { "code": "LSW0000", "message": message } }));
     } else {
         eprintln!("error: {message}");
     }

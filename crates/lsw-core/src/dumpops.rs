@@ -125,7 +125,7 @@ pub fn capture_wine_dump(
     let deadline = Instant::now() + DUMP_TIMEOUT;
     loop {
         match child.try_wait() {
-            Ok(Some(_)) => break,
+            Ok(Some(_)) | Err(_) => break,
             Ok(None) => {
                 if Instant::now() >= deadline {
                     let _ = child.kill();
@@ -134,7 +134,6 @@ pub fn capture_wine_dump(
                 }
                 std::thread::sleep(Duration::from_millis(50));
             }
-            Err(_) => break,
         }
     }
     Ok(out_abs.is_file())

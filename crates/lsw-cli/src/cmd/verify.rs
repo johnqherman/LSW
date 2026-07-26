@@ -58,11 +58,10 @@ pub(crate) fn verify(
         println!("Status: {status}");
         println!("{}", report.detail);
     }
-    Ok(match report.status {
-        lsw_core::verifyops::VerifyStatus::WindowsVerified => ExitCode::SUCCESS,
-        lsw_core::verifyops::VerifyStatus::WindowsUnavailable => ExitCode::FAILURE,
-        lsw_core::verifyops::VerifyStatus::WindowsFailed => ExitCode::FAILURE,
-    })
+    crate::cmd::exit_ok(matches!(
+        report.status,
+        lsw_core::verifyops::VerifyStatus::WindowsVerified
+    ))
 }
 
 fn verify_reproducible(
@@ -216,7 +215,7 @@ pub(crate) fn compat_query(key: &str, dirs: &Dirs, format: Format) -> lsw_core::
         }
         None => {
             if format == Format::Json {
-                println!("{}", serde_json::json!({ "key": key, "found": false }));
+                crate::cmd::emit_json(&serde_json::json!({ "key": key, "found": false }));
             } else {
                 println!(
                     "{key}: not in the compatibility database yet (run `lsw compat --db <app.exe>`)"

@@ -157,7 +157,7 @@ pub(crate) fn path(
         }
     };
     if format == Format::Json {
-        println!("{}", serde_json::json!({ key: value }));
+        crate::cmd::emit_json(&serde_json::json!({ key: value }));
     } else {
         println!("{value}");
     }

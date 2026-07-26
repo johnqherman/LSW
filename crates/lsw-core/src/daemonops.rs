@@ -171,10 +171,9 @@ fn handle_connection(stream: UnixStream, dirs: &Dirs, running: &Arc<AtomicBool>)
         let mut buf = Vec::new();
         let read = std::io::Read::take(&mut reader, MAX_FRAME + 1).read_until(b'\n', &mut buf);
         match read {
-            Ok(0) => break,
+            Ok(0) | Err(_) => break,
             Ok(_) if buf.len() as u64 > MAX_FRAME => break,
             Ok(_) => {}
-            Err(_) => break,
         }
         let line = String::from_utf8_lossy(&buf);
         let line = line.trim();

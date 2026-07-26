@@ -21,10 +21,6 @@ impl PeImage {
             data,
         })
     }
-
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
 }
 
 macro_rules! dispatch_pe {

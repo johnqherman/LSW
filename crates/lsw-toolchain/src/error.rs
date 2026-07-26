@@ -49,6 +49,18 @@ pub struct ProbeReport {
 }
 
 impl ProbeReport {
+    pub(crate) fn failure(provider: &str, detail: String, compiled: bool) -> Self {
+        Self {
+            provider: provider.to_owned(),
+            compiled,
+            linked: false,
+            produced_pe: false,
+            detail,
+        }
+    }
+}
+
+impl ProbeReport {
     pub fn passed(&self) -> bool {
         self.compiled && self.linked && self.produced_pe
     }

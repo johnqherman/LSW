@@ -5,20 +5,39 @@ use lsw_core::Dirs;
 use crate::cli::{DotnetCmd, Format, RustCmd, SdkCmd};
 use crate::{active_env, cwd};
 
+fn init_result(
+    format: Format,
+    language: &str,
+    root: &std::path::Path,
+    created: &[std::path::PathBuf],
+) -> lsw_core::Result<ExitCode> {
+    if format == Format::Json {
+        let files: Vec<String> = created.iter().map(|f| f.display().to_string()).collect();
+        crate::cmd::emit_json(
+            &serde_json::json!({ "root": root.display().to_string(), "created": files }),
+        );
+    } else {
+        println!("Initialized LSW {language} project at {}", root.display());
+        for f in created {
+            println!("  created {}", f.display());
+        }
+        println!("Next: lsw env create <name> && lsw build");
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn doctor_rows(title: &str, rows: &[(&str, &'static str)]) {
+    println!("{title}\n");
+    for (label, mark) in rows {
+        println!("  {label:<18}{mark}");
+    }
+}
+
 pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     match op {
         RustCmd::Init { name } => {
             let report = lsw_core::rustops::init(&cwd()?, name.as_deref())?;
-            if format == Format::Json {
-                print_init_json(&report.root, &report.created);
-            } else {
-                println!("Initialized LSW Rust project at {}", report.root.display());
-                for f in &report.created {
-                    println!("  created {}", f.display());
-                }
-                println!("Next: lsw env create <name> && lsw build");
-            }
-            Ok(ExitCode::SUCCESS)
+            init_result(format, "Rust", &report.root, &report.created)
         }
 
         RustCmd::Doctor => {
@@ -32,13 +51,17 @@ pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
                     lsw_core::rustops::Check::NotConfigured => "NOT CONFIGURED",
                     lsw_core::rustops::Check::Missing => "MISSING",
                 };
-                println!("LSW Rust Doctor  (target {})\n", report.target);
-                println!("  Compiler target   {}", mark(report.compiler_target));
-                println!("  Linker            {}", mark(report.linker));
-                println!("  CRT               {}", mark(report.crt));
-                println!("  Windows imports   {}", mark(report.windows_imports));
-                println!("  Runtime execution {}", mark(report.runtime_execution));
-                println!("  Native validation {}", mark(report.native_validation));
+                doctor_rows(
+                    &format!("LSW Rust Doctor  (target {})", report.target),
+                    &[
+                        ("Compiler target", mark(report.compiler_target)),
+                        ("Linker", mark(report.linker)),
+                        ("CRT", mark(report.crt)),
+                        ("Windows imports", mark(report.windows_imports)),
+                        ("Runtime execution", mark(report.runtime_execution)),
+                        ("Native validation", mark(report.native_validation)),
+                    ],
+                );
             }
             let healthy = [
                 report.compiler_target,
@@ -54,28 +77,11 @@ pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
     }
 }
 
-fn print_init_json(root: &std::path::Path, created: &[std::path::PathBuf]) {
-    let files: Vec<String> = created.iter().map(|f| f.display().to_string()).collect();
-    println!(
-        "{}",
-        serde_json::json!({ "root": root.display().to_string(), "created": files })
-    );
-}
-
 pub(crate) fn dotnet(op: &DotnetCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     match op {
         DotnetCmd::Init { name } => {
             let report = lsw_core::dotnetops::init(&cwd()?, name.as_deref())?;
-            if format == Format::Json {
-                print_init_json(&report.root, &report.created);
-            } else {
-                println!("Initialized LSW C# project at {}", report.root.display());
-                for f in &report.created {
-                    println!("  created {}", f.display());
-                }
-                println!("Next: lsw env create <name> && lsw build");
-            }
-            Ok(ExitCode::SUCCESS)
+            init_result(format, "C#", &report.root, &report.created)
         }
 
         DotnetCmd::Doctor => {
@@ -89,13 +95,17 @@ pub(crate) fn dotnet(op: &DotnetCmd, dirs: &Dirs, format: Format) -> lsw_core::R
                     lsw_core::dotnetops::Check::NotConfigured => "NOT CONFIGURED",
                     lsw_core::dotnetops::Check::Missing => "MISSING",
                 };
-                println!("LSW C# Doctor  (RID {})\n", report.target);
-                println!("  .NET SDK          {}", mark(report.sdk));
-                println!("  Runtime ID        {}", mark(report.runtime_identifier));
-                println!("  Self-contained    {}", mark(report.self_contained));
-                println!("  Runtime execution {}", mark(report.runtime_execution));
-                println!("  NativeAOT         {}", mark(report.native_aot));
-                println!("  Native validation {}", mark(report.native_validation));
+                doctor_rows(
+                    &format!("LSW C# Doctor  (RID {})", report.target),
+                    &[
+                        (".NET SDK", mark(report.sdk)),
+                        ("Runtime ID", mark(report.runtime_identifier)),
+                        ("Self-contained", mark(report.self_contained)),
+                        ("Runtime execution", mark(report.runtime_execution)),
+                        ("NativeAOT", mark(report.native_aot)),
+                        ("Native validation", mark(report.native_validation)),
+                    ],
+                );
             }
             let healthy = [
                 report.sdk,
@@ -122,14 +132,11 @@ pub(crate) fn sdk(op: &SdkCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
             }
             let report = lsw_core::sdkops::import(dirs, name, from, *force)?;
             if json {
-                println!(
-                    "{}",
-                    serde_json::json!({
-                        "name": report.name,
-                        "files_copied": report.files_copied,
-                        "root": report.root.display().to_string(),
-                    })
-                );
+                crate::cmd::emit_json(&serde_json::json!({
+                    "name": report.name,
+                    "files_copied": report.files_copied,
+                    "root": report.root.display().to_string(),
+                }));
             } else {
                 println!(
                     "Imported '{}' ({} files) to {}",
@@ -174,7 +181,7 @@ pub(crate) fn sdk(op: &SdkCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
         SdkCmd::Remove { name } => {
             lsw_core::sdkops::remove(dirs, name)?;
             if json {
-                println!("{}", serde_json::json!({ "name": name, "removed": true }));
+                crate::cmd::emit_json(&serde_json::json!({ "name": name, "removed": true }));
             } else {
                 println!("Removed SDK '{name}'");
             }
