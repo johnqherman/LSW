@@ -13,6 +13,33 @@ pub(crate) fn ide(op: &IdeCmd, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
             crate::cmd::emit_json(&description);
             Ok(ExitCode::SUCCESS)
         }
+        IdeCmd::LaunchConfig => {
+            let (p, _env) = active_env(dirs)?;
+            let name = &p.manifest.project.name;
+            let config = serde_json::json!({
+                "version": "0.2.0",
+                "configurations": [{
+                    "type": "lsw",
+                    "request": "launch",
+                    "name": format!("LSW: Debug {name}"),
+                    "program": format!("${{workspaceFolder}}/build/{name}.exe"),
+                }],
+            });
+            let dir = p.root.join(".vscode");
+            std::fs::create_dir_all(&dir).map_err(|e| lsw_core::Error::io(dir.clone(), e))?;
+            let path = dir.join("launch.json");
+            if path.exists() {
+                eprintln!("{} already exists; not overwriting", path.display());
+                return Ok(ExitCode::FAILURE);
+            }
+            std::fs::write(
+                &path,
+                serde_json::to_string_pretty(&config).expect("static json"),
+            )
+            .map_err(|e| lsw_core::Error::io(path.clone(), e))?;
+            println!("wrote {}", path.display());
+            Ok(ExitCode::SUCCESS)
+        }
     }
 }
 

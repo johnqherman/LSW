@@ -102,7 +102,7 @@ fn build_system_from_name(name: &str) -> Option<BuildSystem> {
     }
 }
 
-fn zig_target(arch: TargetArch) -> Option<&'static str> {
+pub(crate) fn zig_target(arch: TargetArch) -> Option<&'static str> {
     match arch {
         TargetArch::X86_64 => Some("x86_64-windows-gnu"),
         TargetArch::X86 => Some("x86-windows-gnu"),
@@ -118,6 +118,7 @@ pub struct BuildOptions {
     pub update_lock: bool,
     pub reproducible: bool,
     pub aot: bool,
+    pub coverage: bool,
 }
 
 #[derive(Debug)]
@@ -149,6 +150,12 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
     let mut tc = effective_toolchain(env, project);
     if opts.reproducible {
         tc.link_flags.push("-Wl,--no-insert-timestamp".to_owned());
+    }
+    if opts.coverage {
+        for flags in [&mut tc.c_flags, &mut tc.link_flags] {
+            flags.push("-fprofile-instr-generate".to_owned());
+            flags.push("-fcoverage-mapping".to_owned());
+        }
     }
     if matches!(
         system,

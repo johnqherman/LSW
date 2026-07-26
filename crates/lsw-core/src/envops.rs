@@ -499,6 +499,67 @@ pub fn mapper(env: &Environment, project: &Project) -> lsw_path::PathMapper {
     )
 }
 
+pub fn export_env(dirs: &Dirs, name: &str, file: &Path) -> Result<()> {
+    validate_name("environment", name)?;
+    let root = dirs.environment(name);
+    if !root.is_dir() {
+        return Err(Error::EnvironmentNotFound {
+            name: name.to_owned(),
+        });
+    }
+    let status = std::process::Command::new("tar")
+        .arg("--zstd")
+        .arg("-cf")
+        .arg(file)
+        .arg("-C")
+        .arg(dirs.environments())
+        .arg(name)
+        .status()
+        .map_err(|e| Error::io(std::path::PathBuf::from("tar"), e))?;
+    if !status.success() {
+        return Err(Error::InitFailed {
+            path: file.to_path_buf(),
+            detail: "tar failed to create the environment archive".into(),
+        });
+    }
+    Ok(())
+}
+
+pub fn import_env(dirs: &Dirs, name: &str, file: &Path, force: bool) -> Result<()> {
+    validate_name("environment", name)?;
+    let root = dirs.environment(name);
+    if root.exists() {
+        if !force {
+            return Err(Error::EnvironmentExists {
+                name: name.to_owned(),
+            });
+        }
+        std::fs::remove_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
+    }
+    std::fs::create_dir_all(dirs.environments()).map_err(|e| Error::io(dirs.environments(), e))?;
+    let status = std::process::Command::new("tar")
+        .arg("--zstd")
+        .arg("-xf")
+        .arg(file)
+        .arg("-C")
+        .arg(dirs.environments())
+        .status()
+        .map_err(|e| Error::io(std::path::PathBuf::from("tar"), e))?;
+    if !status.success() {
+        return Err(Error::InitFailed {
+            path: file.to_path_buf(),
+            detail: "tar failed to extract the environment archive".into(),
+        });
+    }
+    if !root.is_dir() {
+        return Err(Error::InitFailed {
+            path: file.to_path_buf(),
+            detail: format!("archive did not contain an environment named '{name}'"),
+        });
+    }
+    Environment::open(dirs, name).map(|_| ())
+}
+
 pub fn provision_winetricks(
     env: &Environment,
     verbs: &[String],

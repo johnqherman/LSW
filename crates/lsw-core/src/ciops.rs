@@ -131,6 +131,57 @@ jobs:
     )
 }
 
+pub fn gitlab_pipeline() -> String {
+    let lsw_version = env!("CARGO_PKG_VERSION");
+    format!(
+        r#"stages:
+  - build
+
+build-windows:
+  stage: build
+  image: ubuntu:24.04
+  cache:
+    - key: lsw-cli-{lsw_version}
+      paths:
+        - .cargo-bin/
+    - key:
+        files:
+          - lsw.lock
+      paths:
+        - .lsw-data/
+  variables:
+    XDG_DATA_HOME: $CI_PROJECT_DIR/.lsw-data/share
+    XDG_CACHE_HOME: $CI_PROJECT_DIR/.lsw-data/cache
+  before_script:
+    - dpkg --add-architecture i386
+    - apt-get update
+    - apt-get install -y wine wine64 wine32 mingw-w64 cmake ninja-build xvfb curl build-essential
+    - test -x .cargo-bin/lsw || (curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal && . "$HOME/.cargo/env" && cargo install lsw@{lsw_version} && mkdir -p .cargo-bin && cp "$HOME/.cargo/bin/lsw" "$HOME/.cargo/bin/lswd" .cargo-bin/)
+    - export PATH="$CI_PROJECT_DIR/.cargo-bin:$PATH"
+  script:
+    - lsw setup
+    - lsw build
+    - lsw test --headless
+  artifacts:
+    paths:
+      - build/*.exe
+      - build/*.dll
+"#
+    )
+}
+
+pub fn init_gitlab(project_root: &Path) -> Result<PathBuf> {
+    let path = project_root.join(".gitlab-ci.yml");
+    if std::fs::symlink_metadata(&path).is_ok() {
+        return Err(Error::InitFailed {
+            path,
+            detail: "pipeline file already exists".into(),
+        });
+    }
+    std::fs::write(&path, gitlab_pipeline()).map_err(|e| Error::io(path.clone(), e))?;
+    Ok(path)
+}
+
 pub fn init_github(project_root: &Path) -> Result<PathBuf> {
     let name = project_root.file_name().map_or_else(
         || "lsw-project".to_owned(),

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use lsw_core::Dirs;
@@ -7,6 +7,7 @@ use crate::cli::Format;
 use crate::{active_env, exit_from_status};
 
 pub(crate) struct DebugFlags {
+    pub(crate) attach: Option<u32>,
     pub(crate) gdb: bool,
     pub(crate) no_start: bool,
     pub(crate) native: bool,
@@ -15,12 +16,20 @@ pub(crate) struct DebugFlags {
 }
 
 pub(crate) fn debug(
-    program: &Path,
+    program: &Option<PathBuf>,
     args: &[String],
     flags: &DebugFlags,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
+    if let Some(pid) = flags.attach {
+        let env = crate::admin_env(dirs)?;
+        let status = lsw_core::debugops::attach(&env, pid, flags.gdb)?;
+        return Ok(exit_from_status(status));
+    }
+    let program = program
+        .as_deref()
+        .expect("clap requires program without --attach");
     let (p, env) = active_env(dirs)?;
     if flags.native {
         let cfg = &p.manifest.verify;

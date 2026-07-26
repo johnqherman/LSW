@@ -71,6 +71,7 @@ fn create_env(c: &Corpus, name: &str) -> lsw_core::envops::Environment {
 
 fn build_opts() -> BuildOptions {
     BuildOptions {
+        coverage: false,
         system: None,
         update_lock: true,
         reproducible: false,

@@ -327,6 +327,23 @@ pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
             Ok(ExitCode::SUCCESS)
         }
 
+        DepsCmd::Vendor { dir } => {
+            let (p, env) = active_env(dirs)?;
+            let copied = lsw_core::depsops::vendor(&p, env.manifest.target_arch, dir)?;
+            if format == Format::Json {
+                crate::cmd::emit_json(
+                    &serde_json::json!({ "vendored": dir.display().to_string(), "files": copied }),
+                );
+            } else {
+                println!(
+                    "vendored {} file(s) from {} into deps/; builds pick up include/ and lib/ automatically",
+                    copied,
+                    dir.display()
+                );
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
         DepsCmd::Add { name } => {
             let (p, env) = active_env(dirs)?;
             let pkg = lsw_core::depsops::add(&p, env.manifest.target_arch, dirs, name)?;
