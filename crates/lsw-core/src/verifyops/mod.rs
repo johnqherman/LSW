@@ -95,16 +95,7 @@ pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
     if project.manifest.verify.host.is_none() {
         return run_on_host(project, &[], &[]);
     }
-    let build = buildops::build(
-        project,
-        env,
-        &BuildOptions {
-            system: None,
-            update_lock: false,
-            reproducible: false,
-            aot: false,
-        },
-    )?;
+    let build = buildops::build(project, env, &BuildOptions::default())?;
     run_on_host(project, &build.artifacts, &[])
 }
 

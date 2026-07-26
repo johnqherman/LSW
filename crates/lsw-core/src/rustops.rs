@@ -77,55 +77,18 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<RustInitRepo
         });
     }
 
-    fn write_file(
-        root: &std::path::Path,
-        rel: &str,
-        contents: &str,
-        created: &mut Vec<std::path::PathBuf>,
-    ) -> Result<()> {
-        use std::io::Write;
-        let path = root.join(rel);
-        if let Some(dir) = path.parent() {
-            if fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_symlink()) {
-                return Err(Error::InitFailed {
-                    path: dir.to_path_buf(),
-                    detail: "path is a symlink; refusing to scaffold through it".into(),
-                });
-            }
-            fs::create_dir_all(dir).map_err(|e| Error::io(dir.to_path_buf(), e))?;
-        }
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::AlreadyExists {
-                    Error::InitFailed {
-                        path: path.clone(),
-                        detail: format!("{rel} already exists; refusing to overwrite"),
-                    }
-                } else {
-                    Error::io(path.clone(), e)
-                }
-            })?;
-        created.push(path.clone());
-        file.write_all(contents.as_bytes())
-            .map_err(|e| Error::io(path.clone(), e))?;
-        Ok(())
-    }
-
     let mut created = Vec::new();
     let manifest_path = root.join(lsw_config::PROJECT_MANIFEST);
     let result: Result<()> = (|| {
         lsw_config::ProjectManifest::new(&project_name).save_new(&manifest_path)?;
         created.push(manifest_path.clone());
-        write_file(
+        crate::project::scaffold_write(
             &root,
             "Cargo.toml",
             &TEMPLATE_CARGO.replace("{name}", &cargo_package_name(&project_name)),
             &mut created,
         )?;
-        write_file(&root, "src/main.rs", TEMPLATE_MAIN, &mut created)?;
+        crate::project::scaffold_write(&root, "src/main.rs", TEMPLATE_MAIN, &mut created)?;
         let _ = TEMPLATE_LSW;
         Ok(())
     })();

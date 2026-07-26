@@ -128,13 +128,7 @@ fn run_remote_cdb(remote: &RemoteCdb, script: &str) -> Result<String> {
             remote.cdb, remote.remote_target
         )
     };
-    let out = super::capped_output(
-        Command::new("ssh")
-            .args(ssh_opts(remote.identity.as_deref()))
-            .arg(&remote.host)
-            .arg(invocation),
-    )
-    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    let out = super::ssh_command(&remote.host, remote.identity.as_deref(), &invocation)?;
     if !out.status.success() {
         let detail = String::from_utf8_lossy(&out.stderr);
         let detail = detail.trim();
@@ -206,13 +200,7 @@ fn detect_cdb(host: &str, identity: Option<&str>, paths: &[&str]) -> Result<Opti
         .map(|(i, p)| format!("if exist \"{p}\" echo LSWCDB{i}"))
         .collect::<Vec<_>>()
         .join(" & ");
-    let out = super::capped_output(
-        Command::new("ssh")
-            .args(ssh_opts(identity))
-            .arg(host)
-            .arg(format!("cmd /c \"{checks}\"")),
-    )
-    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    let out = super::ssh_command(host, identity, &format!("cmd /c \"{checks}\""))?;
     if !out.status.success() {
         let detail = String::from_utf8_lossy(&out.stderr);
         return Err(Error::ProbeFailed {

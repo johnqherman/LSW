@@ -47,16 +47,7 @@ pub struct TestOptions {
 }
 
 pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<TestReport> {
-    let build_report = buildops::build(
-        project,
-        env,
-        &BuildOptions {
-            system: None,
-            update_lock: false,
-            reproducible: false,
-            aot: false,
-        },
-    )?;
+    buildops::build(project, env, &BuildOptions::default())?;
     let build = Component {
         label: format!("{}-windows", env.manifest.target_arch),
         outcome: Outcome::Pass,
@@ -87,7 +78,6 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
         command.env("LSW_HEADLESS", "1");
     }
 
-    use std::io::Read;
     const MAX_TEST_OUTPUT: u64 = 64 * 1024 * 1024;
     command
         .stdin(std::process::Stdio::null())
@@ -103,32 +93,19 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
             Error::io(project.root.clone(), e)
         }
     })?;
-    let drain = |pipe: Option<std::process::ChildStdout>| {
-        pipe.map(|mut p| {
-            std::thread::spawn(move || {
-                let mut b = Vec::new();
-                let _ = p.by_ref().take(MAX_TEST_OUTPUT).read_to_end(&mut b);
-                let _ = std::io::copy(&mut p, &mut std::io::sink());
-                b
-            })
-        })
-    };
-    let out_h = drain(child.stdout.take());
-    let err_h = {
-        child.stderr.take().map(|mut p| {
-            std::thread::spawn(move || {
-                let mut b = Vec::new();
-                let _ = p.by_ref().take(MAX_TEST_OUTPUT).read_to_end(&mut b);
-                let _ = std::io::copy(&mut p, &mut std::io::sink());
-                b
-            })
-        })
-    };
+    let out_rx = child
+        .stdout
+        .take()
+        .map(|s| lsw_toolchain::drain_capped(s, MAX_TEST_OUTPUT));
+    let err_rx = child
+        .stderr
+        .take()
+        .map(|s| lsw_toolchain::drain_capped(s, MAX_TEST_OUTPUT));
     let status = child
         .wait()
         .map_err(|e| Error::io(project.root.clone(), e))?;
-    let out_stdout = out_h.and_then(|h| h.join().ok()).unwrap_or_default();
-    let out_stderr = err_h.and_then(|h| h.join().ok()).unwrap_or_default();
+    let out_stdout = out_rx.and_then(|rx| rx.recv().ok()).unwrap_or_default();
+    let out_stderr = err_rx.and_then(|rx| rx.recv().ok()).unwrap_or_default();
 
     eprint!("{}", String::from_utf8_lossy(&out_stdout));
     eprint!("{}", String::from_utf8_lossy(&out_stderr));
@@ -137,7 +114,6 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
 
     let passed = status.success() && tests_failed.is_none_or(|f| f == 0);
 
-    let _ = build_report;
     Ok(TestReport {
         build,
         runtime: Component {

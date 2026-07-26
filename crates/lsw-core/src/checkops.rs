@@ -154,16 +154,7 @@ pub fn check(
         ),
     );
 
-    let build = match buildops::build(
-        &project,
-        &env,
-        &BuildOptions {
-            system: None,
-            update_lock: false,
-            reproducible: false,
-            aot: false,
-        },
-    ) {
+    let build = match buildops::build(&project, &env, &BuildOptions::default()) {
         Ok(b) => b,
         Err(e) => {
             r.record("build", StepStatus::Fail, first_line(&e));

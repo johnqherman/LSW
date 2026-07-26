@@ -8,11 +8,10 @@ pub(crate) fn newest_dump(
     dump_remote: &str,
     exe: &str,
 ) -> Option<String> {
-    let out = super::capped_output(
-        Command::new("ssh")
-            .args(ssh_opts(identity))
-            .arg(host)
-            .arg(format!("cmd /c dir /b /o-d \"{dump_remote}\\{exe}.*.dmp\"")),
+    let out = super::ssh_command(
+        host,
+        identity,
+        &format!("cmd /c dir /b /o-d \"{dump_remote}\\{exe}.*.dmp\""),
     )
     .ok()?;
     String::from_utf8_lossy(&out.stdout).lines().find_map(|l| {

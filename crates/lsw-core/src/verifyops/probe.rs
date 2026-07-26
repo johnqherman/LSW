@@ -1,13 +1,11 @@
 use std::fmt::Write as _;
-use std::path::PathBuf;
-use std::process::Command;
 
 use serde::Serialize;
 
 use crate::error::{Error, Result};
 use crate::project::Project;
 
-use super::{default_remote_dir, expand_tilde, ssh_opts, validate_windows_dir};
+use super::{default_remote_dir, expand_tilde, validate_windows_dir};
 
 use crate::buildops::which;
 
@@ -108,15 +106,11 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
         return Err(Error::ProbeFailed { host, detail });
     }
 
-    let out = super::capped_output(
-        Command::new("ssh")
-            .args(ssh_opts(identity.as_deref()))
-            .arg(&host)
-            .arg(format!(
-                "powershell -NoProfile -ExecutionPolicy Bypass -File \"{remote_script}\""
-            )),
-    )
-    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+    let out = super::ssh_command(
+        &host,
+        identity.as_deref(),
+        &format!("powershell -NoProfile -ExecutionPolicy Bypass -File \"{remote_script}\""),
+    )?;
     if !out.status.success() {
         return Err(Error::ProbeFailed {
             host,

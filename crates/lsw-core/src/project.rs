@@ -11,6 +11,43 @@ pub struct Project {
     pub manifest: ProjectManifest,
 }
 
+pub(crate) fn scaffold_write(
+    root: &std::path::Path,
+    rel: &str,
+    contents: &str,
+    created: &mut Vec<PathBuf>,
+) -> Result<()> {
+    use std::io::Write;
+    let path = root.join(rel);
+    if let Some(dir) = path.parent() {
+        if fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(Error::InitFailed {
+                path: dir.to_path_buf(),
+                detail: "path is a symlink; refusing to scaffold through it".into(),
+            });
+        }
+        fs::create_dir_all(dir).map_err(|e| Error::io(dir.to_path_buf(), e))?;
+    }
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                Error::InitFailed {
+                    path: path.clone(),
+                    detail: format!("{rel} already exists; refusing to overwrite"),
+                }
+            } else {
+                Error::io(path.clone(), e)
+            }
+        })?;
+    created.push(path.clone());
+    file.write_all(contents.as_bytes())
+        .map_err(|e| Error::io(path.clone(), e))?;
+    Ok(())
+}
+
 impl Project {
     pub fn discover(start: &Path) -> Result<Self> {
         let (root, manifest) = ProjectManifest::discover(start)?;
