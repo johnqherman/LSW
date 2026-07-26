@@ -224,10 +224,24 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
     let mut runtime_rows = Vec::new();
     match lsw_runtime::WineRuntime.resolve() {
         Ok(rt) => {
+            let major: Option<u32> = rt
+                .version
+                .split(['.', '-'])
+                .next()
+                .and_then(|v| v.parse().ok());
+            let old = major.is_some_and(|m| m < 9);
             runtime_rows.push(row(
                 "Wine",
-                format!("{} ({})", rt.version, rt.executable.display()),
-                Status::Ok,
+                if old {
+                    format!(
+                        "{} ({}) - older than wine 9; expect missing APIs, upgrade if possible",
+                        rt.version,
+                        rt.executable.display()
+                    )
+                } else {
+                    format!("{} ({})", rt.version, rt.executable.display())
+                },
+                if old { Status::Warn } else { Status::Ok },
             ));
         }
         Err(e) => runtime_rows.push(row("Wine", e.to_string(), Status::Fail)),

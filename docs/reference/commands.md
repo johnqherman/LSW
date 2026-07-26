@@ -38,10 +38,12 @@ The `lsw.toml` schema and every `LSW_*` environment variable are in
   [--dump-on-crash] [program]` starts a program; omit the program to build and
   run the project's single executable.
 - `lsw exec [--host|--windows] <cmd>` runs one command in an explicit domain.
-- `lsw test [--headless] [--junit <file>]` runs the tests and shows the true
-  compatibility status. ctest, `cargo test` (run under Wine via a target
-  runner), `meson test`, and an explicit `[test]` command are supported;
-  `--junit` writes a JUnit XML report for ctest and meson runs.
+- `lsw test [--headless] [--junit <file>] [--coverage]` runs the tests and
+  shows the true compatibility status. ctest, `cargo test` (run under Wine
+  via a target runner), `meson test`, and an explicit `[test]` command are
+  supported; `--junit` writes a JUnit XML report for ctest and meson runs;
+  `--coverage` instruments with clang source coverage and prints an
+  llvm-cov report (llvm-mingw toolchain only).
 - `lsw shell [--windows]` opens a shell (cmd.exe with `--windows`).
 - `lsw watch [--run|--test]` rebuilds automatically when source files change;
   `--run` restarts the project executable after each build, `--test` reruns
@@ -92,7 +94,8 @@ project's artifact.
 ## Debugging
 
 - `lsw debug <pe> [--gdb [--no-start]]` starts winedbg or a gdb-remote stub
-  that gdb/lldb can attach to.
+  that gdb/lldb can attach to. `lsw debug --attach <pid> [--gdb]` attaches to
+  a process already running in the environment (`lsw ps` lists pids).
 - `lsw debug --native <pe> [--analyze|--interactive]` runs the binary under
   cdb on the `[verify]` Windows host for a real backtrace, `!analyze -v`
   automation, or an interactive session.
@@ -100,13 +103,18 @@ project's artifact.
 
 ## Packaging and signing
 
-- `lsw package [--target portable-directory|zip|msi|msix] [--verify]
-  [--bundle-deps]` assembles a distributable. `--bundle-deps` copies each
-  artifact's non-system DLL closure into the package. `--target msi --verify`
-  install-tests the MSI in a scratch environment.
+- `lsw package [--target portable-directory|zip|msi|msix|nsis|winget]
+  [--verify] [--bundle-deps]` assembles a distributable. `--bundle-deps`
+  copies each artifact's non-system DLL closure into the package.
+  `--target msi --verify` install-tests the MSI in a scratch environment.
+  `nsis` builds an NSIS setup.exe (needs `makensis`); `winget` builds the MSI
+  plus a winget manifest trio (needs `[package] installer_url`). With
+  `[package] shortcuts = true` the MSI and NSIS installers create Start-menu
+  shortcuts.
 - `lsw sign <pe> [--publisher <subject>] [--pfx <path> --pfx-pass-env <VAR>]
   [--timestamp-url <url>]` adds an Authenticode signature (self-signed dev
-  identity by default).
+  identity by default). `lsw sign <pe> --verify` checks an existing
+  signature with osslsigncode.
 
 ## Native verification
 
@@ -130,7 +138,12 @@ project's artifact.
 - `lsw ps [--all]`, `lsw kill <pid>|--all` manage runtime processes.
 - `lsw service create|start|stop|query|delete` manages Windows services.
 - `lsw sdk import|list|remove` manages user-supplied Windows SDK sysroots for
-  MSVC-ABI builds.
+  MSVC-ABI builds. `lsw sdk acquire <name> --accept-license` downloads one
+  via xwin under the Microsoft license.
+- `lsw deps vendor <dir>` copies a prebuilt `include/`/`lib/`/`bin/` tree
+  (e.g. a vcpkg or Conan export) into the project `deps/` sysroot.
+- `lsw env export <name> <file.tar.zst>` / `lsw env import-archive <name>
+  <file> [--force]` pack and restore whole environments (CI cache handoff).
 - `lsw toolchain install llvm-mingw[@version]` downloads a self-contained
   llvm-mingw release into `~/.local/share/lsw/toolchains` (default: latest);
   managed toolchains are found automatically by `lsw env create`, newest
@@ -148,6 +161,7 @@ project's artifact.
 
 - `lsw ide env` prints the environment description IDE plugins consume. The
   VS Code, Neovim, and JetBrains front-ends are in `editors/`.
+  `lsw ide launch-config` writes a ready `.vscode/launch.json`.
 - `lsw plugin list` discovers out-of-process `lsw-provider-*` JSON-RPC
   providers on `PATH` (reference implementation in
   `crates/lsw-provider-example`). The plugin surface is experimental:
@@ -156,7 +170,8 @@ project's artifact.
 - `lswd` is an optional background daemon managed with
   `lsw daemon start|status|stop`. It currently only answers version/ping
   probes; normal use does not need it.
-- `lsw ci init github` writes a GitHub Actions workflow.
+- `lsw ci init [github|gitlab]` writes a GitHub Actions workflow or a
+  GitLab CI pipeline.
 - `lsw config check` lints `lsw.toml`.
 - `lsw explain LSW2004` explains an error code.
 - `lsw completions bash|zsh|fish|powershell|elvish` writes shell completions;

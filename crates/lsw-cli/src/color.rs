@@ -1,9 +1,18 @@
 use std::io::IsTerminal;
 use std::sync::OnceLock;
 
+static OVERRIDE: OnceLock<Option<bool>> = OnceLock::new();
+
+pub(crate) fn set_mode(force: Option<bool>) {
+    let _ = OVERRIDE.set(force);
+}
+
 fn enabled() -> bool {
     static E: OnceLock<bool> = OnceLock::new();
-    *E.get_or_init(|| std::env::var_os("NO_COLOR").is_none() && std::io::stdout().is_terminal())
+    *E.get_or_init(|| match OVERRIDE.get().copied().flatten() {
+        Some(force) => force,
+        None => std::env::var_os("NO_COLOR").is_none() && std::io::stdout().is_terminal(),
+    })
 }
 
 fn wrap(code: &str, s: &str) -> String {
