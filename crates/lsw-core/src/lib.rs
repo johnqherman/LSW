@@ -52,6 +52,7 @@ pub mod project;
 pub mod psops;
 pub mod registryops;
 pub mod reproops;
+pub(crate) mod resourceops;
 pub mod runops;
 pub mod rustops;
 pub mod sbomops;

@@ -35,8 +35,35 @@ pub struct ProjectManifest {
     pub env: EnvSection,
     #[serde(default, skip_serializing_if = "RegistrySection::is_empty")]
     pub registry: RegistrySection,
+    #[serde(default, skip_serializing_if = "PackageSection::is_empty")]
+    pub package: PackageSection,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub dependencies: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PackageSection {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upgrade_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dpi_aware: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requires_admin: Option<bool>,
+}
+
+impl PackageSection {
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

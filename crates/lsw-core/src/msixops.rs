@@ -29,7 +29,16 @@ pub fn build_msix(
         });
     }
     let name = &project.manifest.project.name;
-    let publisher = "CN=LSW Self-Signed (Development)";
+    let pkg = &project.manifest.package;
+    let publisher = match &pkg.publisher {
+        Some(p) if p.starts_with("CN=") => p.clone(),
+        Some(p) => format!("CN={p}"),
+        None => "CN=LSW Self-Signed (Development)".to_owned(),
+    };
+    let publisher = publisher.as_str();
+    let version = msix_version(pkg.version.as_deref());
+    let display_publisher = pkg.publisher.as_deref().unwrap_or("LSW");
+    let description = pkg.description.as_deref().unwrap_or(name);
 
     let logo = "lsw-appx-logo.png";
     const RESERVED: &[&str] = &[
@@ -45,7 +54,18 @@ pub fn build_msix(
             });
         }
     }
-    std::fs::write(dir.join(logo), minimal_png()).map_err(|e| Error::io(dir.join(logo), e))?;
+    let logo_bytes = match &pkg.icon {
+        Some(icon)
+            if std::path::Path::new(icon)
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("png")) =>
+        {
+            std::fs::read(project.root.join(icon))
+                .map_err(|e| Error::io(project.root.join(icon), e))?
+        }
+        _ => minimal_png(),
+    };
+    std::fs::write(dir.join(logo), logo_bytes).map_err(|e| Error::io(dir.join(logo), e))?;
 
     let entry = files
         .iter()
@@ -60,7 +80,16 @@ pub fn build_msix(
         })?;
     std::fs::write(
         dir.join("AppxManifest.xml"),
-        manifest_xml(name, publisher, arch, &entry, logo),
+        manifest_xml(
+            name,
+            publisher,
+            display_publisher,
+            description,
+            &version,
+            arch,
+            &entry,
+            logo,
+        ),
     )
     .map_err(|e| Error::io(dir.join("AppxManifest.xml"), e))?;
 
@@ -353,21 +382,52 @@ fn minimal_png() -> Vec<u8> {
         .expect("static PNG decodes")
 }
 
-fn manifest_xml(name: &str, publisher: &str, arch: TargetArch, entry: &str, logo: &str) -> String {
+fn msix_version(raw: Option<&str>) -> String {
+    let Some(raw) = raw else {
+        return "1.0.0.0".to_owned();
+    };
+    let mut parts: Vec<u64> = raw
+        .split('.')
+        .map(|p| p.parse::<u64>().unwrap_or(0).min(65535))
+        .take(4)
+        .collect();
+    while parts.len() < 4 {
+        parts.push(0);
+    }
+    parts
+        .iter()
+        .map(u64::to_string)
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+#[allow(clippy::too_many_arguments)]
+fn manifest_xml(
+    name: &str,
+    publisher: &str,
+    display_publisher: &str,
+    description: &str,
+    version: &str,
+    arch: TargetArch,
+    entry: &str,
+    logo: &str,
+) -> String {
     let proc_arch = arch.win_arch_name();
     let ident = sanitize_identity(name);
     let name = crate::xml_escape(name);
     let entry = crate::xml_escape(entry);
     let publisher = crate::xml_escape(publisher);
+    let display_publisher = crate::xml_escape(display_publisher);
+    let description = crate::xml_escape(description);
     format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
 <Package xmlns=\"http://schemas.microsoft.com/appx/manifest/foundation/windows10\" \
 xmlns:uap=\"http://schemas.microsoft.com/appx/manifest/uap/windows10\" \
 xmlns:rescap=\"http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities\">\n\
-  <Identity Name=\"{ident}\" Publisher=\"{publisher}\" Version=\"1.0.0.0\" ProcessorArchitecture=\"{proc_arch}\"/>\n\
+  <Identity Name=\"{ident}\" Publisher=\"{publisher}\" Version=\"{version}\" ProcessorArchitecture=\"{proc_arch}\"/>\n\
   <Properties>\n\
     <DisplayName>{name}</DisplayName>\n\
-    <PublisherDisplayName>LSW</PublisherDisplayName>\n\
+    <PublisherDisplayName>{display_publisher}</PublisherDisplayName>\n\
     <Logo>{logo}</Logo>\n\
   </Properties>\n\
   <Dependencies>\n\
@@ -378,7 +438,7 @@ xmlns:rescap=\"http://schemas.microsoft.com/appx/manifest/foundation/windows10/r
   </Capabilities>\n\
   <Applications>\n\
     <Application Id=\"App\" Executable=\"{entry}\" EntryPoint=\"Windows.FullTrustApplication\">\n\
-      <uap:VisualElements DisplayName=\"{name}\" Description=\"{name}\" BackgroundColor=\"#464646\" \
+      <uap:VisualElements DisplayName=\"{name}\" Description=\"{description}\" BackgroundColor=\"#464646\" \
 Square150x150Logo=\"{logo}\" Square44x44Logo=\"{logo}\"/>\n\
     </Application>\n\
   </Applications>\n\
@@ -553,15 +613,28 @@ mod tests {
         let m = manifest_xml(
             "Hello",
             "CN=Test",
+            "Acme",
+            "A test app",
+            "2.1.0.0",
             TargetArch::X86_64,
             "hello.exe",
             "logo.png",
         );
         assert!(m.contains("Publisher=\"CN=Test\""));
+        assert!(m.contains("Version=\"2.1.0.0\""));
+        assert!(m.contains("<PublisherDisplayName>Acme</PublisherDisplayName>"));
+        assert!(m.contains("Description=\"A test app\""));
         assert!(m.contains("ProcessorArchitecture=\"x64\""));
         assert!(m.contains("Executable=\"hello.exe\""));
         assert!(m.contains("Name=\"LSW.Hello\""));
         assert!(m.contains("<Logo>logo.png</Logo>"));
+    }
+
+    #[test]
+    fn msix_version_normalizes() {
+        assert_eq!(msix_version(Some("2.5.1")), "2.5.1.0");
+        assert_eq!(msix_version(Some("1.2.3.4")), "1.2.3.4");
+        assert_eq!(msix_version(None), "1.0.0.0");
     }
 
     #[test]
