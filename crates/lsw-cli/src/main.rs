@@ -256,6 +256,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Plugin(op) => cmd::integration::plugin(op, cli.format),
         Cmd::Sdk(op) => cmd::lang::sdk(op, &dirs, cli.format),
         Cmd::Ide(op) => cmd::integration::ide(op, &dirs),
+        Cmd::Toolchain(op) => cmd::tooling::toolchain(op, &dirs, cli.format),
         Cmd::Watch { run, test } => cmd::tooling::watch(*run, *test, &dirs),
         Cmd::Clean { deps } => cmd::tooling::clean(*deps),
         Cmd::Doctor => cmd::tooling::doctor(&dirs, cli.format),

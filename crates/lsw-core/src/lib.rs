@@ -63,6 +63,7 @@ pub mod signops;
 pub mod sizeops;
 pub mod stringsops;
 pub mod testops;
+pub mod toolchainops;
 pub mod traceops;
 pub mod ttyops;
 pub mod verifyops;
@@ -73,8 +74,8 @@ pub use buildops::{BuildOptions, BuildReport, BuildSystem, build};
 pub use doctorops::{DoctorReport, Section, Status, doctor};
 pub use envops::{
     EnvCreateOptions, EnvCreateReport, EnvSummary, Environment, clone_env, create as env_create,
-    list as env_list, mapper, remove as env_remove, resolve_active, restore as env_restore,
-    use_environment,
+    list as env_list, mapper, provision_winetricks, remove as env_remove, resolve_active,
+    restore as env_restore, use_environment,
 };
 pub use error::{Error, Result};
 pub use inspectops::{ImportStatus, InspectReport, inspect};

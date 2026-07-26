@@ -14,6 +14,54 @@ pub(crate) fn watch(run: bool, test: bool, dirs: &Dirs) -> lsw_core::Result<Exit
     Ok(ExitCode::SUCCESS)
 }
 
+pub(crate) fn toolchain(
+    op: &crate::cli::ToolchainCmd,
+    dirs: &Dirs,
+    format: Format,
+) -> lsw_core::Result<ExitCode> {
+    use crate::cli::ToolchainCmd;
+    let json = format == Format::Json;
+    match op {
+        ToolchainCmd::Install { spec } => {
+            let report = lsw_core::toolchainops::install(dirs, spec)?;
+            if json {
+                crate::cmd::emit_json(&report);
+            } else {
+                println!(
+                    "installed {} {} at {}",
+                    report.name, report.version, report.path
+                );
+                println!("new environments will find it automatically (lsw env create)");
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        ToolchainCmd::List => {
+            let list = lsw_core::toolchainops::list(dirs);
+            if json {
+                crate::cmd::emit_json(&list);
+            } else if list.is_empty() {
+                println!(
+                    "no managed toolchains (install one with: lsw toolchain install llvm-mingw)"
+                );
+            } else {
+                for t in list {
+                    println!("{:<28} {}", t.name, t.path);
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        ToolchainCmd::Remove { name } => {
+            if lsw_core::toolchainops::remove(dirs, name)? {
+                println!("removed {name}");
+                Ok(ExitCode::SUCCESS)
+            } else {
+                eprintln!("no managed toolchain named '{name}'");
+                Ok(ExitCode::FAILURE)
+            }
+        }
+    }
+}
+
 pub(crate) fn clean(deps: bool) -> lsw_core::Result<ExitCode> {
     let p = crate::project()?;
     let mut targets = vec![p.root.join("build"), p.root.join("dist")];
