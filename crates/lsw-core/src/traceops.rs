@@ -127,9 +127,29 @@ struct ParsedTrace {
     timeline_truncated: bool,
 }
 
-pub(crate) fn glob_match(pattern: &str, text: &str) -> bool {
-    let p: Vec<char> = pattern.to_ascii_lowercase().chars().collect();
-    let t: Vec<char> = text.to_ascii_lowercase().chars().collect();
+pub(crate) struct Glob {
+    p: Vec<char>,
+}
+
+impl Glob {
+    pub(crate) fn new(pattern: &str) -> Self {
+        Self {
+            p: pattern.to_ascii_lowercase().chars().collect(),
+        }
+    }
+
+    pub(crate) fn matches(&self, text: &str) -> bool {
+        glob_chars(&self.p, text)
+    }
+}
+
+#[cfg(test)]
+fn glob_match(pattern: &str, text: &str) -> bool {
+    Glob::new(pattern).matches(text)
+}
+
+fn glob_chars(p: &[char], text: &str) -> bool {
+    let t: Vec<char> = text.chars().map(|c| c.to_ascii_lowercase()).collect();
     let (mut pi, mut ti) = (0usize, 0usize);
     let (mut star, mut mark) = (usize::MAX, 0usize);
     while ti < t.len() {
@@ -179,6 +199,7 @@ fn extract_quoted(line: &str) -> Option<String> {
 }
 
 fn parse_wine_trace(stderr: &str, filter: Option<&str>) -> ParsedTrace {
+    let filter = filter.map(Glob::new);
     let mut loaded = BTreeSet::new();
     let mut calls = BTreeSet::new();
     let mut registry = BTreeSet::new();
@@ -193,9 +214,9 @@ fn parse_wine_trace(stderr: &str, filter: Option<&str>) -> ParsedTrace {
                           kind: TraceEventKind,
                           verb: String,
                           path_or_key: String| {
-        if let Some(f) = filter
-            && !glob_match(f, &path_or_key)
-            && !glob_match(f, &verb)
+        if let Some(f) = &filter
+            && !f.matches(&path_or_key)
+            && !f.matches(&verb)
         {
             return;
         }
@@ -265,10 +286,9 @@ fn parse_wine_trace(stderr: &str, filter: Option<&str>) -> ParsedTrace {
             continue;
         }
 
-        let lower = line.to_ascii_lowercase();
-        let unimplemented = lower.contains("not implemented")
-            || lower.contains("unimplemented")
-            || lower.contains("no implementation for");
+        let unimplemented = contains_ignore_ascii_case(line, "not implemented")
+            || contains_ignore_ascii_case(line, "unimplemented")
+            || contains_ignore_ascii_case(line, "no implementation for");
         if unimplemented && let Some(sym) = extract_unimplemented(line) {
             unsupported.insert(sym.clone());
             push_event(
@@ -290,6 +310,15 @@ fn parse_wine_trace(stderr: &str, filter: Option<&str>) -> ParsedTrace {
         timeline,
         timeline_truncated,
     }
+}
+
+fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    if n.is_empty() || h.len() < n.len() {
+        return n.is_empty();
+    }
+    h.windows(n.len()).any(|w| w.eq_ignore_ascii_case(n))
 }
 
 fn extract_channel_op(line: &str, tag: &str) -> Option<String> {

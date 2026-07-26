@@ -300,9 +300,13 @@ pub(crate) fn strings(file: &Path, min: &usize, format: Format) -> lsw_core::Res
     if format == Format::Json {
         crate::cmd::emit_json(&found);
     } else {
+        use std::io::Write;
+        let stdout = std::io::stdout().lock();
+        let mut out = std::io::BufWriter::new(stdout);
         for s in &found {
-            println!("{s}");
+            let _ = writeln!(out, "{s}");
         }
+        let _ = out.flush();
     }
     Ok(ExitCode::SUCCESS)
 }
