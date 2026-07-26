@@ -91,8 +91,20 @@ fn is_executable_file(path: &Path) -> bool {
 }
 
 pub(crate) fn find_wine() -> Option<PathBuf> {
+    if std::env::var_os("LSW_WINE").is_some() {
+        return wine_override().ok();
+    }
     let path_var = std::env::var_os("PATH")?;
     find_in_paths(WINE_ID, &path_var)
+}
+
+fn wine_override() -> Result<PathBuf, RuntimeError> {
+    let path = PathBuf::from(std::env::var_os("LSW_WINE").expect("checked by caller"));
+    if is_executable_file(&path) {
+        std::path::absolute(&path).map_err(|_| RuntimeError::WineOverrideInvalid { path })
+    } else {
+        Err(RuntimeError::WineOverrideInvalid { path })
+    }
 }
 
 pub(crate) fn parse_wine_version(raw: &str) -> String {
@@ -102,6 +114,9 @@ pub(crate) fn parse_wine_version(raw: &str) -> String {
 
 impl WineRuntime {
     fn wine_executable() -> Result<PathBuf, RuntimeError> {
+        if std::env::var_os("LSW_WINE").is_some() {
+            return wine_override();
+        }
         find_wine().ok_or(RuntimeError::WineNotFound)
     }
 

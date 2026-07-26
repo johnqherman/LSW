@@ -4,9 +4,16 @@ use std::path::PathBuf;
 pub enum RuntimeError {
     #[error(
         "LSW1501: wine executable not found on PATH; \
-         install wine via your package manager (e.g. 'pacman -S wine' or 'apt install wine')"
+         install wine via your package manager (e.g. 'pacman -S wine' or 'apt install wine'), \
+         or point LSW_WINE at a wine binary"
     )]
     WineNotFound,
+
+    #[error(
+        "LSW1508: LSW_WINE points at '{}' which is not an executable file; \
+         fix or unset LSW_WINE", path.display()
+    )]
+    WineOverrideInvalid { path: PathBuf },
 
     #[error(
         "LSW1502: wine prefix initialization failed: {detail}; \

@@ -152,6 +152,11 @@ const TABLE: &[Explanation] = &[
         hint: "list processes with `lsw ps` to get a valid pid",
     },
     Explanation {
+        code: "LSW1508",
+        summary: "the LSW_WINE override does not point at an executable wine binary",
+        hint: "set LSW_WINE to a real wine executable, or unset it to use wine from PATH",
+    },
+    Explanation {
         code: "LSW2001",
         summary: "no active environment is selected for this project",
         hint: "run `lsw use <name>` (or `lsw env create <name>` first)",
