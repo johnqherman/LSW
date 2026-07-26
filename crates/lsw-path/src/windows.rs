@@ -30,13 +30,12 @@ impl PathMapper {
                         }
                         comps.push(part.to_owned());
                     }
-                    Component::CurDir => {}
+                    Component::CurDir | Component::RootDir | Component::Prefix(_) => {}
                     Component::ParentDir => {
                         return Err(PathError::Unmapped {
                             path: path.to_string_lossy().into_owned(),
                         });
                     }
-                    Component::RootDir | Component::Prefix(_) => {}
                 }
             }
             return Ok(render_windows(drive, &comps));

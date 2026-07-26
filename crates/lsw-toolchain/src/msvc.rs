@@ -93,23 +93,13 @@ pub(crate) fn msvc_search_paths(root: &Path, lib_archs: &[&str]) -> (Vec<PathBuf
 }
 
 pub fn probe_msvc(tc: &ResolvedToolchain) -> ProbeReport {
-    let fail = |detail: String, compiled: bool| ProbeReport {
-        provider: CLANG_CL_ID.to_owned(),
-        compiled,
-        linked: false,
-        produced_pe: false,
-        detail,
-    };
+    let fail = |detail: String, compiled: bool| ProbeReport::failure(CLANG_CL_ID, detail, compiled);
 
-    let dir = match tempfile::tempdir() {
-        Ok(d) => d,
-        Err(e) => return fail(format!("cannot create temp dir: {e}"), false),
+    let (dir, src) = match crate::provider::probe_fixture(CLANG_CL_ID) {
+        Ok(v) => v,
+        Err(report) => return report,
     };
-    let src = dir.path().join("probe.c");
     let exe = dir.path().join("probe.exe");
-    if std::fs::write(&src, "int main(void){return 0;}\n").is_err() {
-        return fail("cannot write probe source".to_owned(), false);
-    }
 
     let mut cmd = Command::new(&tc.cc);
     cmd.args(&tc.c_flags);

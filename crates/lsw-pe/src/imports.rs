@@ -32,26 +32,33 @@ impl PeImage {
     }
 }
 
-fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<String>, PeError> {
+fn walk_import_descriptors<Pe: ImageNtHeaders>(
+    path: &Path,
+    data: &[u8],
+    mut visit: impl FnMut(
+        &object::read::pe::ImportTable,
+        &object::pe::ImageImportDescriptor,
+        String,
+        &mut usize,
+    ) -> Result<bool, PeError>,
+) -> Result<(), PeError> {
     let file = PeFile::<Pe>::parse(data).map_err(|e| PeError::malformed(path, e))?;
-    let mut dlls: Vec<String> = Vec::new();
     let Some(table) = file
         .import_table()
         .map_err(|e| PeError::malformed(path, e))?
     else {
-        return Ok(dlls);
+        return Ok(());
     };
     let mut descriptors = table
         .descriptors()
         .map_err(|e| PeError::malformed(path, e))?;
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut visited = 0usize;
     let mut scanned = 0usize;
     while let Some(descriptor) = descriptors
         .next()
         .map_err(|e| PeError::malformed(path, e))?
     {
-        if dlls.len() >= MAX_NAMES || visited >= MAX_NAMES || scanned >= MAX_SCAN_BYTES {
+        if visited >= MAX_NAMES || scanned >= MAX_SCAN_BYTES {
             break;
         }
         visited += 1;
@@ -60,10 +67,22 @@ fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
             .map_err(|e| PeError::malformed(path, e))?;
         scanned += raw.len();
         let name = decode_name(raw);
+        if !visit(&table, descriptor, name, &mut scanned)? {
+            break;
+        }
+    }
+    Ok(())
+}
+
+fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<String>, PeError> {
+    let mut dlls: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    walk_import_descriptors::<Pe>(path, data, |_, _, name, _| {
         if seen.insert(name.to_ascii_lowercase()) {
             dlls.push(name);
         }
-    }
+        Ok(dlls.len() < MAX_NAMES)
+    })?;
     Ok(dlls)
 }
 
@@ -110,32 +129,8 @@ fn imported_symbols_typed<Pe: ImageNtHeaders>(
     path: &Path,
     data: &[u8],
 ) -> Result<Vec<(String, String)>, PeError> {
-    let file = PeFile::<Pe>::parse(data).map_err(|e| PeError::malformed(path, e))?;
     let mut out: Vec<(String, String)> = Vec::new();
-    let Some(table) = file
-        .import_table()
-        .map_err(|e| PeError::malformed(path, e))?
-    else {
-        return Ok(out);
-    };
-    let mut descriptors = table
-        .descriptors()
-        .map_err(|e| PeError::malformed(path, e))?;
-    let mut visited = 0usize;
-    let mut scanned = 0usize;
-    while let Some(descriptor) = descriptors
-        .next()
-        .map_err(|e| PeError::malformed(path, e))?
-    {
-        if out.len() >= MAX_NAMES || visited >= MAX_NAMES || scanned >= MAX_SCAN_BYTES {
-            break;
-        }
-        visited += 1;
-        let dll_raw = table
-            .name(descriptor.name.get(LE))
-            .map_err(|e| PeError::malformed(path, e))?;
-        scanned += dll_raw.len();
-        let dll = decode_name(dll_raw);
+    walk_import_descriptors::<Pe>(path, data, |table, descriptor, dll, scanned| {
         let ilt = descriptor.original_first_thunk.get(LE);
         let first = if ilt != 0 {
             ilt
@@ -149,7 +144,7 @@ fn imported_symbols_typed<Pe: ImageNtHeaders>(
             .next::<Pe>()
             .map_err(|e| PeError::malformed(path, e))?
         {
-            if out.len() >= MAX_NAMES || scanned >= MAX_SCAN_BYTES {
+            if out.len() >= MAX_NAMES || *scanned >= MAX_SCAN_BYTES {
                 break;
             }
             let symbol = match table
@@ -158,12 +153,13 @@ fn imported_symbols_typed<Pe: ImageNtHeaders>(
             {
                 Import::Ordinal(n) => format!("#{n}"),
                 Import::Name(_hint, name) => {
-                    scanned += name.len();
+                    *scanned += name.len();
                     decode_name(name)
                 }
             };
             out.push((dll.clone(), symbol));
         }
-    }
+        Ok(out.len() < MAX_NAMES)
+    })?;
     Ok(out)
 }

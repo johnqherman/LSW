@@ -82,14 +82,11 @@ pub(crate) fn daemon(op: &DaemonCmd, dirs: &Dirs, format: Format) -> lsw_core::R
             match probe {
                 Ok(v) => {
                     if json {
-                        println!(
-                            "{}",
-                            serde_json::json!({
-                                "running": true,
-                                "protocol": v["protocol"],
-                                "version": v["version"],
-                            })
-                        );
+                        crate::cmd::emit_json(&serde_json::json!({
+                            "running": true,
+                            "protocol": v["protocol"],
+                            "version": v["version"],
+                        }));
                     } else {
                         println!(
                             "lswd running (protocol v{}, version {})",
@@ -99,7 +96,7 @@ pub(crate) fn daemon(op: &DaemonCmd, dirs: &Dirs, format: Format) -> lsw_core::R
                 }
                 Err(_) => {
                     if json {
-                        println!("{}", serde_json::json!({ "running": false }));
+                        crate::cmd::emit_json(&serde_json::json!({ "running": false }));
                     } else {
                         println!("lswd not running (start it with: lswd)");
                     }
@@ -112,7 +109,7 @@ pub(crate) fn daemon(op: &DaemonCmd, dirs: &Dirs, format: Format) -> lsw_core::R
             let mut client = lsw_core::daemonops::DaemonClient::connect(dirs)?;
             client.call("shutdown")?;
             if json {
-                println!("{}", serde_json::json!({ "stopping": true }));
+                crate::cmd::emit_json(&serde_json::json!({ "stopping": true }));
             } else {
                 println!("lswd stopping");
             }

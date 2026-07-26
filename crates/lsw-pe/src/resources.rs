@@ -20,7 +20,6 @@ const RT_VERSION: u16 = 16;
 const RT_MANIFEST: u16 = 24;
 const MAX_RESOURCE_VISITS: u32 = 100_000;
 const MAX_RESOURCE_DATA: usize = 4 * 1024 * 1024;
-const MAX_SECTIONS: usize = 96;
 const MAX_RESOURCE_PAYLOAD_TOTAL: usize = 64 * 1024 * 1024;
 
 pub fn resources(path: &Path) -> Result<Resources, PeError> {
@@ -39,25 +38,8 @@ fn rva_to_bytes<'d, Pe: ImageNtHeaders>(
     rva: u32,
     size: u32,
 ) -> Option<&'d [u8]> {
-    for section in file.section_table().iter().take(MAX_SECTIONS) {
-        let va = section.virtual_address.get(LE);
-        let vsize = section.virtual_size.get(LE);
-        let raw = section.size_of_raw_data.get(LE);
-        let span = vsize.max(raw);
-        if rva >= va && rva < va.saturating_add(span) {
-            let off = rva - va;
-            if off >= raw {
-                return None;
-            }
-            let ptr = section.pointer_to_raw_data.get(LE);
-            let start = ptr.checked_add(off)? as usize;
-            let avail = (raw - off) as usize;
-            let take = (size as usize).min(avail);
-            let end = start.checked_add(take)?;
-            return data.get(start..end.min(data.len()));
-        }
-    }
-    None
+    let bytes = file.section_table().pe_data_at(data, rva)?;
+    Some(&bytes[..bytes.len().min(size as usize)])
 }
 
 fn resources_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Resources, PeError> {

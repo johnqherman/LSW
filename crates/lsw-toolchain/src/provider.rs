@@ -80,29 +80,36 @@ pub fn select(
     Err(ToolchainError::NoWorkingProvider { attempts })
 }
 
-pub(crate) fn run_probe(provider_id: &str, tc: &ResolvedToolchain) -> ProbeReport {
-    let mut report = ProbeReport {
-        provider: provider_id.to_owned(),
-        compiled: false,
-        linked: false,
-        produced_pe: false,
-        detail: String::new(),
-    };
-
-    let dir = match tempfile::tempdir() {
-        Ok(d) => d,
-        Err(e) => {
-            report.detail = format!("cannot create probe temp directory: {e}");
-            return report;
-        }
-    };
+pub(crate) fn probe_fixture(
+    provider: &str,
+) -> std::result::Result<(tempfile::TempDir, std::path::PathBuf), ProbeReport> {
+    let dir = tempfile::tempdir().map_err(|e| {
+        ProbeReport::failure(
+            provider,
+            format!("cannot create probe temp directory: {e}"),
+            false,
+        )
+    })?;
     let src = dir.path().join("probe.c");
+    fs::write(&src, "int main(void) { return 0; }\n").map_err(|e| {
+        ProbeReport::failure(
+            provider,
+            format!("cannot write probe source {}: {e}", src.display()),
+            false,
+        )
+    })?;
+    Ok((dir, src))
+}
+
+pub(crate) fn run_probe(provider_id: &str, tc: &ResolvedToolchain) -> ProbeReport {
+    let mut report = ProbeReport::failure(provider_id, String::new(), false);
+
+    let (dir, src) = match probe_fixture(provider_id) {
+        Ok(v) => v,
+        Err(report) => return report,
+    };
     let obj = dir.path().join("probe.o");
     let exe = dir.path().join("out.exe");
-    if let Err(e) = fs::write(&src, "int main(void) { return 0; }\n") {
-        report.detail = format!("cannot write probe source {}: {e}", src.display());
-        return report;
-    }
 
     match run_tool(&tc.cc, |cmd| {
         cmd.args(&tc.c_flags)

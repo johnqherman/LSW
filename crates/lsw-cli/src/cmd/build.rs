@@ -33,13 +33,12 @@ pub(crate) fn build(
             .iter()
             .map(|a| a.display().to_string())
             .collect();
-        let payload = serde_json::json!({
+        crate::cmd::emit_json(&serde_json::json!({
             "system": format!("{:?}", report.system),
             "commands": report.commands,
             "artifacts": artifacts,
             "lock_written": report.lock_written,
-        });
-        println!("{payload}");
+        }));
     } else {
         println!("Build OK ({:?})", report.system);
         for a in &report.artifacts {
