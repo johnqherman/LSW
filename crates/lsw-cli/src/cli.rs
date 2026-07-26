@@ -340,7 +340,20 @@ pub(crate) enum Cmd {
     #[command(subcommand)]
     Ide(IdeCmd),
     /// Rebuild automatically when project source files change.
-    Watch,
+    Watch {
+        /// Run the project executable after each successful build.
+        #[arg(long, conflicts_with = "test")]
+        run: bool,
+        /// Run the test suite after each successful build.
+        #[arg(long)]
+        test: bool,
+    },
+    /// Remove build output (build/, dist/, and the generated resource dir).
+    Clean {
+        /// Also remove downloaded [dependencies] from deps/.
+        #[arg(long)]
+        deps: bool,
+    },
     /// Diagnose host, runtime, toolchain, and project health.
     Doctor,
     /// Generate shell completion scripts (bash, zsh, fish, powershell, elvish).

@@ -46,12 +46,61 @@ fn rebuild(project: &Project, env: &Environment) -> Option<Vec<PathBuf>> {
     }
 }
 
-pub fn watch(project: &Project, env: &Environment) -> Result<()> {
+#[derive(Debug, Default, Clone, Copy)]
+pub struct WatchOptions {
+    pub run: bool,
+    pub test: bool,
+}
+
+fn after_build(
+    project: &Project,
+    env: &Environment,
+    opts: WatchOptions,
+    outputs: &[PathBuf],
+    child: &mut Option<std::process::Child>,
+) {
+    if let Some(mut old) = child.take() {
+        let _ = old.kill();
+        let _ = old.wait();
+    }
+    if opts.test {
+        match crate::testops::test(project, env, &crate::testops::TestOptions::default()) {
+            Ok(t) => println!(
+                "[watch] tests: {} passed, {} failed",
+                t.tests_passed.unwrap_or(0),
+                t.tests_failed.unwrap_or(0)
+            ),
+            Err(e) => eprintln!("[watch] tests failed: {e}"),
+        }
+    } else if opts.run {
+        let exes: Vec<&PathBuf> = outputs
+            .iter()
+            .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")))
+            .collect();
+        match exes.as_slice() {
+            [only] => match crate::runops::spawn_in_prefix(env, project, only) {
+                Ok(c) => {
+                    println!("[watch] running {}", only.display());
+                    *child = Some(c);
+                }
+                Err(e) => eprintln!("[watch] run failed: {e}"),
+            },
+            [] => eprintln!("[watch] no .exe to run"),
+            _ => eprintln!("[watch] multiple executables; --run needs exactly one"),
+        }
+    }
+}
+
+pub fn watch(project: &Project, env: &Environment, opts: WatchOptions) -> Result<()> {
     println!(
         "[watch] watching {} (Ctrl-C to stop)",
         project.root.display()
     );
+    let mut child: Option<std::process::Child> = None;
     let mut outputs = rebuild(project, env).unwrap_or_default();
+    if !outputs.is_empty() {
+        after_build(project, env, opts, &outputs, &mut child);
+    }
 
     let (tx, rx) = mpsc::sync_channel(8192);
     let mut watcher = notify::recommended_watcher(move |res| {
@@ -81,6 +130,7 @@ pub fn watch(project: &Project, env: &Environment) -> Result<()> {
             && let Some(next) = rebuild(project, env)
         {
             outputs = next;
+            after_build(project, env, opts, &outputs, &mut child);
             let drain_deadline = Instant::now() + Duration::from_secs(2);
             while Instant::now() < drain_deadline
                 && rx.recv_timeout(Duration::from_millis(500)).is_ok()

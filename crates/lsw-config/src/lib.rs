@@ -192,11 +192,25 @@ mod tests {
                 version: "unknown".into(),
                 sha256: "ef".repeat(32),
             },
+            dependencies: std::collections::BTreeMap::from([(
+                "zlib".to_owned(),
+                LockedDep {
+                    version: "1.3.1-1".into(),
+                    sha256: "12".repeat(32),
+                },
+            )]),
         };
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(PROJECT_LOCKFILE);
         lock.save(&path).unwrap();
         assert_eq!(Lockfile::load(&path).unwrap(), lock);
+
+        let no_deps = "version = 1\nenvironment_format = 1\ntarget_arch = \"x86_64\"\n\
+             [toolchain]\nprovider = \"llvm-mingw\"\nversion = \"1\"\nsha256 = \"a\"\n\
+             [runtime]\nprovider = \"wine\"\nversion = \"9\"\nsha256 = \"b\"\n\
+             [sysroot]\nprovider = \"mingw-w64\"\nversion = \"host\"\nsha256 = \"c\"\n";
+        let parsed: Lockfile = toml::from_str(no_deps).unwrap();
+        assert!(parsed.dependencies.is_empty());
     }
 
     #[test]

@@ -280,6 +280,25 @@ fn env_overrides(
     out
 }
 
+pub(crate) fn spawn_in_prefix(
+    env: &Environment,
+    project: &Project,
+    program: &Path,
+) -> Result<std::process::Child> {
+    WineRuntime
+        .spawn(&lsw_runtime::ExecutionRequest {
+            program: program.to_path_buf(),
+            args: Vec::new(),
+            prefix: env.layout.prefix(),
+            cwd: windows_cwd(env, Some(project)),
+            env: windows_env(env, Some(project)),
+            sandbox: None,
+            display: lsw_runtime::DisplayMode::Inherit,
+            emulate: crate::emulateops::resolve(env.manifest.target_arch)?,
+        })
+        .map_err(Into::into)
+}
+
 fn windows_env(env: &Environment, project: Option<&Project>) -> Vec<(String, String)> {
     let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
     let user = windows_user();

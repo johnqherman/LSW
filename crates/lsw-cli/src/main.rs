@@ -65,7 +65,8 @@ fn note_format_gaps(cli: &Cli) {
             | Cmd::Kill { .. }
             | Cmd::Dap
             | Cmd::Ide(_)
-            | Cmd::Watch
+            | Cmd::Watch { .. }
+            | Cmd::Clean { .. }
             | Cmd::Completions { .. }
             | Cmd::Man { .. }
             | Cmd::Install { .. }
@@ -255,7 +256,8 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Plugin(op) => cmd::integration::plugin(op, cli.format),
         Cmd::Sdk(op) => cmd::lang::sdk(op, &dirs, cli.format),
         Cmd::Ide(op) => cmd::integration::ide(op, &dirs),
-        Cmd::Watch => cmd::tooling::watch(&dirs),
+        Cmd::Watch { run, test } => cmd::tooling::watch(*run, *test, &dirs),
+        Cmd::Clean { deps } => cmd::tooling::clean(*deps),
         Cmd::Doctor => cmd::tooling::doctor(&dirs, cli.format),
         Cmd::Completions { shell } => cmd::tooling::completions(shell),
         Cmd::Man { dir } => cmd::tooling::man(dir),

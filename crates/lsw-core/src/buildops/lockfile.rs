@@ -33,7 +33,7 @@ pub(crate) fn check_lock(project: &Project, env: &Environment) -> Result<()> {
         return Ok(());
     }
     let recorded = Lockfile::load(&path)?;
-    let current = envops::lockfile_for(env)?;
+    let current = envops::lockfile_for(env, Some(project))?;
     if recorded != current {
         return Err(Error::LockMismatch {
             environment: env.name.clone(),
@@ -44,7 +44,7 @@ pub(crate) fn check_lock(project: &Project, env: &Environment) -> Result<()> {
 }
 
 pub(crate) fn sync_lockfile(project: &Project, env: &Environment, update: bool) -> Result<bool> {
-    let current = envops::lockfile_for(env)?;
+    let current = envops::lockfile_for(env, Some(project))?;
     let path = project.lockfile_path();
     if !path.is_file() || update {
         current.save(&path)?;
@@ -85,6 +85,25 @@ fn lock_diff(recorded: &Lockfile, current: &Lockfile) -> String {
             "  arch: locked {} but environment targets {}",
             recorded.target_arch, current.target_arch
         ));
+    }
+    if recorded.dependencies != current.dependencies {
+        for (name, cur) in &current.dependencies {
+            match recorded.dependencies.get(name) {
+                None => lines.push(format!("  dependency {name}: not in lsw.lock")),
+                Some(rec) if rec != cur => lines.push(format!(
+                    "  dependency {name}: locked {} but installed {}",
+                    rec.version, cur.version
+                )),
+                _ => {}
+            }
+        }
+        for name in recorded.dependencies.keys() {
+            if !current.dependencies.contains_key(name) {
+                lines.push(format!(
+                    "  dependency {name}: locked but no longer installed"
+                ));
+            }
+        }
     }
     lines.join("\n")
 }

@@ -8,9 +8,28 @@ use crate::cli::{Cli, Format};
 use crate::install::{default_prefix, run_install, write_man_page};
 use crate::{active_env, color, project};
 
-pub(crate) fn watch(dirs: &Dirs) -> lsw_core::Result<ExitCode> {
+pub(crate) fn watch(run: bool, test: bool, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
-    lsw_core::watchops::watch(&p, &env)?;
+    lsw_core::watchops::watch(&p, &env, lsw_core::watchops::WatchOptions { run, test })?;
+    Ok(ExitCode::SUCCESS)
+}
+
+pub(crate) fn clean(deps: bool) -> lsw_core::Result<ExitCode> {
+    let p = crate::project()?;
+    let mut targets = vec![p.root.join("build"), p.root.join("dist")];
+    if deps {
+        targets.push(p.root.join("deps"));
+    }
+    for dir in targets {
+        if std::fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_symlink()) {
+            eprintln!("skipping symlink {}", dir.display());
+            continue;
+        }
+        if dir.is_dir() {
+            std::fs::remove_dir_all(&dir).map_err(|e| lsw_core::Error::io(dir.clone(), e))?;
+            println!("removed {}", dir.display());
+        }
+    }
     Ok(ExitCode::SUCCESS)
 }
 
