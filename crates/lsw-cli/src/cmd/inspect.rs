@@ -155,10 +155,7 @@ pub(crate) fn crash(
 pub(crate) fn audit(file: &Path, format: Format) -> lsw_core::Result<ExitCode> {
     let report = lsw_core::auditops::audit(file)?;
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).expect("serializes")
-        );
+        crate::cmd::emit_json(&report);
     } else {
         println!("\n{}  {}\n", color::bold("LSW AUDIT"), file.display());
         for c in &report.checks {
@@ -184,10 +181,7 @@ pub(crate) fn audit(file: &Path, format: Format) -> lsw_core::Result<ExitCode> {
 pub(crate) fn exports(file: &Path, format: Format) -> lsw_core::Result<ExitCode> {
     let names = lsw_core::auditops::exports(file)?;
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&names).expect("serializes")
-        );
+        crate::cmd::emit_json(&names);
     } else if names.is_empty() {
         println!("no exports (not a DLL, or no export table)");
     } else {
@@ -200,20 +194,14 @@ pub(crate) fn exports(file: &Path, format: Format) -> lsw_core::Result<ExitCode>
 
 pub(crate) fn sbom(file: &Path) -> lsw_core::Result<ExitCode> {
     let bom = lsw_core::sbomops::sbom(file)?;
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&bom).expect("serializes")
-    );
+    crate::cmd::emit_json(&bom);
     Ok(ExitCode::SUCCESS)
 }
 
 pub(crate) fn diff(a: &Path, b: &Path, format: Format) -> lsw_core::Result<ExitCode> {
     let report = lsw_core::diffops::diff(a, b)?;
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).expect("serializes")
-        );
+        crate::cmd::emit_json(&report);
     } else {
         let mut any = false;
         for (label, d) in [
@@ -255,10 +243,7 @@ pub(crate) fn size(
 ) -> lsw_core::Result<ExitCode> {
     let report = lsw_core::sizeops::size(file, baseline.as_deref(), *max_growth)?;
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).expect("serializes")
-        );
+        crate::cmd::emit_json(&report);
     } else {
         println!(
             "\nLSW SIZE  {}  ({} bytes)\n",
@@ -307,20 +292,13 @@ pub(crate) fn size(
             );
         }
     }
-    Ok(if report.exceeded.is_empty() {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::FAILURE
-    })
+    crate::cmd::exit_ok(report.exceeded.is_empty())
 }
 
 pub(crate) fn strings(file: &Path, min: &usize, format: Format) -> lsw_core::Result<ExitCode> {
     let found = lsw_core::stringsops::strings(file, *min)?;
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&found).expect("serializes")
-        );
+        crate::cmd::emit_json(&found);
     } else {
         for s in &found {
             println!("{s}");
@@ -338,10 +316,7 @@ pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
             let env = active_env(dirs).ok().map(|(_, e)| e);
             let root = lsw_core::depsops::tree(env.as_ref(), &file)?;
             if format == Format::Json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&root).expect("serializes")
-                );
+                crate::cmd::emit_json(&root);
             } else {
                 print_dep_tree(&root, 0);
             }
@@ -352,10 +327,7 @@ pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
             let (p, env) = active_env(dirs)?;
             let pkg = lsw_core::depsops::add(&p, env.manifest.target_arch, dirs, name)?;
             if format == Format::Json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&pkg).expect("serializes")
-                );
+                crate::cmd::emit_json(&pkg);
             } else {
                 println!(
                     "{} added {} {}",
@@ -381,21 +353,14 @@ pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
             } else {
                 eprintln!("error: {name} is not an installed dependency");
             }
-            Ok(if removed {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::FAILURE
-            })
+            crate::cmd::exit_ok(removed)
         }
 
         DepsCmd::List => {
             let (p, _env) = active_env(dirs)?;
             let deps = lsw_core::depsops::list(&p);
             if format == Format::Json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&deps).expect("serializes")
-                );
+                crate::cmd::emit_json(&deps);
             } else if deps.is_empty() {
                 println!("no dependencies (add one with: lsw deps add <name>)");
             } else {

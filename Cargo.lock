@@ -565,6 +565,7 @@ dependencies = [
  "clap_complete",
  "clap_mangen",
  "lsw-core",
+ "serde",
  "serde_json",
  "tracing-subscriber",
 ]

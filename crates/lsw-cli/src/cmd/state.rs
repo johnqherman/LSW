@@ -14,10 +14,7 @@ pub(crate) fn registry(
     let json = format == Format::Json;
     let emit = |value: serde_json::Value, text: String| {
         if json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&value).expect("serializes")
-            );
+            crate::cmd::emit_json(&value);
         } else {
             println!("{text}");
         }
@@ -77,10 +74,7 @@ pub(crate) fn ps(all: bool, dirs: &Dirs, format: Format) -> lsw_core::Result<Exi
         processes.retain(|p| !lsw_core::psops::is_wine_infrastructure(&p.command));
     }
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&processes).expect("serializes")
-        );
+        crate::cmd::emit_json(&processes);
     } else if processes.is_empty() {
         println!("No processes running in environment '{}'", env.name);
         if !all {
@@ -139,10 +133,7 @@ pub(crate) fn service(op: &ServiceCmd, dirs: &Dirs, format: Format) -> lsw_core:
         ServiceCmd::Query { name } => {
             let status = lsw_core::serviceops::query(&env, name)?;
             if json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&status).expect("serializes")
-                );
+                crate::cmd::emit_json(&status);
             } else {
                 println!("{:<24} {}", status.name, status.state);
             }

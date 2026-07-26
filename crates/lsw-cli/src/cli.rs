@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use lsw_core::{Domain, TargetArch};
 
 #[derive(Parser)]
@@ -70,36 +70,16 @@ pub(crate) enum Cmd {
         program: Option<PathBuf>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
-        /// Force the host (Linux) execution domain.
-        #[arg(long, conflicts_with = "windows")]
-        host: bool,
-        /// Force the Windows execution domain.
-        #[arg(long)]
-        windows: bool,
-        /// Kernel sandbox for Windows execution ("strict").
-        #[arg(long)]
-        sandbox: Option<SandboxArg>,
-        /// Run GUI programs under a virtual display (headless CI).
-        #[arg(long)]
-        headless: bool,
+        #[command(flatten)]
+        domain: DomainFlags,
         /// On nonzero/signal exit, capture a minidump at <program>.dmp and decode it.
         #[arg(long)]
         dump_on_crash: bool,
     },
     /// Run a command in an explicit execution domain.
     Exec {
-        /// Host (Linux) domain.
-        #[arg(long, conflicts_with = "windows")]
-        host: bool,
-        /// Windows domain.
-        #[arg(long)]
-        windows: bool,
-        /// Kernel sandbox for Windows execution ("strict").
-        #[arg(long)]
-        sandbox: Option<SandboxArg>,
-        /// Run GUI programs under a virtual display (headless CI).
-        #[arg(long)]
-        headless: bool,
+        #[command(flatten)]
+        domain: DomainFlags,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
         command: Vec<String>,
     },
@@ -582,6 +562,28 @@ impl From<ArchArg> for TargetArch {
             ArchArg::Armv7 => TargetArch::Armv7,
             ArchArg::Arm64Ec => TargetArch::Arm64Ec,
         }
+    }
+}
+
+#[derive(Args)]
+pub struct DomainFlags {
+    /// Force the host (Linux) execution domain.
+    #[arg(long, conflicts_with = "windows")]
+    pub host: bool,
+    /// Force the Windows execution domain.
+    #[arg(long)]
+    pub windows: bool,
+    /// Kernel sandbox for Windows execution ("strict").
+    #[arg(long)]
+    pub sandbox: Option<SandboxArg>,
+    /// Run GUI programs under a virtual display (headless CI).
+    #[arg(long)]
+    pub headless: bool,
+}
+
+impl DomainFlags {
+    pub(crate) fn domain(&self) -> Domain {
+        domain_from_flags(self.host, self.windows)
     }
 }
 

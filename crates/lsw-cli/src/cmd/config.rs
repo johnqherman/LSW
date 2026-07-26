@@ -9,10 +9,7 @@ pub(crate) fn config(op: &ConfigCmd, format: Format) -> lsw_core::Result<ExitCod
             let p = project()?;
             let findings = lsw_core::configops::check(&p.root)?;
             if format == Format::Json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&findings).expect("serializes")
-                );
+                crate::cmd::emit_json(&findings);
             } else if findings.is_empty() {
                 println!("lsw.toml: no problems found");
             } else {

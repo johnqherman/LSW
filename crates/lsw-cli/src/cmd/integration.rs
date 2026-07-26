@@ -10,10 +10,7 @@ pub(crate) fn ide(op: &IdeCmd, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
         IdeCmd::Env => {
             let (p, env) = active_env(dirs)?;
             let description = lsw_core::ideops::ide_env(&env, Some(&p))?;
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&description).expect("serializes")
-            );
+            crate::cmd::emit_json(&description);
             Ok(ExitCode::SUCCESS)
         }
     }
@@ -64,21 +61,14 @@ pub(crate) fn plugin(op: &PluginCmd, format: Format) -> lsw_core::Result<ExitCod
                 }
             }
             if json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&rows).expect("serializes")
-                );
+                crate::cmd::emit_json(&rows);
             } else if discovered.is_empty() {
                 println!(
                     "No provider plugins found (looked for lsw-provider-* on PATH, protocol v{})",
                     lsw_core::pluginops::PROTOCOL_VERSION
                 );
             }
-            Ok(if any_failed {
-                ExitCode::FAILURE
-            } else {
-                ExitCode::SUCCESS
-            })
+            crate::cmd::exit_ok(!any_failed)
         }
     }
 }

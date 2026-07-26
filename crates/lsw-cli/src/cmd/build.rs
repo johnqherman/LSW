@@ -3,8 +3,10 @@ use std::process::ExitCode;
 
 use lsw_core::{BuildOptions, Dirs};
 
-use crate::cli::{Format, SandboxArg, display_from, domain_from_flags, sandbox_from};
+use crate::cli::{DomainFlags, Format, display_from, sandbox_from};
 use crate::{active_env, exit_from_status, note_runtime_domain};
+
+use super::{Picked, pick_built};
 
 pub(crate) fn build(
     system: &Option<String>,
@@ -53,9 +55,7 @@ pub(crate) fn build(
 pub(crate) fn run(
     program: &Option<PathBuf>,
     args: &[String],
-    domain: lsw_core::Domain,
-    sandbox: &Option<SandboxArg>,
-    headless: &bool,
+    domain: &DomainFlags,
     dump_on_crash: &bool,
     dirs: &Dirs,
 ) -> lsw_core::Result<ExitCode> {
@@ -64,24 +64,18 @@ pub(crate) fn run(
         Some(program) => program.clone(),
         None => {
             let build = lsw_core::build(&p, &env, &BuildOptions::default())?;
-            let mut exes: Vec<&PathBuf> = build
-                .artifacts
-                .iter()
-                .filter(|a| a.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")))
-                .collect();
-            exes.sort();
-            match exes.as_slice() {
-                [] => {
+            match pick_built(&build, true) {
+                Picked::None => {
                     eprintln!("the build produced no .exe to run; pass a program explicitly");
                     return Ok(ExitCode::FAILURE);
                 }
-                [only] => {
+                Picked::One(only) => {
                     println!("Running {}", only.display());
-                    (*only).clone()
+                    only
                 }
-                many => {
+                Picked::Many(many) => {
                     eprintln!("the build produced multiple executables; pick one:");
-                    for exe in many {
+                    for exe in &many {
                         eprintln!("  lsw run {}", exe.display());
                     }
                     return Ok(ExitCode::FAILURE);
@@ -94,9 +88,9 @@ pub(crate) fn run(
         Some(&p),
         &program,
         args,
-        domain,
-        sandbox_from(*sandbox),
-        display_from(*headless),
+        domain.domain(),
+        sandbox_from(domain.sandbox),
+        display_from(domain.headless),
     )?;
     crate::note_crash(&report.status);
     note_runtime_domain(&report);
@@ -130,24 +124,20 @@ fn capture_crash_dump(env: &lsw_core::Environment, program: &std::path::Path, ar
 }
 
 pub(crate) fn exec(
-    host: &bool,
-    windows: &bool,
-    sandbox: &Option<SandboxArg>,
-    headless: &bool,
+    domain: &DomainFlags,
     command: &[String],
     dirs: &Dirs,
 ) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
-    let domain = domain_from_flags(*host, *windows);
     let (program, args) = command.split_first().expect("clap enforces non-empty");
     let report = lsw_core::run(
         &env,
         Some(&p),
         &PathBuf::from(program),
         args,
-        domain,
-        sandbox_from(*sandbox),
-        display_from(*headless),
+        domain.domain(),
+        sandbox_from(domain.sandbox),
+        display_from(domain.headless),
     )?;
     crate::note_crash(&report.status);
     note_runtime_domain(&report);
@@ -164,10 +154,7 @@ pub(crate) fn test(headless: &bool, dirs: &Dirs, format: Format) -> lsw_core::Re
         },
     )?;
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).expect("report serializes")
-        );
+        crate::cmd::emit_json(&report);
     } else {
         let outcome = |o: lsw_core::Outcome| match o {
             lsw_core::Outcome::Pass => "PASS",
@@ -203,13 +190,7 @@ pub(crate) fn test(headless: &bool, dirs: &Dirs, format: Format) -> lsw_core::Re
         };
         println!("\nCompatibility status:\n  {compat}");
     }
-    Ok(
-        if report.compatibility == lsw_core::CompatStatus::LocalCompatibilityVerified {
-            ExitCode::SUCCESS
-        } else {
-            ExitCode::FAILURE
-        },
-    )
+    crate::cmd::exit_ok(report.compatibility == lsw_core::CompatStatus::LocalCompatibilityVerified)
 }
 
 pub(crate) fn shell(windows: &bool, dirs: &Dirs) -> lsw_core::Result<ExitCode> {

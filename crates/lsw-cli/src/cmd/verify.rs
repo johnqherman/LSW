@@ -22,10 +22,7 @@ pub(crate) fn verify(
     }
     let report = lsw_core::verifyops::verify(&p, &env)?;
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).expect("serializes")
-        );
+        crate::cmd::emit_json(&report);
     } else {
         let status = match report.status {
             lsw_core::verifyops::VerifyStatus::WindowsVerified => "WINDOWS_VERIFIED",
@@ -76,10 +73,7 @@ fn verify_reproducible(
 ) -> lsw_core::Result<ExitCode> {
     let report = lsw_core::reproops::verify_reproducible(p, env, artifact)?;
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).expect("serializes")
-        );
+        crate::cmd::emit_json(&report);
     } else {
         println!("\nLSW REPRODUCIBLE-BUILD CHECK (built twice)\n");
         for a in &report.artifacts {
@@ -103,11 +97,7 @@ fn verify_reproducible(
             }
         );
     }
-    Ok(if report.identical {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::FAILURE
-    })
+    crate::cmd::exit_ok(report.identical)
 }
 
 pub(crate) fn compat(
@@ -137,13 +127,7 @@ pub(crate) fn compat(
         None
     };
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(
-                &serde_json::json!({ "compat": report, "native": native })
-            )
-            .expect("serializes")
-        );
+        crate::cmd::emit_json(&serde_json::json!({ "compat": report, "native": native }));
     } else {
         println!("\nLSW Compatibility Report  {}\n", program.display());
         println!("Required imported DLLs:  {}", report.imported_dlls);
@@ -221,10 +205,7 @@ pub(crate) fn compat_query(key: &str, dirs: &Dirs, format: Format) -> lsw_core::
                 lsw_core::compatdb::Verdict::Unsupported => "UNSUPPORTED",
             };
             if format == Format::Json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(entry).expect("serializes")
-                );
+                crate::cmd::emit_json(entry);
             } else {
                 println!("{key}: {verdict}");
                 println!(
@@ -294,10 +275,7 @@ pub(crate) fn trace(
             eprintln!("lsw: timeline truncated at the event cap");
         }
     } else if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).expect("serializes")
-        );
+        crate::cmd::emit_json(&report);
     } else {
         println!("\nLSW TRACE  {}\n", program.display());
         println!("Imported DLLs: {}", report.imported_dlls.len());
