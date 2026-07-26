@@ -30,6 +30,21 @@ pub enum BuildSystem {
     Explicit,
 }
 
+impl BuildSystem {
+    pub fn label(self) -> &'static str {
+        match self {
+            BuildSystem::Cmake => "CMake",
+            BuildSystem::Cargo => "Cargo",
+            BuildSystem::Make => "Make",
+            BuildSystem::Ninja => "Ninja",
+            BuildSystem::Meson => "Meson",
+            BuildSystem::Zig => "Zig",
+            BuildSystem::Dotnet => ".NET",
+            BuildSystem::Explicit => "explicit",
+        }
+    }
+}
+
 fn check_case_sensitivity(project: &Project) -> Result<()> {
     let hazards = crate::caseops::hazards(&project.root);
     if hazards.is_empty() {

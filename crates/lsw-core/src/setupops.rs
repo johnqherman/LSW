@@ -24,7 +24,7 @@ pub const DEFAULT_ENV_NAME: &str = "windows-x64";
 pub fn setup(dirs: &Dirs, start: &Path) -> Result<SetupReport> {
     let (mut project, manifest_created) = discover_or_create(start)?;
     let build_system =
-        crate::buildops::detect_build_system(&project.root).map(|s| format!("{s:?}"));
+        crate::buildops::detect_build_system(&project.root).map(|s| s.label().to_owned());
 
     let mut environment_created = false;
     let env = match envops::resolve_active(dirs, &project) {
