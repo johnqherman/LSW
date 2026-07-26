@@ -25,14 +25,14 @@ const MAX_UNIT_SCAN: usize = 100_000;
 const MAX_STRING_BYTES: usize = 256 * 1024 * 1024;
 const MAX_PE_BYTES: u64 = 512 * 1024 * 1024;
 
-type LineTable = BTreeMap<(String, u32), Vec<(Arc<str>, u64)>>;
+type LineTable = BTreeMap<String, BTreeMap<u32, Vec<(Arc<str>, u64)>>>;
 type AddrRow = (u64, Option<(Arc<str>, u32)>);
 
 pub(crate) struct DebugInfo {
     pub image_base: u64,
     lines: LineTable,
     by_addr: Vec<AddrRow>,
-    funcs: Vec<(u64, u64, String)>,
+    funcs: Vec<(u64, u64, Arc<str>)>,
 }
 
 fn norm(path: &str) -> String {
@@ -88,7 +88,7 @@ impl DebugInfo {
 
         let mut lines = LineTable::new();
         let mut by_addr: Vec<AddrRow> = Vec::new();
-        let mut funcs: Vec<(u64, u64, String)> = Vec::new();
+        let mut funcs: Vec<(u64, u64, Arc<str>)> = Vec::new();
         let mut func_visited = 0usize;
         let mut rows_seen = 0usize;
         let mut scan_budget = MAX_UNIT_SCAN;
@@ -116,7 +116,7 @@ impl DebugInfo {
                 continue;
             };
             let comp_dir = unit.comp_dir.and_then(bounded_string).unwrap_or_default();
-            let mut file_cache: HashMap<u64, Arc<str>> = HashMap::new();
+            let mut file_cache: HashMap<u64, (Arc<str>, Arc<str>)> = HashMap::new();
             let mut rows = program.rows();
             while let Ok(Some((header, row))) = rows.next_row() {
                 if rows_seen >= MAX_LINE_ROWS {
@@ -134,7 +134,7 @@ impl DebugInfo {
                 let Ok(line) = u32::try_from(line.get()) else {
                     continue;
                 };
-                let file: Arc<str> = match file_cache.entry(row.file_index()) {
+                let (file, norm_key) = match file_cache.entry(row.file_index()) {
                     std::collections::hash_map::Entry::Occupied(e) => e.get().clone(),
                     std::collections::hash_map::Entry::Vacant(e) => {
                         let resolved = cap_len(
@@ -144,21 +144,29 @@ impl DebugInfo {
                         );
                         string_bytes =
                             string_bytes.saturating_add(resolved.len().saturating_mul(2));
-                        e.insert(Arc::from(resolved)).clone()
+                        let norm_key: Arc<str> = Arc::from(norm(&resolved));
+                        e.insert((Arc::from(resolved), norm_key)).clone()
                     }
                 };
                 let addr = row.address();
+                if !lines.contains_key(&*norm_key) {
+                    lines.insert(norm_key.to_string(), BTreeMap::new());
+                }
                 lines
-                    .entry((norm(&file), line))
+                    .get_mut(&*norm_key)
+                    .expect("inserted above")
+                    .entry(line)
                     .or_default()
                     .push((file.clone(), addr));
                 by_addr.push((addr, Some((file, line))));
             }
         }
 
-        for v in lines.values_mut() {
-            v.sort_by_key(|(_, a)| *a);
-            v.dedup();
+        for by_line in lines.values_mut() {
+            for v in by_line.values_mut() {
+                v.sort_by_key(|(_, a)| *a);
+                v.dedup();
+            }
         }
         by_addr.sort_by_key(|(a, _)| *a);
         let mut collapsed: Vec<AddrRow> = Vec::with_capacity(by_addr.len());
@@ -184,12 +192,13 @@ impl DebugInfo {
     }
 
     pub(crate) fn line_to_addr(&self, file: &str, line: u32) -> Option<u64> {
+        let by_line = self.lines.get(&norm(file))?;
         let mut best: Option<(usize, u32, u64)> = None;
         for delta in 0..=20 {
             let Some(target) = line.checked_add(delta) else {
                 break;
             };
-            let Some(v) = self.lines.get(&(norm(file), target)) else {
+            let Some(v) = by_line.get(&target) else {
                 continue;
             };
             for (path, addr) in v {
@@ -206,24 +215,24 @@ impl DebugInfo {
         best.map(|(_, _, addr)| addr)
     }
 
-    pub(crate) fn addr_to_line(&self, addr: u64) -> Option<(String, u32)> {
+    pub(crate) fn addr_to_line(&self, addr: u64) -> Option<(Arc<str>, u32)> {
         let idx = match self.by_addr.binary_search_by_key(&addr, |(a, _)| *a) {
             Ok(i) => i,
             Err(0) => return None,
             Err(i) => i - 1,
         };
         let (file, line) = self.by_addr.get(idx)?.1.as_ref()?;
-        Some((file.to_string(), *line))
+        Some((file.clone(), *line))
     }
 
-    fn containing_func(&self, addr: u64) -> Option<&(u64, u64, String)> {
+    fn containing_func(&self, addr: u64) -> Option<&(u64, u64, Arc<str>)> {
         const MAX_OVERLAP_SCAN: usize = 1_000_000;
         let upper = self.funcs.partition_point(|(a, _, _)| *a <= addr);
         if upper == 0 {
             return None;
         }
         let start = upper.saturating_sub(MAX_OVERLAP_SCAN);
-        let mut best: Option<&(u64, u64, String)> = None;
+        let mut best: Option<&(u64, u64, Arc<str>)> = None;
         for f in self.funcs[start..upper].iter().rev() {
             if f.0 <= addr && addr < f.1 {
                 match best {
@@ -235,7 +244,7 @@ impl DebugInfo {
         best
     }
 
-    pub(crate) fn addr_to_func(&self, addr: u64) -> Option<String> {
+    pub(crate) fn addr_to_func(&self, addr: u64) -> Option<Arc<str>> {
         self.containing_func(addr).map(|(_, _, name)| name.clone())
     }
 
@@ -248,7 +257,7 @@ impl DebugInfo {
 fn collect_functions<R: gimli::Reader>(
     dwarf: &gimli::Dwarf<R>,
     unit: &gimli::Unit<R>,
-    out: &mut Vec<(u64, u64, String)>,
+    out: &mut Vec<(u64, u64, Arc<str>)>,
     visited: &mut usize,
     scan_budget: &mut usize,
     string_bytes: &mut usize,
@@ -262,9 +271,9 @@ fn collect_functions<R: gimli::Reader>(
             continue;
         }
         *visited += 1;
-        let name = cap_len(
+        let name: Arc<str> = Arc::from(cap_len(
             func_name(dwarf, unit, entry, scan_budget).unwrap_or_else(|| "<anonymous>".to_owned()),
-        );
+        ));
         let Ok(mut ranges) = dwarf.die_ranges(unit, entry) else {
             continue;
         };
@@ -442,11 +451,14 @@ mod tests {
         let info = DebugInfo {
             image_base: 0,
             lines: BTreeMap::from([(
-                ("util.c".to_owned(), 10),
-                vec![
-                    (Arc::from("/src/client/util.c"), 0x2000),
-                    (Arc::from("/src/server/util.c"), 0x1000),
-                ],
+                "util.c".to_owned(),
+                BTreeMap::from([(
+                    10,
+                    vec![
+                        (Arc::from("/src/client/util.c"), 0x2000),
+                        (Arc::from("/src/server/util.c"), 0x1000),
+                    ],
+                )]),
             )]),
             by_addr: Vec::new(),
             funcs: Vec::new(),
@@ -471,16 +483,13 @@ mod tests {
     fn line_to_addr_ranks_suffix_over_delta() {
         let info = DebugInfo {
             image_base: 0,
-            lines: BTreeMap::from([
-                (
-                    ("foo.c".to_owned(), 11),
-                    vec![(Arc::from("/b/foo.c"), 0x200)],
-                ),
-                (
-                    ("foo.c".to_owned(), 12),
-                    vec![(Arc::from("/a/foo.c"), 0x300)],
-                ),
-            ]),
+            lines: BTreeMap::from([(
+                "foo.c".to_owned(),
+                BTreeMap::from([
+                    (11, vec![(Arc::from("/b/foo.c"), 0x200)]),
+                    (12, vec![(Arc::from("/a/foo.c"), 0x300)]),
+                ]),
+            )]),
             by_addr: Vec::new(),
             funcs: Vec::new(),
         };
@@ -499,8 +508,8 @@ mod tests {
             ],
             funcs: Vec::new(),
         };
-        assert_eq!(info.addr_to_line(0x1004), Some(("a.c".to_owned(), 5)));
+        assert_eq!(info.addr_to_line(0x1004), Some((Arc::from("a.c"), 5)));
         assert_eq!(info.addr_to_line(0x1800), None);
-        assert_eq!(info.addr_to_line(0x2004), Some(("a.c".to_owned(), 6)));
+        assert_eq!(info.addr_to_line(0x2004), Some((Arc::from("a.c"), 6)));
     }
 }

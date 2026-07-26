@@ -492,7 +492,7 @@ impl<'a> Adapter<'a> {
                 .info
                 .as_ref()
                 .and_then(|i| i.addr_to_func(lookup_addr))
-                .unwrap_or_else(|| format!("{rip:#x}"));
+                .map_or_else(|| format!("{rip:#x}"), |n| n.to_string());
             let frame_id = self.next_frame_id;
             self.next_frame_id += 1;
             self.frame_threads.insert(frame_id, thread);
@@ -504,9 +504,10 @@ impl<'a> Adapter<'a> {
             });
             if let Some((file, line)) = self.info.as_ref().and_then(|i| i.addr_to_line(lookup_addr))
             {
+                let file = &*file;
                 frame["line"] = serde_json::json!(line);
                 frame["source"] = serde_json::json!({
-                    "name": Path::new(&file).file_name().map_or_else(|| file.clone(), |n| n.to_string_lossy().into_owned()),
+                    "name": Path::new(file).file_name().map_or_else(|| file.to_owned(), |n| n.to_string_lossy().into_owned()),
                     "path": file,
                 });
             }
@@ -688,11 +689,7 @@ impl<'a> Adapter<'a> {
         out: &mut Vec<ProtocolMessage>,
     ) -> Result<()> {
         let stop = self.source_step(step_over, out)?;
-        let reason = if matches!(stop, Stop::Signal { signal: 5 }) && self.at_user_breakpoint() {
-            "breakpoint"
-        } else {
-            "step"
-        };
+        let reason = self.stop_reason(&stop);
         self.report_stop(stop, reason, out);
         Ok(())
     }
@@ -781,7 +778,7 @@ impl<'a> Adapter<'a> {
         }
     }
 
-    fn line_for(&self, rip: Option<u64>) -> Option<(String, u32)> {
+    fn line_for(&self, rip: Option<u64>) -> Option<(std::sync::Arc<str>, u32)> {
         let rip = rip?;
         self.info
             .as_ref()?
@@ -799,11 +796,7 @@ impl<'a> Adapter<'a> {
         start_sp: u64,
         out: &mut Vec<ProtocolMessage>,
     ) -> Result<Option<Stop>> {
-        let already = self.breakpoints.iter().any(|b| b.verified && b.addr == ret);
-        let temp = match self.conn.as_mut() {
-            Some(conn) if !already => conn.set_breakpoint(ret).is_ok().then_some(ret),
-            _ => None,
-        };
+        let (already, temp) = self.set_temp_breakpoint(ret);
         if temp.is_none() && !already {
             return Ok(None);
         }
@@ -822,11 +815,17 @@ impl<'a> Adapter<'a> {
                 }
             };
             self.emit_output(&output, out);
-            if !matches!(stop, Stop::Signal { signal: 5 }) || self.at_user_breakpoint() {
+            if !matches!(stop, Stop::Signal { signal: 5 }) {
                 result = Ok(Some(stop));
                 break;
             }
-            if self.current_sp().unwrap_or(start_sp) >= start_sp {
+            let regs = self.read_regs();
+            let (rip, sp) = Self::rip_sp(regs.as_deref());
+            if rip.is_some_and(|rip| self.bp_at(rip)) {
+                result = Ok(Some(stop));
+                break;
+            }
+            if sp.unwrap_or(start_sp) >= start_sp {
                 break;
             }
         }
@@ -836,11 +835,25 @@ impl<'a> Adapter<'a> {
         result
     }
 
-    fn at_user_breakpoint(&mut self) -> bool {
-        let Some(rip) = self.current_rip() else {
-            return false;
+    fn set_temp_breakpoint(&mut self, ret: u64) -> (bool, Option<u64>) {
+        let already = self.bp_at(ret);
+        let temp = match self.conn.as_mut() {
+            Some(conn) if !already => conn.set_breakpoint(ret).is_ok().then_some(ret),
+            _ => None,
         };
-        self.breakpoints.iter().any(|b| b.verified && b.addr == rip)
+        (already, temp)
+    }
+
+    fn at_user_breakpoint(&mut self) -> bool {
+        self.current_rip().is_some_and(|rip| self.bp_at(rip))
+    }
+
+    fn stop_reason(&mut self, stop: &Stop) -> &'static str {
+        if matches!(stop, Stop::Signal { signal: 5 }) && self.at_user_breakpoint() {
+            "breakpoint"
+        } else {
+            "step"
+        }
     }
 
     fn read_stack_u64(&mut self, addr: u64) -> Option<u64> {
@@ -850,14 +863,9 @@ impl<'a> Adapter<'a> {
     }
 
     fn step_out_and_report(&mut self, out: &mut Vec<ProtocolMessage>) -> Result<()> {
-        let ret = self.return_address();
-        let has_user_bp =
-            ret.is_some_and(|r| self.breakpoints.iter().any(|b| b.verified && b.addr == r));
-        let temp = match (ret, self.conn.as_mut()) {
-            (Some(ret), Some(conn)) if !has_user_bp => {
-                conn.set_breakpoint(ret).is_ok().then_some(ret)
-            }
-            _ => None,
+        let (has_user_bp, temp) = match self.return_address() {
+            Some(ret) => self.set_temp_breakpoint(ret),
+            None => (false, None),
         };
         if temp.is_none() && !has_user_bp {
             self.report_stop(Stop::Signal { signal: 5 }, "step", out);
@@ -875,19 +883,9 @@ impl<'a> Adapter<'a> {
             result?
         };
         self.emit_output(&output, out);
-        let reason = if matches!(stop, Stop::Signal { signal: 5 }) && self.at_user_breakpoint() {
-            "breakpoint"
-        } else {
-            "step"
-        };
+        let reason = self.stop_reason(&stop);
         self.report_stop(stop, reason, out);
         Ok(())
-    }
-
-    fn current_sp(&mut self) -> Option<u64> {
-        let conn = self.conn.as_mut()?;
-        let regs = conn.read_registers().ok()?;
-        amd64::reg(&regs, amd64::RSP)
     }
 
     fn current_rip(&mut self) -> Option<u64> {
@@ -1259,21 +1257,53 @@ mod tests {
         assert!(err.to_string().contains("exceeds"));
     }
 
-    #[test]
-    fn unsupported_request_returns_failure_response_not_error() {
-        let mut adapter = FakeAdapter::default();
-        let req = ProtocolMessage {
-            seq: 7,
+    fn test_env(root: &std::path::Path) -> Environment {
+        Environment {
+            name: "e".into(),
+            layout: lsw_config::EnvironmentLayout::new(root.join("env")),
+            manifest: lsw_config::EnvironmentManifest {
+                name: "e".into(),
+                format: lsw_config::ENVIRONMENT_FORMAT_VERSION,
+                target_arch: lsw_config::TargetArch::X86_64,
+                toolchain: lsw_config::ResolvedToolchain {
+                    provider: "mingw-gcc".into(),
+                    version: "test".into(),
+                    cc: PathBuf::from("/usr/bin/x86_64-w64-mingw32-gcc"),
+                    cxx: PathBuf::from("/usr/bin/x86_64-w64-mingw32-g++"),
+                    sysroot: PathBuf::from("/usr/x86_64-w64-mingw32"),
+                    c_flags: vec![],
+                    cxx_flags: vec![],
+                    link_flags: vec![],
+                },
+                runtime: lsw_config::ResolvedRuntime {
+                    provider: "wine".into(),
+                    version: "11".into(),
+                    executable: PathBuf::from("/usr/bin/wine"),
+                },
+            },
+        }
+    }
+
+    fn req(seq: i64, command: &str) -> ProtocolMessage {
+        ProtocolMessage {
+            seq,
             kind: "request".into(),
-            command: Some("setBreakpoints".into()),
+            command: Some(command.into()),
             event: None,
             request_seq: None,
             success: None,
             message: None,
             arguments: serde_json::Value::Null,
             body: serde_json::Value::Null,
-        };
-        let out = adapter.handle_unsupported(&req);
+        }
+    }
+
+    #[test]
+    fn unsupported_request_returns_failure_response_not_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let env = test_env(tmp.path());
+        let mut adapter = Adapter::new(&env);
+        let out = adapter.handle(&req(7, "restartFrame")).unwrap();
         assert_eq!(out[0].kind, "response");
         assert_eq!(out[0].success, Some(false));
         assert_eq!(out[0].request_seq, Some(7));
@@ -1281,19 +1311,10 @@ mod tests {
 
     #[test]
     fn initialize_returns_capabilities_and_initialized_event() {
-        let mut adapter = FakeAdapter::default();
-        let req = ProtocolMessage {
-            seq: 1,
-            kind: "request".into(),
-            command: Some("initialize".into()),
-            event: None,
-            request_seq: None,
-            success: None,
-            message: None,
-            arguments: serde_json::Value::Null,
-            body: serde_json::Value::Null,
-        };
-        let out = adapter.handle_initialize(&req);
+        let tmp = tempfile::tempdir().unwrap();
+        let env = test_env(tmp.path());
+        let mut adapter = Adapter::new(&env);
+        let out = adapter.handle(&req(1, "initialize")).unwrap();
         assert_eq!(out[0].kind, "response");
         assert_eq!(out[0].success, Some(true));
         assert_eq!(
@@ -1306,101 +1327,14 @@ mod tests {
 
     #[test]
     fn terminate_emits_terminated_event() {
-        let mut adapter = FakeAdapter::default();
-        let req = ProtocolMessage {
-            seq: 5,
-            kind: "request".into(),
-            command: Some("terminate".into()),
-            event: None,
-            request_seq: None,
-            success: None,
-            message: None,
-            arguments: serde_json::Value::Null,
-            body: serde_json::Value::Null,
-        };
-        let out = adapter.handle_terminate(&req);
+        let tmp = tempfile::tempdir().unwrap();
+        let env = test_env(tmp.path());
+        let mut adapter = Adapter::new(&env);
+        let out = adapter.handle(&req(5, "terminate")).unwrap();
         assert_eq!(out[0].request_seq, Some(5));
-        assert_eq!(out[1].event.as_deref(), Some("terminated"));
-    }
-
-    #[derive(Default)]
-    struct FakeAdapter {
-        seq: i64,
-    }
-
-    impl FakeAdapter {
-        fn next_seq(&mut self) -> i64 {
-            self.seq += 1;
-            self.seq
-        }
-        fn handle_unsupported(&mut self, req: &ProtocolMessage) -> Vec<ProtocolMessage> {
-            vec![ProtocolMessage {
-                seq: self.next_seq(),
-                kind: "response".into(),
-                command: req.command.clone(),
-                event: None,
-                request_seq: Some(req.seq),
-                success: Some(false),
-                message: Some("unsupported".into()),
-                arguments: serde_json::Value::Null,
-                body: serde_json::Value::Null,
-            }]
-        }
-        fn handle_initialize(&mut self, req: &ProtocolMessage) -> Vec<ProtocolMessage> {
-            let caps = serde_json::json!({
-                "supportsConfigurationDoneRequest": true,
-                "supportsTerminateRequest": true,
-            });
-            vec![
-                ProtocolMessage {
-                    seq: self.next_seq(),
-                    kind: "response".into(),
-                    command: req.command.clone(),
-                    event: None,
-                    request_seq: Some(req.seq),
-                    success: Some(true),
-                    message: None,
-                    arguments: serde_json::Value::Null,
-                    body: caps,
-                },
-                ProtocolMessage {
-                    seq: self.next_seq(),
-                    kind: "event".into(),
-                    command: None,
-                    event: Some("initialized".into()),
-                    request_seq: None,
-                    success: None,
-                    message: None,
-                    arguments: serde_json::Value::Null,
-                    body: serde_json::Value::Null,
-                },
-            ]
-        }
-        fn handle_terminate(&mut self, req: &ProtocolMessage) -> Vec<ProtocolMessage> {
-            vec![
-                ProtocolMessage {
-                    seq: self.next_seq(),
-                    kind: "response".into(),
-                    command: req.command.clone(),
-                    event: None,
-                    request_seq: Some(req.seq),
-                    success: Some(true),
-                    message: None,
-                    arguments: serde_json::Value::Null,
-                    body: serde_json::Value::Null,
-                },
-                ProtocolMessage {
-                    seq: self.next_seq(),
-                    kind: "event".into(),
-                    command: None,
-                    event: Some("terminated".into()),
-                    request_seq: None,
-                    success: None,
-                    message: None,
-                    arguments: serde_json::Value::Null,
-                    body: serde_json::Value::Null,
-                },
-            ]
-        }
+        assert!(
+            out.iter()
+                .any(|m| m.event.as_deref() == Some("terminated"))
+        );
     }
 }
