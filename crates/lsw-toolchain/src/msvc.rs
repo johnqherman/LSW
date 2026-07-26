@@ -143,8 +143,7 @@ pub fn probe_msvc(tc: &ResolvedToolchain) -> ProbeReport {
                 .arg(&src)
                 .arg(format!("/Fo{}", obj.display()));
             let compiled = crate::util::capped_output(&mut compile)
-                .map(|o| o.status.success() && obj.is_file())
-                .unwrap_or(false);
+                .is_ok_and(|o| o.status.success() && obj.is_file());
             let link_err = match link_result {
                 Ok(out) => String::from_utf8_lossy(&out.stderr).trim().to_owned(),
                 Err(e) => e.to_string(),
@@ -162,4 +161,3 @@ pub fn probe_msvc(tc: &ResolvedToolchain) -> ProbeReport {
         }
     }
 }
-

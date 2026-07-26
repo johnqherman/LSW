@@ -36,8 +36,7 @@ fn norm(path: &str) -> String {
     let p = path.replace('\\', "/");
     Path::new(&p)
         .file_name()
-        .map(|n| n.to_string_lossy().to_lowercase())
-        .unwrap_or_else(|| p.to_lowercase())
+        .map_or_else(|| p.to_lowercase(), |n| n.to_string_lossy().to_lowercase())
 }
 
 fn suffix_score(candidate: &str, requested: &str) -> usize {
@@ -45,7 +44,7 @@ fn suffix_score(candidate: &str, requested: &str) -> usize {
         s.replace('\\', "/")
             .split('/')
             .filter(|c| !c.is_empty())
-            .map(|c| c.to_lowercase())
+            .map(str::to_lowercase)
             .collect()
     };
     let a = split(candidate);

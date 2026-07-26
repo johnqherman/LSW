@@ -31,15 +31,13 @@ pub enum BuildSystem {
 }
 
 fn has_dotnet_project(root: &Path) -> bool {
-    std::fs::read_dir(root)
-        .map(|entries| {
-            entries.flatten().take(MAX_DIR_ENTRIES).any(|e| {
-                let name = e.file_name();
-                let name = name.to_string_lossy();
-                name.ends_with(".csproj") || name.ends_with(".sln") || name.ends_with(".fsproj")
-            })
+    std::fs::read_dir(root).is_ok_and(|entries| {
+        entries.flatten().take(MAX_DIR_ENTRIES).any(|e| {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            name.ends_with(".csproj") || name.ends_with(".sln") || name.ends_with(".fsproj")
         })
-        .unwrap_or(false)
+    })
 }
 
 fn check_case_sensitivity(project: &Project) -> Result<()> {
@@ -226,11 +224,13 @@ fn build_cargo(
     tc: &ResolvedToolchain,
     commands: &mut Vec<String>,
 ) -> Result<PathBuf> {
-    let triple = env.manifest.target_arch.rust_gnu_triple().ok_or_else(|| {
-        Error::RustTargetUnavailable {
-            arch: env.manifest.target_arch.to_string(),
-        }
-    })?;
+    let triple =
+        env.manifest
+            .target_arch
+            .rust_gnu_triple()
+            .ok_or_else(|| Error::RustTargetUnavailable {
+                arch: env.manifest.target_arch.to_string(),
+            })?;
     crate::rustops::ensure_target(env.manifest.target_arch)?;
     let default_linker = format!("{}-gcc", env.manifest.target_arch.mingw_triple());
     let cargo_env = if which(&default_linker).is_some() {
@@ -356,10 +356,9 @@ fn build_dotnet(
     opts: &BuildOptions,
     commands: &mut Vec<String>,
 ) -> Result<PathBuf> {
-    let rid =
-        dotnet_rid(env.manifest.target_arch).ok_or_else(|| Error::RustTargetUnavailable {
-            arch: env.manifest.target_arch.to_string(),
-        })?;
+    let rid = dotnet_rid(env.manifest.target_arch).ok_or_else(|| Error::RustTargetUnavailable {
+        arch: env.manifest.target_arch.to_string(),
+    })?;
     let mut args = vec![
         "dotnet".to_owned(),
         "publish".to_owned(),
@@ -577,7 +576,9 @@ fn file_fingerprint(path: &Path) -> Option<(u64, std::time::SystemTime)> {
     Some((meta.len(), meta.modified().ok()?))
 }
 
-fn artifact_fingerprints(root: &Path) -> std::collections::HashMap<PathBuf, (u64, std::time::SystemTime)> {
+fn artifact_fingerprints(
+    root: &Path,
+) -> std::collections::HashMap<PathBuf, (u64, std::time::SystemTime)> {
     let mut out = std::collections::HashMap::new();
     let mut paths = Vec::new();
     walk(root, &mut paths);
@@ -881,8 +882,7 @@ mod tests {
             .arg("-o")
             .arg(build.join("t.exe"))
             .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+            .is_ok_and(|s| s.success());
         if !ok {
             eprintln!("skipping: cross compile failed");
             return;

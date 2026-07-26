@@ -6,7 +6,9 @@ use serde::Serialize;
 use crate::error::{Error, Result};
 use crate::project::Project;
 
-use super::{default_remote_dir, expand_tilde, ssh_opts, validate_windows_dir, validate_windows_name};
+use super::{
+    default_remote_dir, expand_tilde, ssh_opts, validate_windows_dir, validate_windows_name,
+};
 
 use crate::buildops::which;
 
@@ -286,7 +288,7 @@ fn parse_backtrace(host: String, stdout: &str) -> NativeBacktrace {
             && !trimmed.contains("80000003")
         {
             let text = trimmed[..idx].trim_end();
-            let text = text.rsplit_once("): ").map(|(_, t)| t).unwrap_or(text);
+            let text = text.rsplit_once("): ").map_or(text, |(_, t)| t);
             exception = Some(text.to_owned());
         }
         if trimmed.contains("Child") && trimmed.contains("RetAddr") {

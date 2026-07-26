@@ -164,8 +164,7 @@ mod tests {
         let lookup = |key: &str| {
             env.iter()
                 .find(|(k, _)| k == key)
-                .map(|(_, v)| v.as_str())
-                .unwrap_or_else(|| panic!("{key} missing"))
+                .map_or_else(|| panic!("{key} missing"), |(_, v)| v.as_str())
         };
         assert_eq!(lookup("WINEPREFIX"), "/data/lsw/environments/e1/prefix");
         assert_eq!(lookup("WINEDEBUG"), "fixme-all");
@@ -283,7 +282,7 @@ mod tests {
             .execute(&ExecutionRequest {
                 program: PathBuf::from("cmd.exe"),
                 args: vec!["/c".into(), "exit".into(), "0".into()],
-                prefix: prefix.clone(),
+                prefix: prefix,
                 cwd: Some(dir.path().to_path_buf()),
                 env: Vec::new(),
                 sandbox: None,

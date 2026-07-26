@@ -85,17 +85,15 @@ fn sandbox_spec(
                 })?,
                 None => lsw_runtime::NetworkMode::Host,
             };
-            let (cpu_seconds, memory_bytes) = project
-                .map(|p| {
-                    (
-                        p.manifest.sandbox.cpu_seconds,
-                        p.manifest
-                            .sandbox
-                            .memory_mb
-                            .map(|mb| mb.saturating_mul(1024 * 1024)),
-                    )
-                })
-                .unwrap_or((None, None));
+            let (cpu_seconds, memory_bytes) = project.map_or((None, None), |p| {
+                (
+                    p.manifest.sandbox.cpu_seconds,
+                    p.manifest
+                        .sandbox
+                        .memory_mb
+                        .map(|mb| mb.saturating_mul(1024 * 1024)),
+                )
+            });
             Ok(Some(lsw_runtime::SandboxSpec {
                 rw_binds,
                 network,
@@ -277,9 +275,7 @@ fn env_overrides(
 }
 
 fn windows_env(env: &Environment, project: Option<&Project>) -> Vec<(String, String)> {
-    let cpus = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1);
+    let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
     let user = windows_user();
     let profile = format!("C:\\users\\{user}");
     let mut vars: Vec<(String, String)> = vec![
@@ -496,7 +492,7 @@ fn wait_interactive(mut child: std::process::Child) -> std::io::Result<ExitStatu
 pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Result<ExitStatus> {
     let _session = SHELL_SESSION_LOCK
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let _guard = ShellSignalGuard::install();
     if windows {
         if let Some(p) = project {

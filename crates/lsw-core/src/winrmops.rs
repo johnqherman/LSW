@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
@@ -9,12 +10,12 @@ const MAX_WINRM_BYTES: usize = 32 * 1024 * 1024;
 const MAX_RECEIVE_OUTPUT: usize = 64 * 1024 * 1024;
 const MAX_UPLOAD_BYTES: u64 = 512 * 1024 * 1024;
 
-use lsw_toolchain::drain_capped;
 use crate::project::Project;
 use crate::verifyops::{
     self, AgentResult, VerifyReport, VerifyStatus, default_remote_dir, validate_windows_dir,
     validate_windows_name,
 };
+use lsw_toolchain::drain_capped;
 
 const NS: &str = "xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" \
      xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" \
@@ -171,7 +172,7 @@ impl Winrm {
             xml(program)
         );
         for a in args {
-            body.push_str(&format!("<rsp:Arguments>{}</rsp:Arguments>", xml(a)));
+            let _ = write!(body, "<rsp:Arguments>{}</rsp:Arguments>", xml(a));
         }
         body.push_str("</rsp:CommandLine>");
         let opt = format!(

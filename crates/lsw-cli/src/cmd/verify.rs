@@ -158,7 +158,7 @@ pub(crate) fn compat(
             println!("\nFeature                Local      Native");
             println!("------------------------------------------");
             for c in &report.capabilities {
-                let n = c.native.map(sup).unwrap_or("?");
+                let n = c.native.map_or("?", sup);
                 println!("{:<22} {:<10} {}", c.feature, sup(c.local), n);
             }
         } else {

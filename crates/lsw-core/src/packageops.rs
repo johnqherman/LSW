@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -72,13 +73,13 @@ pub fn package(
     let dir = dist.join(&stem);
     if dir.parent() != Some(dist.as_path()) {
         return Err(Error::InitFailed {
-            path: dir.clone(),
+            path: dir,
             detail: "package output directory escaped dist/".into(),
         });
     }
     if fs::symlink_metadata(&dist).is_ok_and(|m| m.file_type().is_symlink()) {
         return Err(Error::InitFailed {
-            path: dist.clone(),
+            path: dist,
             detail: "dist/ is a symlink; refusing to package through it".into(),
         });
     }
@@ -122,7 +123,7 @@ pub fn package(
             .is_some_and(|(s, root)| s.starts_with(&root));
         if !within {
             return Err(Error::InitFailed {
-                path: source.clone(),
+                path: source,
                 detail: "refusing to package an artifact that resolves outside the project".into(),
             });
         }
@@ -346,12 +347,13 @@ fn render_wxs(name: &str, files: &[String]) -> String {
         let file_id = format!("file{i}");
         let guid = deterministic_guid(&format!("lsw:{name}:{file}"));
         let efile = crate::xml_escape(file);
-        components.push_str(&format!(
+        let _ = write!(
+            components,
             "          <Component Id=\"{comp_id}\" Guid=\"{guid}\">\n\
              \x20           <File Id=\"{file_id}\" Source=\"{efile}\" KeyPath=\"yes\"/>\n\
              \x20         </Component>\n"
-        ));
-        refs.push_str(&format!("        <ComponentRef Id=\"{comp_id}\"/>\n"));
+        );
+        let _ = write!(refs, "        <ComponentRef Id=\"{comp_id}\"/>\n");
     }
 
     format!(
@@ -424,7 +426,7 @@ mod tests {
             None,
             vec![
                 node("KERNEL32.dll", DepKind::System, None, vec![]),
-                node("libFoo-1.dll", DepKind::Resolved, Some(src.clone()), vec![]),
+                node("libFoo-1.dll", DepKind::Resolved, Some(src), vec![]),
                 node("gone.dll", DepKind::Missing, None, vec![]),
             ],
         );

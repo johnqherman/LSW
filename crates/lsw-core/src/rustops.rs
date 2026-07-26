@@ -225,12 +225,11 @@ fn rust_target_installed(triple: &str) -> bool {
         .args(["target", "list", "--installed"])
         .output()
         .ok()
-        .map(|o| {
+        .is_some_and(|o| {
             String::from_utf8_lossy(&o.stdout)
                 .lines()
                 .any(|l| l.trim() == triple)
         })
-        .unwrap_or(false)
 }
 
 #[cfg(test)]

@@ -87,8 +87,7 @@ pub(crate) fn find_in_paths(name: &str, paths: &OsStr) -> Option<PathBuf> {
 fn is_executable_file(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     path.metadata()
-        .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
-        .unwrap_or(false)
+        .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
 pub(crate) fn find_wine() -> Option<PathBuf> {
@@ -190,7 +189,7 @@ impl WineRuntime {
         if let Some(loader) = &loader {
             argv.push(loader.clone().into_os_string());
         }
-        argv.push(executable.clone().into_os_string());
+        argv.push(executable.into_os_string());
         argv.push(req.program.clone().into_os_string());
         argv.extend(req.args.iter().map(Into::into));
 

@@ -16,7 +16,7 @@ fn dap(detail: impl Into<String>) -> Error {
 
 fn output_packet(reply: &[u8]) -> Option<Vec<u8>> {
     let rest = reply.strip_prefix(b"O")?;
-    if rest.is_empty() || !rest.iter().all(|b| b.is_ascii_hexdigit()) {
+    if rest.is_empty() || !rest.iter().all(u8::is_ascii_hexdigit) {
         return None;
     }
     hex_to_bytes(std::str::from_utf8(rest).ok()?)

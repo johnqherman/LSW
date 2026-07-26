@@ -271,7 +271,7 @@ impl<'a> Adapter<'a> {
         self.stop_on_entry = req
             .arguments
             .get("stopOnEntry")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
         let args: Vec<String> = req
             .arguments
@@ -279,7 +279,7 @@ impl<'a> Adapter<'a> {
             .and_then(|v| v.as_array())
             .map(|a| {
                 a.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_owned()))
+                    .filter_map(|v| v.as_str().map(std::borrow::ToOwned::to_owned))
                     .collect()
             })
             .unwrap_or_default();
@@ -337,7 +337,7 @@ impl<'a> Adapter<'a> {
             .and_then(|v| v.as_array())
             .map(|a| {
                 a.iter()
-                    .filter_map(|b| b.get("line").and_then(|l| l.as_u64()))
+                    .filter_map(|b| b.get("line").and_then(serde_json::Value::as_u64))
                     .take(MAX_BREAKPOINTS)
                     .collect()
             })
@@ -451,7 +451,7 @@ impl<'a> Adapter<'a> {
         let thread_id = req
             .arguments
             .get("threadId")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .unwrap_or(self.current_thread);
         if !self.thread_is_live(thread_id) {
             return Ok(vec![self.success_response(
@@ -506,7 +506,7 @@ impl<'a> Adapter<'a> {
             {
                 frame["line"] = serde_json::json!(line);
                 frame["source"] = serde_json::json!({
-                    "name": Path::new(&file).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| file.clone()),
+                    "name": Path::new(&file).file_name().map_or_else(|| file.clone(), |n| n.to_string_lossy().into_owned()),
                     "path": file,
                 });
             }
@@ -535,7 +535,7 @@ impl<'a> Adapter<'a> {
         let frame_id = req
             .arguments
             .get("frameId")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .filter(|id| self.frame_threads.contains_key(id))
             .unwrap_or(REGISTERS_REF);
         let scopes = serde_json::json!({
@@ -552,7 +552,7 @@ impl<'a> Adapter<'a> {
         let reference = req
             .arguments
             .get("variablesReference")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .unwrap_or(0);
         let mut variables = Vec::new();
         let known = reference == REGISTERS_REF || self.frame_threads.contains_key(&reference);
@@ -639,7 +639,7 @@ impl<'a> Adapter<'a> {
         let thread = req
             .arguments
             .get("frameId")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .and_then(|id| self.frame_threads.get(&id).copied())
             .unwrap_or(self.current_thread);
         if !self.thread_is_live(thread) {
@@ -762,10 +762,7 @@ impl<'a> Adapter<'a> {
 
     fn rip_sp(regs: Option<&[u8]>) -> (Option<u64>, Option<u64>) {
         match regs {
-            Some(regs) => (
-                amd64::reg(regs, amd64::RIP),
-                amd64::reg(regs, amd64::RSP),
-            ),
+            Some(regs) => (amd64::reg(regs, amd64::RIP), amd64::reg(regs, amd64::RSP)),
             None => (None, None),
         }
     }
@@ -937,10 +934,7 @@ impl<'a> Adapter<'a> {
             return true;
         }
         match self.conn.as_mut() {
-            Some(conn) => conn
-                .thread_ids()
-                .map(|ids| ids.contains(&id))
-                .unwrap_or(true),
+            Some(conn) => conn.thread_ids().map_or(true, |ids| ids.contains(&id)),
             None => false,
         }
     }
@@ -1128,7 +1122,7 @@ fn read_gdb_port<R: Read + Send + 'static>(stream: R) -> Result<u16> {
         if let Some(idx) = line.find(MARKER) {
             let digits: String = line[idx + MARKER.len()..]
                 .chars()
-                .take_while(|c| c.is_ascii_digit())
+                .take_while(char::is_ascii_digit)
                 .collect();
             if let Ok(port) = digits.parse::<u16>() {
                 return Ok(port);
@@ -1216,7 +1210,10 @@ mod tests {
 
     #[test]
     fn q_offsets_text_form_is_the_slide_itself() {
-        assert_eq!(parse_q_offsets("Text=2000;Data=2000;Bss=2000", 0), Some(0x2000));
+        assert_eq!(
+            parse_q_offsets("Text=2000;Data=2000;Bss=2000", 0),
+            Some(0x2000)
+        );
     }
 
     #[test]

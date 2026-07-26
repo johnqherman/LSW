@@ -49,7 +49,7 @@ fn scan(dir: &Path, root: &Path, out: &mut Vec<CaseHazard>) {
                 None => raw.as_bytes().to_vec(),
             };
             let name = raw.to_string_lossy().into_owned();
-            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
             if is_dir && !SKIP_DIRS.contains(&name.as_str()) && queued < MAX_DIRS {
                 queued += 1;
                 stack.push(entry.path());

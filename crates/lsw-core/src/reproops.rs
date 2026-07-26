@@ -72,7 +72,7 @@ fn clean_for_rebuild(project: &Project, system: BuildSystem, artifacts: &[PathBu
 fn read_section(data: &[u8], s: &lsw_pe::SectionInfo) -> Option<Vec<u8>> {
     let start = s.raw_offset as usize;
     let end = start.checked_add(s.raw_size as usize)?;
-    data.get(start..end).map(|b| b.to_vec())
+    data.get(start..end).map(<[u8]>::to_vec)
 }
 
 fn section_divergences(a: &Path, b: &Path) -> Vec<SectionDivergence> {
@@ -187,10 +187,10 @@ fn verify_with_stage(
     let mut staged: Vec<(PathBuf, PathBuf)> = Vec::new();
     for (i, rel) in selected.iter().enumerate() {
         let src = project.root.join(rel);
-        let name = rel
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "artifact".to_owned());
+        let name = rel.file_name().map_or_else(
+            || "artifact".to_owned(),
+            |n| n.to_string_lossy().into_owned(),
+        );
         let dest = stage.join(format!("{i}-{name}"));
         std::fs::copy(&src, &dest).map_err(|e| Error::io(src.clone(), e))?;
         staged.push((rel.clone(), dest));

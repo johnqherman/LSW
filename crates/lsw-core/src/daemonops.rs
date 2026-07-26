@@ -310,7 +310,7 @@ impl DaemonClient {
                 detail: "daemon response is not jsonrpc 2.0".to_owned(),
             });
         }
-        if value.get("id").and_then(|v| v.as_u64()) != Some(id) {
+        if value.get("id").and_then(serde_json::Value::as_u64) != Some(id) {
             return Err(Error::DaemonUnavailable {
                 path: self.path.clone(),
                 detail: format!("daemon response id mismatch (expected {id})"),
@@ -402,7 +402,7 @@ mod tests {
         std::fs::create_dir_all(&dirs.cache).unwrap();
         std::fs::create_dir_all(dirs.environments()).unwrap();
 
-        let server_dirs = dirs.clone();
+        let server_dirs = dirs;
         let sock_for_server = sock.clone();
         let handle = std::thread::spawn(move || {
             let listener = bind_socket(&sock_for_server).unwrap();
@@ -439,7 +439,7 @@ mod tests {
         std::fs::create_dir_all(dirs.environments()).unwrap();
         let sock = dirs.cache.join("lswd.sock");
 
-        let server_dirs = dirs.clone();
+        let server_dirs = dirs;
         let sock_for_server = sock.clone();
         let handle = std::thread::spawn(move || {
             let listener = bind_socket(&sock_for_server).unwrap();

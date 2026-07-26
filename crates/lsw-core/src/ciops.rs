@@ -111,10 +111,10 @@ jobs:
 }
 
 pub fn init_github(project_root: &Path) -> Result<PathBuf> {
-    let name = project_root
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "lsw-project".to_owned());
+    let name = project_root.file_name().map_or_else(
+        || "lsw-project".to_owned(),
+        |n| n.to_string_lossy().into_owned(),
+    );
     let gh = project_root.join(".github");
     let dir = gh.join("workflows");
     for d in [&gh, &dir] {
@@ -129,7 +129,7 @@ pub fn init_github(project_root: &Path) -> Result<PathBuf> {
     let path = dir.join("lsw.yml");
     if std::fs::symlink_metadata(&path).is_ok() {
         return Err(Error::InitFailed {
-            path: path.clone(),
+            path,
             detail: "workflow already exists".into(),
         });
     }

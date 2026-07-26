@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -180,15 +181,17 @@ fn probe_script(
     );
     for (dll, funcs) in grouped {
         let dll_d = ps_dquote(dll);
-        s.push_str(&format!("$h=[LswProbe]::LoadLibraryW('{dll}')\n"));
-        s.push_str(&format!(
+        let _ = write!(s, "$h=[LswProbe]::LoadLibraryW('{dll}')\n");
+        let _ = write!(
+            s,
             "if($h -eq [IntPtr]::Zero){{Write-Output \"DLL`t{dll_d}`tMISSING\"}}else{{Write-Output \"DLL`t{dll_d}`tOK\"\n"
-        ));
+        );
         for func in funcs {
             let func_d = ps_dquote(func);
-            s.push_str(&format!(
+            let _ = write!(
+                s,
                 "if([LswProbe]::GetProcAddress($h,'{func}') -eq [IntPtr]::Zero){{Write-Output \"FN`t{dll_d}`t{func_d}`tMISSING\"}}\n"
-            ));
+            );
         }
         s.push_str("}\n");
     }

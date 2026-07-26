@@ -65,7 +65,7 @@ fn scan_case_collisions(root: &Path) -> usize {
         let mut names = Vec::new();
         for entry in entries.flatten().take(MAX_ENTRIES_PER_DIR) {
             let name = entry.file_name().to_string_lossy().into_owned();
-            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
             if is_dir && !SKIP.contains(&name.as_str()) && queued < MAX_DIRS {
                 queued += 1;
                 stack.push(entry.path());
@@ -119,8 +119,10 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
         .arg("-r")
         .output()
         .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
-        .unwrap_or_else(|| "unknown".to_owned());
+        .map_or_else(
+            || "unknown".to_owned(),
+            |o| String::from_utf8_lossy(&o.stdout).trim().to_owned(),
+        );
     sections.push(Section {
         name: "Host".into(),
         rows: vec![
@@ -145,9 +147,7 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
         rows: runtime_rows,
     });
 
-    let arch = project
-        .map(|p| p.manifest.target.arch)
-        .unwrap_or(lsw_config::TargetArch::X86_64);
+    let arch = project.map_or(lsw_config::TargetArch::X86_64, |p| p.manifest.target.arch);
     let mut tc_rows = Vec::new();
     for provider in lsw_toolchain::providers() {
         match provider.probe(arch) {

@@ -38,15 +38,13 @@ struct LoadCfg {
 fn read_u32(bytes: &[u8], off: usize) -> u32 {
     bytes
         .get(off..off + 4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
-        .unwrap_or(0)
+        .map_or(0, |b| u32::from_le_bytes(b.try_into().unwrap()))
 }
 
 fn read_u64(bytes: &[u8], off: usize) -> u64 {
     bytes
         .get(off..off + 8)
-        .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
-        .unwrap_or(0)
+        .map_or(0, |b| u64::from_le_bytes(b.try_into().unwrap()))
 }
 
 fn load_config<Pe: ImageNtHeaders>(file: &PeFile<Pe>, data: &[u8], is_64: bool) -> Option<LoadCfg> {
@@ -122,7 +120,7 @@ fn hardening_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Harde
     let signed = file
         .data_directories()
         .get(pe::IMAGE_DIRECTORY_ENTRY_SECURITY)
-        .map(|d| {
+        .is_some_and(|d| {
             let addr = d.virtual_address.get(LE) as usize;
             let size = d.size.get(LE) as usize;
             if addr == 0 || size < 8 {
@@ -139,8 +137,7 @@ fn hardening_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Harde
                 && addr.saturating_add(dw_length) <= data.len()
                 && matches!(revision, 0x0100 | 0x0200)
                 && cert_type == 0x0002
-        })
-        .unwrap_or(false);
+        });
     Ok(Hardening {
         aslr: has(pe::IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE) && !relocs_stripped,
         high_entropy_va: is_64.then(|| has(pe::IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA)),
