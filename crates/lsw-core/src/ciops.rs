@@ -16,6 +16,7 @@ pub fn github_workflow(project_name: &str) -> String {
         })
         .collect();
     let project_name = format!("\"{escaped}\"");
+    let lsw_version = env!("CARGO_PKG_VERSION");
     format!(
         r#"name: {project_name}
 
@@ -34,14 +35,26 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y wine64 wine32 mingw-w64 cmake ninja-build xvfb
+          sudo apt-get install -y wine wine64 wine32 mingw-w64 cmake ninja-build xvfb
       - uses: dtolnay/rust-toolchain@stable
+      - name: Cache lsw
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/lsw
+          key: lsw-cli-{lsw_version}-${{{{ runner.os }}}}
       - name: Install lsw
-        run: cargo install lsw
+        run: command -v lsw >/dev/null || cargo install lsw@{lsw_version}
+      - name: Cache lsw environments
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/lsw
+            ~/.cache/lsw
+          key: lsw-env-${{{{ runner.os }}}}-${{{{ hashFiles('lsw.lock') }}}}
+          restore-keys: lsw-env-${{{{ runner.os }}}}-
       - name: Build and test
         run: |
-          lsw env create ci
-          lsw use ci
+          lsw setup
           lsw build
           lsw test --headless
 
@@ -54,14 +67,18 @@ jobs:
       - name: Install toolchain and runtime
         run: |
           sudo apt-get update
-          sudo apt-get install -y wine64 mingw-w64 cmake ninja-build
+          sudo apt-get install -y wine wine64 mingw-w64 cmake ninja-build
       - uses: dtolnay/rust-toolchain@stable
+      - name: Cache lsw
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/lsw
+          key: lsw-cli-{lsw_version}-${{{{ runner.os }}}}
       - name: Install lsw
-        run: cargo install lsw
+        run: command -v lsw >/dev/null || cargo install lsw@{lsw_version}
       - name: Verify reproducibility
         run: |
-          lsw env create ci
-          lsw use ci
+          lsw setup
           lsw verify --reproducible
 
   # Signs release binaries with a real certificate. Opt-in via manual
@@ -77,17 +94,21 @@ jobs:
       - name: Install toolchain and runtime
         run: |
           sudo apt-get update
-          sudo apt-get install -y wine64 mingw-w64 cmake ninja-build osslsigncode
+          sudo apt-get install -y wine wine64 mingw-w64 cmake ninja-build osslsigncode
       - uses: dtolnay/rust-toolchain@stable
+      - name: Cache lsw
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/lsw
+          key: lsw-cli-{lsw_version}-${{{{ runner.os }}}}
       - name: Install lsw
-        run: cargo install lsw
+        run: command -v lsw >/dev/null || cargo install lsw@{lsw_version}
       - name: Build and sign
         env:
           LSW_PFX_B64: ${{{{ secrets.LSW_PFX_B64 }}}}
           LSW_PFX_PASSWORD: ${{{{ secrets.LSW_PFX_PASSWORD }}}}
         run: |
-          lsw env create ci
-          lsw use ci
+          lsw setup
           lsw build
           printf '%s' "$LSW_PFX_B64" | base64 -d > signing.pfx
           for exe in build/*.exe; do
@@ -148,6 +169,10 @@ mod tests {
         assert!(yaml.contains("lsw build"));
         assert!(yaml.contains("lsw test --headless"));
         assert!(yaml.contains("mingw-w64"));
+        assert!(yaml.contains("install -y wine wine64"));
+        assert!(yaml.contains("lsw setup"));
+        assert!(yaml.contains(&format!("cargo install lsw@{}", env!("CARGO_PKG_VERSION"))));
+        assert!(yaml.contains("hashFiles('lsw.lock')"));
         assert!(yaml.contains("lsw verify --reproducible"));
         assert!(yaml.contains("workflow_dispatch"));
         assert!(yaml.contains("--pfx-pass-env LSW_PFX_PASSWORD"));
