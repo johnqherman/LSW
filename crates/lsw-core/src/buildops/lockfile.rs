@@ -10,7 +10,7 @@ pub(crate) fn stamp_build_dir(project: &Project, env: &Environment) -> Result<()
     let build_dir = project.root.join("build");
     if fs::symlink_metadata(&build_dir).is_ok_and(|m| m.file_type().is_symlink()) {
         return Err(Error::InitFailed {
-            path: build_dir.clone(),
+            path: build_dir,
             detail: "build/ is a symlink; refusing to build through it".into(),
         });
     }

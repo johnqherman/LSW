@@ -49,10 +49,10 @@ pub fn sbom(path: &Path) -> Result<Value> {
     let mut dlls = lsw_pe::imports(path)?;
     dlls.sort();
     dlls.dedup();
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "artifact".to_owned());
+    let name = path.file_name().map_or_else(
+        || "artifact".to_owned(),
+        |n| n.to_string_lossy().into_owned(),
+    );
 
     let toolchain = crate::project::Project::discover(&std::env::current_dir().unwrap_or_default())
         .ok()

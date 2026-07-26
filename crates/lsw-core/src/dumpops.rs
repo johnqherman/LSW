@@ -68,10 +68,10 @@ pub fn analyze(path: &Path) -> Result<DumpSummary> {
 }
 
 pub fn dump_path_for(pe: &Path) -> PathBuf {
-    let name = pe
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "program".to_owned());
+    let name = pe.file_name().map_or_else(
+        || "program".to_owned(),
+        |n| n.to_string_lossy().into_owned(),
+    );
     pe.with_file_name(format!("{name}.dmp"))
 }
 

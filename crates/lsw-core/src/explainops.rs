@@ -12,7 +12,7 @@ pub fn explain(code: &str) -> Option<Explanation> {
 
 fn normalize(code: &str) -> String {
     let trimmed = code.trim();
-    let digits: String = trimmed.chars().filter(|c| c.is_ascii_digit()).collect();
+    let digits: String = trimmed.chars().filter(char::is_ascii_digit).collect();
     if digits.is_empty() {
         trimmed.to_uppercase()
     } else {

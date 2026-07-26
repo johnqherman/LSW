@@ -58,7 +58,7 @@ impl CompatDb {
         let text = match std::fs::read_to_string(&path) {
             Ok(t) => t,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(empty()),
-            Err(e) => return Err(Error::io(path.clone(), e)),
+            Err(e) => return Err(Error::io(path, e)),
         };
         match serde_json::from_str(&text) {
             Ok(db) => Ok(db),

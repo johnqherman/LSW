@@ -20,10 +20,7 @@ pub fn sign(path: &Path, opts: &SignOptions) -> Result<()> {
             detail: "file not found".into(),
         });
     }
-    if lsw_pe::detect(path)
-        .map(|k| !matches!(k, lsw_pe::BinaryKind::Pe(_)))
-        .unwrap_or(true)
-    {
+    if lsw_pe::detect(path).map_or(true, |k| !matches!(k, lsw_pe::BinaryKind::Pe(_))) {
         return Err(Error::NotExecutable {
             program: path.to_path_buf(),
             detail: "only PE binaries can be Authenticode-signed".into(),

@@ -262,7 +262,7 @@ pub fn clone_env(dirs: &Dirs, src: &str, dst: &str, force: bool) -> Result<Envir
         .map_err(|e| Error::io(PathBuf::from("cp"), e))?;
     if !status.success() {
         return Err(Error::InitFailed {
-            path: dst_root.clone(),
+            path: dst_root,
             detail: format!("copying environment '{src}' failed"),
         });
     }
@@ -378,8 +378,7 @@ fn backup_path(root: &Path) -> PathBuf {
     let counter = BACKUP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_nanos());
     root.with_file_name(format!(
         ".{name}.lsw-bak-{}-{nanos}-{counter}",
         std::process::id()
@@ -469,7 +468,7 @@ pub fn link_project(env: &Environment, project: &Project) -> Result<PathBuf> {
         && meta.file_type().is_symlink()
     {
         return Err(Error::InitFailed {
-            path: src_dir.clone(),
+            path: src_dir,
             detail: "prefix src directory is a symlink; refusing to link through it".into(),
         });
     }
@@ -483,7 +482,7 @@ pub fn link_project(env: &Environment, project: &Project) -> Result<PathBuf> {
         fs::remove_file(&link).map_err(|e| Error::io(link.clone(), e))?;
     } else if link.exists() {
         return Err(Error::InitFailed {
-            path: link.clone(),
+            path: link,
             detail: "exists inside the prefix but is not a symlink; remove it manually".into(),
         });
     }
@@ -547,7 +546,7 @@ fn fingerprint_sysroot(sysroot: &Path) -> Result<String> {
                 .flatten()
                 .take(1_000_000)
                 .map(|e| {
-                    let meta_len = e.metadata().map(|m| m.len()).unwrap_or(0);
+                    let meta_len = e.metadata().map_or(0, |m| m.len());
                     format!("{}:{}", e.file_name().to_string_lossy(), meta_len)
                 })
                 .collect(),

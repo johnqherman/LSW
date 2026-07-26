@@ -201,8 +201,7 @@ pub fn tree_with_dirs(dirs: &[PathBuf], pe: &Path) -> Result<DepNode> {
     let mut nodes = 0usize;
     let name = pe
         .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "root".to_owned());
+        .map_or_else(|| "root".to_owned(), |n| n.to_string_lossy().into_owned());
     let children = build(&name, pe, &index, &mut seen, 0, &mut nodes);
     Ok(DepNode {
         name,
@@ -426,7 +425,7 @@ pub fn add(
             let _ = std::fs::remove_file(&cached);
             return Err(Error::ChecksumMismatch {
                 name: name.to_owned(),
-                expected: pkg.sha256.clone(),
+                expected: pkg.sha256,
                 actual,
             });
         }

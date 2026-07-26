@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
@@ -441,12 +442,13 @@ HashMethod=\"http://www.w3.org/2001/04/xmlenc#sha256\">\n",
             });
         }
         let lfh = 30 + file.len();
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "  <File Name=\"{}\" Size=\"{}\" LfhSize=\"{}\">\n",
             crate::xml_escape(&file.replace('/', "\\")),
             size,
             lfh
-        ));
+        );
         let mut reader = std::io::BufReader::new(
             std::fs::File::open(&path).map_err(|e| Error::io(path.clone(), e))?,
         );
@@ -469,14 +471,14 @@ HashMethod=\"http://www.w3.org/2001/04/xmlenc#sha256\">\n",
             emitted = true;
             let digest = Sha256::digest(&block[..filled]);
             let hash = base64::engine::general_purpose::STANDARD.encode(digest);
-            out.push_str(&format!("    <Block Hash=\"{hash}\"/>\n"));
+            let _ = write!(out, "    <Block Hash=\"{hash}\"/>\n");
             if filled < BLOCK_SIZE {
                 break;
             }
         }
         if !emitted {
             let hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest([]));
-            out.push_str(&format!("    <Block Hash=\"{hash}\"/>\n"));
+            let _ = write!(out, "    <Block Hash=\"{hash}\"/>\n");
         }
         out.push_str("  </File>\n");
     }
@@ -501,10 +503,11 @@ fn content_types_xml(files: &[String]) -> String {
             "png" => "image/png",
             _ => "application/octet-stream",
         };
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             "  <Default Extension=\"{}\" ContentType=\"{ct}\"/>\n",
             crate::xml_escape(ext)
-        ));
+        );
     }
     out.push_str(
         "  <Override PartName=\"/AppxBlockMap.xml\" ContentType=\"application/vnd.ms-appx.blockmap+xml\"/>\n\

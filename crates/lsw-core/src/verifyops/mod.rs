@@ -244,11 +244,7 @@ pub(crate) fn validate_windows_name(name: &str) -> Result<()> {
     }
 }
 
-pub(crate) fn ssh_command(
-    host: &str,
-    identity: Option<&str>,
-    remote_cmd: &str,
-) -> Result<Output> {
+pub(crate) fn ssh_command(host: &str, identity: Option<&str>, remote_cmd: &str) -> Result<Output> {
     capped_output(
         Command::new("ssh")
             .args(ssh_opts(identity))

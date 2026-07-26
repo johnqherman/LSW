@@ -5,8 +5,7 @@ use lsw_core::{BuildOptions, Dirs, Display, Domain, EnvCreateOptions, Project, S
 
 fn on_path(tool: &str) -> bool {
     std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).any(|d| d.join(tool).is_file()))
-        .unwrap_or(false)
+        .is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(tool).is_file()))
 }
 
 fn e2e_enabled() -> bool {

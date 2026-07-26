@@ -24,9 +24,10 @@ pub(crate) fn default_prefix() -> PathBuf {
     if let Some(p) = std::env::var_os("PREFIX") {
         return PathBuf::from(p);
     }
-    std::env::var_os("HOME")
-        .map(|h| PathBuf::from(h).join(".local"))
-        .unwrap_or_else(|| PathBuf::from("/usr/local"))
+    std::env::var_os("HOME").map_or_else(
+        || PathBuf::from("/usr/local"),
+        |h| PathBuf::from(h).join(".local"),
+    )
 }
 
 fn write_completion(

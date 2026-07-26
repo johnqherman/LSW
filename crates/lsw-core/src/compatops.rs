@@ -150,9 +150,7 @@ fn compat_inner(
     }
 
     let capabilities = classify(&imported);
-    let imported_functions = lsw_pe::imported_symbols(program)
-        .map(|s| s.len())
-        .unwrap_or(0);
+    let imported_functions = lsw_pe::imported_symbols(program).map_or(0, |s| s.len());
 
     Ok(CompatReport {
         imported_dlls: imported.len(),

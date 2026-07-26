@@ -24,7 +24,7 @@ impl Project {
         {
             return Err(Error::UnsupportedFilesystem {
                 drive: manifest.filesystem.project_drive.clone(),
-                mount: manifest.filesystem.mount_project.clone(),
+                mount: manifest.filesystem.mount_project,
             });
         }
         Ok(Self { root, manifest })

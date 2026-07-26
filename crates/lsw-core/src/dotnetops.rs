@@ -115,15 +115,13 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<DotnetInitRe
 }
 
 fn has_dotnet_project(root: &std::path::Path) -> bool {
-    fs::read_dir(root)
-        .map(|entries| {
-            entries.flatten().take(1_000_000).any(|e| {
-                let name = e.file_name();
-                let name = name.to_string_lossy();
-                name.ends_with(".csproj") || name.ends_with(".sln") || name.ends_with(".fsproj")
-            })
+    fs::read_dir(root).is_ok_and(|entries| {
+        entries.flatten().take(1_000_000).any(|e| {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            name.ends_with(".csproj") || name.ends_with(".sln") || name.ends_with(".fsproj")
         })
-        .unwrap_or(false)
+    })
 }
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
@@ -170,7 +168,9 @@ pub fn doctor(env: &Environment) -> Result<DotnetDoctor> {
         } else {
             Check::NotConfigured
         },
-        native_aot: if crate::buildops::which("lld-link").is_some() && crate::buildops::which("clang").is_some() {
+        native_aot: if crate::buildops::which("lld-link").is_some()
+            && crate::buildops::which("clang").is_some()
+        {
             Check::Ok
         } else {
             Check::Missing
