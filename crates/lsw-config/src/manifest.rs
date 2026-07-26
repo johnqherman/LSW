@@ -13,21 +13,21 @@ use crate::types::{CaseSensitivity, LinkMode, TargetArch};
 #[serde(deny_unknown_fields)]
 pub struct ProjectManifest {
     pub project: ProjectSection,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default_section")]
     pub target: TargetSection,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default_section")]
     pub toolchain: ToolchainSection,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default_section")]
     pub runtime: RuntimeSection,
     #[serde(default, skip_serializing_if = "EnvironmentSection::is_empty")]
     pub environment: EnvironmentSection,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default_section")]
     pub filesystem: FilesystemSection,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub build: Option<CommandSection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test: Option<CommandSection>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default_section")]
     pub sandbox: SandboxSection,
     #[serde(default, skip_serializing_if = "VerifySection::is_empty")]
     pub verify: VerifySection,
@@ -181,6 +181,10 @@ pub struct ToolchainSection {
 
 fn is_false(value: &bool) -> bool {
     !*value
+}
+
+fn is_default_section<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

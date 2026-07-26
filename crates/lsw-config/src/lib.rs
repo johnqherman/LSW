@@ -45,11 +45,34 @@ mod tests {
     #[test]
     fn fresh_manifest_omits_empty_sections() {
         let text = toml::to_string_pretty(&ProjectManifest::new("x")).unwrap();
-        for section in ["[verify]", "[env]", "[registry]", "[environment]"] {
-            assert!(!text.contains(section), "should not emit empty {section}");
+        for section in [
+            "[verify]",
+            "[env]",
+            "[registry]",
+            "[environment]",
+            "[target]",
+            "[toolchain]",
+            "[runtime]",
+            "[filesystem]",
+            "[sandbox]",
+        ] {
+            assert!(!text.contains(section), "should not emit default {section}");
         }
         let back: ProjectManifest = toml::from_str(&text).unwrap();
         assert_eq!(back, ProjectManifest::new("x"));
+    }
+
+    #[test]
+    fn non_default_sections_still_serialize() {
+        let mut m = ProjectManifest::new("x");
+        m.target.arch = TargetArch::Aarch64;
+        m.sandbox.network = "isolated".into();
+        let text = toml::to_string_pretty(&m).unwrap();
+        assert!(text.contains("[target]"));
+        assert!(text.contains("arch = \"aarch64\""));
+        assert!(text.contains("[sandbox]"));
+        let back: ProjectManifest = toml::from_str(&text).unwrap();
+        assert_eq!(back, m);
     }
 
     #[test]
