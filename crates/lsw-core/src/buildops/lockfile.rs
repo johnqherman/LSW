@@ -15,7 +15,7 @@ pub(crate) fn stamp_build_dir(project: &Project, env: &Environment) -> Result<()
         });
     }
     let marker = build_dir.join(".lsw-env");
-    let owner = super::read_capped(&marker, 1024 * 1024).and_then(|b| String::from_utf8(b).ok());
+    let owner = super::read_capped_string(&marker, 1024 * 1024);
     if build_dir.is_dir()
         && let Some(owner) = &owner
         && owner.trim() != env.name

@@ -244,6 +244,82 @@ pub(crate) fn validate_windows_name(name: &str) -> Result<()> {
     }
 }
 
+pub(crate) fn ssh_command(
+    host: &str,
+    identity: Option<&str>,
+    remote_cmd: &str,
+) -> Result<Output> {
+    capped_output(
+        Command::new("ssh")
+            .args(ssh_opts(identity))
+            .arg(host)
+            .arg(remote_cmd),
+    )
+    .map_err(|e| Error::io(PathBuf::from("ssh"), e))
+}
+
+pub(crate) fn ensure_remote_dir(
+    host: &str,
+    identity: Option<&str>,
+    dir: &str,
+) -> Result<Option<String>> {
+    let out = ssh_command(
+        host,
+        identity,
+        &format!("cmd /c \"if not exist \"{dir}\" mkdir \"{dir}\"\""),
+    )?;
+    Ok(if out.status.success() {
+        None
+    } else {
+        Some(String::from_utf8_lossy(&out.stderr).trim().to_owned())
+    })
+}
+
+pub(crate) fn scp_upload(
+    host: &str,
+    identity: Option<&str>,
+    local: &std::path::Path,
+    remote: &str,
+) -> Result<Option<String>> {
+    let out = capped_output(
+        Command::new("scp")
+            .args(ssh_opts(identity))
+            .arg(local)
+            .arg(format!("{host}:{remote}")),
+    )
+    .map_err(|e| Error::io(PathBuf::from("scp"), e))?;
+    Ok(if out.status.success() {
+        None
+    } else {
+        Some(String::from_utf8_lossy(&out.stderr).trim().to_owned())
+    })
+}
+
+pub(crate) fn finish_report(
+    host: String,
+    results: Vec<AgentResult>,
+    all_passed: bool,
+) -> VerifyReport {
+    let status = if results.is_empty() {
+        VerifyStatus::WindowsUnavailable
+    } else if all_passed {
+        VerifyStatus::WindowsVerified
+    } else {
+        VerifyStatus::WindowsFailed
+    };
+    let detail = match status {
+        VerifyStatus::WindowsVerified => "all artifacts ran successfully on native Windows".into(),
+        VerifyStatus::WindowsFailed => "one or more artifacts failed on native Windows".into(),
+        VerifyStatus::WindowsUnavailable => "no runnable artifacts were produced".into(),
+    };
+    VerifyReport {
+        status,
+        host: Some(host),
+        results,
+        detail,
+    }
+}
+
 fn run_ssh_plan(
     host: &str,
     plan: &AgentPlan,
@@ -257,47 +333,23 @@ fn run_ssh_plan(
     } else {
         format!(" {}", args.join(" "))
     };
-    let mkdir = capped_output(
-        Command::new("ssh")
-            .args(ssh_opts(identity))
-            .arg(host)
-            .arg(format!(
-                "cmd /c \"if not exist \"{}\" mkdir \"{}\"\"",
-                plan.remote_dir, plan.remote_dir
-            )),
-    )
-    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
-    if !mkdir.status.success() {
+    if let Some(detail) = ensure_remote_dir(host, identity, &plan.remote_dir)? {
         return Ok(VerifyReport {
             status: VerifyStatus::WindowsUnavailable,
             host: Some(host.to_owned()),
             results: Vec::new(),
-            detail: format!(
-                "could not reach Windows host '{host}': {}",
-                String::from_utf8_lossy(&mkdir.stderr).trim()
-            ),
+            detail: format!("could not reach Windows host '{host}': {detail}"),
         });
     }
 
     for (local, remote_name) in &plan.uploads {
-        let dest = format!("{host}:{}/{remote_name}", plan.remote_dir);
-        let scp = capped_output(
-            Command::new("scp")
-                .args(ssh_opts(identity))
-                .arg(local)
-                .arg(&dest),
-        )
-        .map_err(|e| Error::io(PathBuf::from("scp"), e))?;
-        if !scp.status.success() {
+        let dest = format!("{}/{remote_name}", plan.remote_dir);
+        if let Some(detail) = scp_upload(host, identity, local, &dest)? {
             return Ok(VerifyReport {
                 status: VerifyStatus::WindowsUnavailable,
                 host: Some(host.to_owned()),
                 results: Vec::new(),
-                detail: format!(
-                    "failed to upload {}: {}",
-                    local.display(),
-                    String::from_utf8_lossy(&scp.stderr).trim()
-                ),
+                detail: format!("failed to upload {}: {detail}", local.display()),
             });
         }
     }
@@ -312,13 +364,7 @@ fn run_ssh_plan(
             dir = plan.remote_dir,
             prog = program,
         );
-        let out = capped_output(
-            Command::new("ssh")
-                .args(ssh_opts(identity))
-                .arg(host)
-                .arg(&remote_cmd),
-        )
-        .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
+        let out = ssh_command(host, identity, &remote_cmd)?;
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
 
         let remote_code = parse_sentinel_code(&stdout, sentinel);
@@ -357,24 +403,7 @@ fn run_ssh_plan(
         });
     }
 
-    let status = if results.is_empty() {
-        VerifyStatus::WindowsUnavailable
-    } else if all_passed {
-        VerifyStatus::WindowsVerified
-    } else {
-        VerifyStatus::WindowsFailed
-    };
-    let detail = match status {
-        VerifyStatus::WindowsVerified => "all artifacts ran successfully on native Windows".into(),
-        VerifyStatus::WindowsFailed => "one or more artifacts failed on native Windows".into(),
-        VerifyStatus::WindowsUnavailable => "no runnable artifacts were produced".into(),
-    };
-    Ok(VerifyReport {
-        status,
-        host: Some(host.to_owned()),
-        results,
-        detail,
-    })
+    Ok(finish_report(host.to_owned(), results, all_passed))
 }
 
 fn parse_sentinel_code(stdout: &str, sentinel: &str) -> Option<i32> {

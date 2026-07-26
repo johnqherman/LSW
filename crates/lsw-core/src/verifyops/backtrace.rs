@@ -94,33 +94,16 @@ fn prep_remote(project: &Project, target: &std::path::Path) -> Result<Option<Rem
     let remote_fwd = remote_dir.replace('\\', "/");
     let remote_target = format!("{remote_dir}\\{name}");
 
-    let mkdir = super::capped_output(
-        Command::new("ssh")
-            .args(ssh_opts(identity.as_deref()))
-            .arg(&host)
-            .arg(format!(
-                "cmd /c \"if not exist \"{remote_dir}\" mkdir \"{remote_dir}\"\""
-            )),
-    )
-    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
-    if !mkdir.status.success() {
-        return Err(Error::ProbeFailed {
-            host,
-            detail: String::from_utf8_lossy(&mkdir.stderr).trim().to_owned(),
-        });
+    if let Some(detail) = super::ensure_remote_dir(&host, identity.as_deref(), &remote_dir)? {
+        return Err(Error::ProbeFailed { host, detail });
     }
-    let scp = super::capped_output(
-        Command::new("scp")
-            .args(ssh_opts(identity.as_deref()))
-            .arg(target)
-            .arg(format!("{host}:{remote_fwd}/{name}")),
-    )
-    .map_err(|e| Error::io(PathBuf::from("scp"), e))?;
-    if !scp.status.success() {
-        return Err(Error::ProbeFailed {
-            host,
-            detail: String::from_utf8_lossy(&scp.stderr).trim().to_owned(),
-        });
+    if let Some(detail) = super::scp_upload(
+        &host,
+        identity.as_deref(),
+        target,
+        &format!("{remote_fwd}/{name}"),
+    )? {
+        return Err(Error::ProbeFailed { host, detail });
     }
     Ok(Some(RemoteCdb {
         host,

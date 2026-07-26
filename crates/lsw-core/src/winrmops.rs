@@ -368,24 +368,7 @@ pub fn run_on_host(
     winrm.delete_shell(&shell);
     let (results, all_passed) = result?;
 
-    let status = if results.is_empty() {
-        VerifyStatus::WindowsUnavailable
-    } else if all_passed {
-        VerifyStatus::WindowsVerified
-    } else {
-        VerifyStatus::WindowsFailed
-    };
-    let detail = match status {
-        VerifyStatus::WindowsVerified => "all artifacts ran successfully on native Windows".into(),
-        VerifyStatus::WindowsFailed => "one or more artifacts failed on native Windows".into(),
-        VerifyStatus::WindowsUnavailable => "no runnable artifacts were produced".into(),
-    };
-    Ok(VerifyReport {
-        status,
-        host: Some(winrm.addr),
-        results,
-        detail,
-    })
+    Ok(verifyops::finish_report(winrm.addr, results, all_passed))
 }
 
 fn xml(s: &str) -> String {

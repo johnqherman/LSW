@@ -227,9 +227,8 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             } else {
                 None
             };
-            let toolchain_contents = read_capped(&toolchain_file, 4 * 1024 * 1024)
-                .and_then(|b| String::from_utf8(b).ok())
-                .unwrap_or_default();
+            let toolchain_contents =
+                read_capped_string(&toolchain_file, 4 * 1024 * 1024).unwrap_or_default();
             let cmake_config = format!(
                 "{tc:?}|arch={}|generator={generator:?}|toolchain_path={}|toolchain_body={}|prefix={}|emulator={}|deps={:?}|env={}",
                 env.manifest.target_arch,
@@ -330,7 +329,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
             let configured = project.root.join("build").join("meson-info").is_dir();
             let fp_path = project.root.join("build").join(".lsw-meson-cross");
             let recorded_fp =
-                read_capped(&fp_path, 1024 * 1024).and_then(|b| String::from_utf8(b).ok());
+                read_capped_string(&fp_path, 1024 * 1024);
             let fp_match = configured && recorded_fp.as_deref() == cross_hash.as_deref();
             if !fp_match {
                 let mut setup = vec![
@@ -464,7 +463,7 @@ fn refresh_stale_cmake_build_dir(build_dir: &Path, config: &str) -> Result<()> {
     }
     let fingerprint = cmake_config_fingerprint(config);
     let marker = build_dir.join(".lsw-toolchain");
-    let recorded = read_capped(&marker, 1024 * 1024).and_then(|b| String::from_utf8(b).ok());
+    let recorded = read_capped_string(&marker, 1024 * 1024);
     if recorded.is_some_and(|m| m.trim() == fingerprint) {
         return Ok(());
     }
@@ -513,12 +512,16 @@ fn file_hash(path: &Path) -> Option<String> {
     lsw_toolchain::sha256_file(path).ok()
 }
 
-pub(super) fn read_capped(path: &Path, max: u64) -> Option<Vec<u8>> {
+pub(crate) fn read_capped(path: &Path, max: u64) -> Option<Vec<u8>> {
     use std::io::Read;
     let file = fs::File::open(path).ok()?;
     let mut buf = Vec::new();
     file.take(max).read_to_end(&mut buf).ok()?;
     Some(buf)
+}
+
+pub(crate) fn read_capped_string(path: &Path, max: u64) -> Option<String> {
+    String::from_utf8(read_capped(path, max)?).ok()
 }
 
 pub(super) fn safe_marker_write(path: &Path, contents: impl AsRef<[u8]>) {

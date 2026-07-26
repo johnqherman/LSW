@@ -73,20 +73,8 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
     let remote_script = format!("{remote_dir}\\lsw_probe.ps1");
     let script = probe_script(&grouped);
 
-    let mkdir = super::capped_output(
-        Command::new("ssh")
-            .args(ssh_opts(identity.as_deref()))
-            .arg(&host)
-            .arg(format!(
-                "cmd /c \"if not exist \"{remote_dir}\" mkdir \"{remote_dir}\"\""
-            )),
-    )
-    .map_err(|e| Error::io(PathBuf::from("ssh"), e))?;
-    if !mkdir.status.success() {
-        return Err(Error::ProbeFailed {
-            host,
-            detail: String::from_utf8_lossy(&mkdir.stderr).trim().to_owned(),
-        });
+    if let Some(detail) = super::ensure_remote_dir(&host, identity.as_deref(), &remote_dir)? {
+        return Err(Error::ProbeFailed { host, detail });
     }
 
     let nonce = format!(
@@ -108,19 +96,15 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
         f.write_all(script.as_bytes())
             .map_err(|e| Error::io(local_script.clone(), e))?;
     }
-    let scp = super::capped_output(
-        Command::new("scp")
-            .args(ssh_opts(identity.as_deref()))
-            .arg(&local_script)
-            .arg(format!("{host}:{remote_fwd}/lsw_probe.ps1")),
-    )
-    .map_err(|e| Error::io(PathBuf::from("scp"), e))?;
+    let scp = super::scp_upload(
+        &host,
+        identity.as_deref(),
+        &local_script,
+        &format!("{remote_fwd}/lsw_probe.ps1"),
+    );
     let _ = std::fs::remove_file(&local_script);
-    if !scp.status.success() {
-        return Err(Error::ProbeFailed {
-            host,
-            detail: String::from_utf8_lossy(&scp.stderr).trim().to_owned(),
-        });
+    if let Some(detail) = scp? {
+        return Err(Error::ProbeFailed { host, detail });
     }
 
     let out = super::capped_output(
