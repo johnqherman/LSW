@@ -1,12 +1,10 @@
 use std::path::Path;
 
 use object::LittleEndian as LE;
-use object::pe;
-use object::pe::{ImageNtHeaders32, ImageNtHeaders64};
-use object::read::pe::{ImageNtHeaders, Import, PeFile, optional_header_magic};
+use object::read::pe::{ImageNtHeaders, Import, PeFile};
 
-use crate::MZ_MAGIC;
 use crate::error::PeError;
+use crate::image::{PeImage, dispatch_pe};
 
 const MAX_NAMES: usize = 65536;
 const MAX_NAME_LEN: usize = 512;
@@ -17,19 +15,20 @@ fn decode_name(raw: &[u8]) -> String {
 }
 
 pub fn imports(path: &Path) -> Result<Vec<String>, PeError> {
-    let data = crate::error::read_pe(path)?;
-    if !data.starts_with(MZ_MAGIC) {
-        return Err(PeError::NotPe {
-            path: path.to_path_buf(),
-        });
+    PeImage::open(path)?.imports()
+}
+
+impl PeImage {
+    pub fn imports(&self) -> Result<Vec<String>, PeError> {
+        dispatch_pe!(&self.path, &self.data, imports_typed)
     }
-    match optional_header_magic(&*data).map_err(|e| PeError::malformed(path, e))? {
-        pe::IMAGE_NT_OPTIONAL_HDR32_MAGIC => imports_typed::<ImageNtHeaders32>(path, &data),
-        pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC => imports_typed::<ImageNtHeaders64>(path, &data),
-        other => Err(PeError::malformed(
-            path,
-            format!("unrecognized optional header magic 0x{other:04x}"),
-        )),
+
+    pub fn exports(&self) -> Result<Vec<String>, PeError> {
+        dispatch_pe!(&self.path, &self.data, exports_typed)
+    }
+
+    pub fn imported_symbols(&self) -> Result<Vec<(String, String)>, PeError> {
+        dispatch_pe!(&self.path, &self.data, imported_symbols_typed)
     }
 }
 
@@ -69,20 +68,7 @@ fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
 }
 
 pub fn exports(path: &Path) -> Result<Vec<String>, PeError> {
-    let data = crate::error::read_pe(path)?;
-    if !data.starts_with(MZ_MAGIC) {
-        return Err(PeError::NotPe {
-            path: path.to_path_buf(),
-        });
-    }
-    match optional_header_magic(&*data).map_err(|e| PeError::malformed(path, e))? {
-        pe::IMAGE_NT_OPTIONAL_HDR32_MAGIC => exports_typed::<ImageNtHeaders32>(path, &data),
-        pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC => exports_typed::<ImageNtHeaders64>(path, &data),
-        other => Err(PeError::malformed(
-            path,
-            format!("unrecognized optional header magic 0x{other:04x}"),
-        )),
-    }
+    PeImage::open(path)?.exports()
 }
 
 fn exports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<String>, PeError> {
@@ -117,24 +103,7 @@ fn exports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
 }
 
 pub fn imported_symbols(path: &Path) -> Result<Vec<(String, String)>, PeError> {
-    let data = crate::error::read_pe(path)?;
-    if !data.starts_with(MZ_MAGIC) {
-        return Err(PeError::NotPe {
-            path: path.to_path_buf(),
-        });
-    }
-    match optional_header_magic(&*data).map_err(|e| PeError::malformed(path, e))? {
-        pe::IMAGE_NT_OPTIONAL_HDR32_MAGIC => {
-            imported_symbols_typed::<ImageNtHeaders32>(path, &data)
-        }
-        pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC => {
-            imported_symbols_typed::<ImageNtHeaders64>(path, &data)
-        }
-        other => Err(PeError::malformed(
-            path,
-            format!("unrecognized optional header magic 0x{other:04x}"),
-        )),
-    }
+    PeImage::open(path)?.imported_symbols()
 }
 
 fn imported_symbols_typed<Pe: ImageNtHeaders>(

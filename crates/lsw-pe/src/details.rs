@@ -1,12 +1,10 @@
 use std::path::Path;
 
 use object::LittleEndian as LE;
-use object::pe;
-use object::pe::{ImageNtHeaders32, ImageNtHeaders64};
-use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile, optional_header_magic};
+use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile};
 
-use crate::MZ_MAGIC;
 use crate::error::PeError;
+use crate::image::{PeImage, dispatch_pe};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SectionInfo {
@@ -24,19 +22,12 @@ pub struct PeDetails {
 }
 
 pub fn details(path: &Path) -> Result<PeDetails, PeError> {
-    let data = crate::error::read_pe(path)?;
-    if !data.starts_with(MZ_MAGIC) {
-        return Err(PeError::NotPe {
-            path: path.to_path_buf(),
-        });
-    }
-    match optional_header_magic(&*data).map_err(|e| PeError::malformed(path, e))? {
-        pe::IMAGE_NT_OPTIONAL_HDR32_MAGIC => details_typed::<ImageNtHeaders32>(path, &data),
-        pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC => details_typed::<ImageNtHeaders64>(path, &data),
-        other => Err(PeError::malformed(
-            path,
-            format!("unrecognized optional header magic 0x{other:04x}"),
-        )),
+    PeImage::open(path)?.details()
+}
+
+impl PeImage {
+    pub fn details(&self) -> Result<PeDetails, PeError> {
+        dispatch_pe!(&self.path, &self.data, details_typed)
     }
 }
 
