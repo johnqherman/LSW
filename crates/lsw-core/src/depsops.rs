@@ -287,6 +287,31 @@ fn deps_root(project: &crate::project::Project, arch: lsw_config::TargetArch) ->
     project.root.join("deps").join(arch)
 }
 
+pub(crate) fn locked_deps(
+    project: &crate::project::Project,
+    arch: lsw_config::TargetArch,
+) -> std::collections::BTreeMap<String, lsw_config::LockedDep> {
+    let meta = deps_root(project, arch).join(".lsw");
+    project
+        .manifest
+        .dependencies
+        .iter()
+        .map(|(name, version)| {
+            let sha256 =
+                crate::buildops::read_capped_string(&meta.join(format!("{name}.sha256")), 1024)
+                    .map(|s| s.trim().to_owned())
+                    .unwrap_or_default();
+            (
+                name.clone(),
+                lsw_config::LockedDep {
+                    version: version.clone(),
+                    sha256,
+                },
+            )
+        })
+        .collect()
+}
+
 fn curl_download(url: &str, dest: &Path) -> Result<()> {
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| Error::io(parent.to_path_buf(), e))?;
@@ -505,6 +530,11 @@ pub fn add(
         std::fs::remove_file(&files_path).map_err(|e| Error::io(files_path.clone(), e))?;
     }
     std::fs::write(&files_path, files.join("\n")).map_err(|e| Error::io(files_path.clone(), e))?;
+    let sha_path = meta_dir.join(format!("{name}.sha256"));
+    if std::fs::symlink_metadata(&sha_path).is_ok_and(|m| m.file_type().is_symlink()) {
+        std::fs::remove_file(&sha_path).map_err(|e| Error::io(sha_path.clone(), e))?;
+    }
+    std::fs::write(&sha_path, &pkg.sha256).map_err(|e| Error::io(sha_path.clone(), e))?;
 
     let manifest_path = project.root.join("lsw.toml");
     let mut manifest = lsw_config::ProjectManifest::load(&manifest_path)?;
