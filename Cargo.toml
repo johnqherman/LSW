@@ -30,7 +30,6 @@ lsw-runtime = { path = "crates/lsw-runtime", version = "0.3.1" }
 lsw-path = { path = "crates/lsw-path", version = "0.3.1" }
 lsw-pe = { path = "crates/lsw-pe", version = "0.3.1" }
 
-anyhow = "1"
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"

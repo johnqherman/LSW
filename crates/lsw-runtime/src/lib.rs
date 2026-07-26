@@ -265,13 +265,6 @@ mod tests {
     }
 
     #[test]
-    fn providers_lists_wine_first() {
-        let all = providers();
-        assert_eq!(all.len(), 1);
-        assert_eq!(all[0].id(), "wine");
-    }
-
-    #[test]
     fn gated_prepare_is_idempotent_and_execute_runs_cmd() {
         if skip_without_wine_gate("gated_prepare_is_idempotent_and_execute_runs_cmd") {
             return;

@@ -210,13 +210,11 @@ impl Default for RuntimeSection {
 pub struct EnvironmentSection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub profile: Option<String>,
 }
 
 impl EnvironmentSection {
     fn is_empty(&self) -> bool {
-        self.name.is_none() && self.profile.is_none()
+        self.name.is_none()
     }
 }
 

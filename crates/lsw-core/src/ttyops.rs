@@ -28,7 +28,7 @@ extern "C" fn on_fatal(sig: libc::c_int) {
     }
 }
 
-pub fn stdin_is_tty() -> bool {
+pub(crate) fn stdin_is_tty() -> bool {
     unsafe { libc::isatty(0) == 1 }
 }
 
@@ -155,7 +155,7 @@ fn write_all_fd(fd: RawFd, mut data: &[u8]) {
     }
 }
 
-pub fn run_shell_in_pty(mut command: Command, exit_hint: &str) -> Result<ExitStatus> {
+pub(crate) fn run_shell_in_pty(mut command: Command, exit_hint: &str) -> Result<ExitStatus> {
     use std::os::fd::AsRawFd;
     use std::os::unix::process::CommandExt;
 
