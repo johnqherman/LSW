@@ -261,15 +261,22 @@ pub(crate) fn trace(
             lsw_core::traceops::TraceEventKind::Call => "call",
             lsw_core::traceops::TraceEventKind::Unsupported => "unsupported",
         };
-        println!("at_ms,kind,verb,path_or_key");
-        for e in &report.timeline {
-            println!(
-                "{},{},{},{}",
-                e.at_ms,
-                kind(e.kind),
-                csv_field(&e.verb),
-                csv_field(&e.path_or_key)
-            );
+        {
+            use std::io::Write;
+            let stdout = std::io::stdout().lock();
+            let mut out = std::io::BufWriter::new(stdout);
+            let _ = writeln!(out, "at_ms,kind,verb,path_or_key");
+            for e in &report.timeline {
+                let _ = writeln!(
+                    out,
+                    "{},{},{},{}",
+                    e.at_ms,
+                    kind(e.kind),
+                    csv_field(&e.verb),
+                    csv_field(&e.path_or_key)
+                );
+            }
+            let _ = out.flush();
         }
         if report.timeline_truncated {
             eprintln!("lsw: timeline truncated at the event cap");

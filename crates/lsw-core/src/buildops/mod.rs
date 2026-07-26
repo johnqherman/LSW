@@ -160,7 +160,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
         BuildSystem::Make | BuildSystem::Ninja | BuildSystem::Explicit
     );
     let pre_build = if flat_layout {
-        artifact_hashes(&project.root)
+        artifact_fingerprints(&project.root)
     } else {
         std::collections::HashMap::new()
     };
@@ -429,7 +429,7 @@ fn build_meson(
 fn reconcile_flat_artifacts(
     project: &Project,
     mut artifacts: Vec<PathBuf>,
-    pre_build: &std::collections::HashMap<PathBuf, String>,
+    pre_build: &std::collections::HashMap<PathBuf, (u64, std::time::SystemTime)>,
 ) -> Vec<PathBuf> {
     let manifest = project.root.join("build").join(".lsw-artifacts");
     artifacts.retain(|rel| is_safe_artifact(rel));
@@ -437,7 +437,7 @@ fn reconcile_flat_artifacts(
         .iter()
         .filter(|rel| {
             let abs = project.root.join(rel);
-            match (file_hash(&abs), pre_build.get(abs.as_path())) {
+            match (file_fingerprint(&abs), pre_build.get(abs.as_path())) {
                 (Some(now), Some(before)) => now != *before,
                 (Some(_), None) => true,
                 _ => false,
@@ -572,13 +572,18 @@ pub(super) fn safe_marker_write(path: &Path, contents: impl AsRef<[u8]>) {
     let _ = fs::write(path, contents);
 }
 
-fn artifact_hashes(root: &Path) -> std::collections::HashMap<PathBuf, String> {
+fn file_fingerprint(path: &Path) -> Option<(u64, std::time::SystemTime)> {
+    let meta = fs::metadata(path).ok()?;
+    Some((meta.len(), meta.modified().ok()?))
+}
+
+fn artifact_fingerprints(root: &Path) -> std::collections::HashMap<PathBuf, (u64, std::time::SystemTime)> {
     let mut out = std::collections::HashMap::new();
     let mut paths = Vec::new();
     walk(root, &mut paths);
     for p in paths {
-        if let Some(h) = file_hash(&p) {
-            out.insert(p, h);
+        if let Some(fp) = file_fingerprint(&p) {
+            out.insert(p, fp);
         }
     }
     out
