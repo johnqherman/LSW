@@ -129,6 +129,9 @@ pub(crate) enum Cmd {
         /// Write a JUnit XML report (ctest and meson runs).
         #[arg(long, value_name = "FILE")]
         junit: Option<PathBuf>,
+        /// Instrument with clang source coverage and print a report (llvm-mingw).
+        #[arg(long)]
+        coverage: bool,
     },
     /// Validate the project: build, wine execution, deps, hardening.
     Check {
@@ -241,9 +244,13 @@ pub(crate) enum Cmd {
     Registry(RegistryCmd),
     /// Debug a Windows binary with winedbg (or its gdb proxy).
     Debug {
-        program: PathBuf,
+        #[arg(required_unless_present = "attach")]
+        program: Option<PathBuf>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
+        /// Attach to a running process in the environment (see lsw ps).
+        #[arg(long, value_name = "PID", conflicts_with_all = ["native", "analyze", "interactive", "no_start"])]
+        attach: Option<u32>,
         /// Start a gdbserver-compatible proxy instead of the console.
         #[arg(long)]
         gdb: bool,
@@ -386,6 +393,8 @@ pub(crate) enum DepsCmd {
     },
     /// Install a mingw-w64 library (headers, import/static libs, DLLs).
     Add { name: String },
+    /// Copy a prebuilt include/lib/bin tree (e.g. a vcpkg export) into deps/.
+    Vendor { dir: PathBuf },
     /// Remove an installed library.
     Remove { name: String },
     /// List installed libraries.
@@ -413,7 +422,7 @@ pub(crate) enum ProvisionCmd {
 
 #[derive(Subcommand)]
 pub(crate) enum CiCmd {
-    /// Write a GitHub Actions workflow (.github/workflows/lsw.yml).
+    /// Write a CI pipeline (GitHub Actions or GitLab CI).
     Init {
         #[arg(value_enum, default_value_t = CiProvider::Github)]
         provider: CiProvider,
@@ -423,6 +432,7 @@ pub(crate) enum CiCmd {
 #[derive(Clone, Copy, ValueEnum)]
 pub(crate) enum CiProvider {
     Github,
+    Gitlab,
 }
 
 #[derive(Subcommand)]
@@ -435,6 +445,8 @@ pub(crate) enum ConfigCmd {
 pub(crate) enum IdeCmd {
     /// Print the environment description IDE plugins consume (JSON).
     Env,
+    /// Write a ready debug launch configuration (.vscode/launch.json).
+    LaunchConfig,
 }
 
 #[derive(Subcommand)]
@@ -578,6 +590,16 @@ pub(crate) enum EnvCmd {
     /// Provision the environment's prefix with extra components.
     #[command(subcommand)]
     Provision(ProvisionCmd),
+    /// Pack an environment into a portable .tar.zst (CI cache handoff).
+    Export { name: String, file: PathBuf },
+    /// Restore an environment from an exported archive.
+    ImportArchive {
+        name: String,
+        file: PathBuf,
+        /// Overwrite an existing environment of the same name.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]

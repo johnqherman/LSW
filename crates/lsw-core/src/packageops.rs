@@ -391,9 +391,9 @@ fn render_wxs(name: &str, package: &lsw_config::PackageSection, files: &[String]
                 let stem = std::path::Path::new(exe.as_str())
                     .file_stem()
                     .map_or_else(|| exe.to_string(), |s| s.to_string_lossy().into_owned());
-                let _ = write!(
+                let _ = writeln!(
                     shortcuts,
-                    "\x20       <Shortcut Id=\"menu{i}\" Name=\"{}\" Target=\"[INSTALLDIR]{}\" WorkingDirectory=\"INSTALLDIR\"/>\n",
+                    "\x20       <Shortcut Id=\"menu{i}\" Name=\"{}\" Target=\"[INSTALLDIR]{}\" WorkingDirectory=\"INSTALLDIR\"/>",
                     crate::xml_escape(&stem),
                     crate::xml_escape(exe)
                 );

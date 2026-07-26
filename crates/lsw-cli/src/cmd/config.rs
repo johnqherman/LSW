@@ -36,8 +36,10 @@ pub(crate) fn config(op: &ConfigCmd, format: Format) -> lsw_core::Result<ExitCod
 pub(crate) fn ci(op: &CiCmd) -> lsw_core::Result<ExitCode> {
     match op {
         CiCmd::Init { provider } => {
-            let CiProvider::Github = provider;
-            let path = lsw_core::ciops::init_github(&cwd()?)?;
+            let path = match provider {
+                CiProvider::Github => lsw_core::ciops::init_github(&cwd()?)?,
+                CiProvider::Gitlab => lsw_core::ciops::init_gitlab(&cwd()?)?,
+            };
             println!("wrote {}", path.display());
             Ok(ExitCode::SUCCESS)
         }
