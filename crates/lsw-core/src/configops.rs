@@ -114,11 +114,14 @@ pub fn lint(manifest: &ProjectManifest) -> Vec<Finding> {
 
     if manifest.verify.host.is_some()
         && let Some(transport) = &manifest.verify.transport
-        && transport != "ssh"
+        && !crate::verifyops::SUPPORTED_TRANSPORTS.contains(&transport.as_str())
     {
         error(
             &mut out,
-            format!("[verify] transport = \"{transport}\" is unsupported (only ssh)"),
+            format!(
+                "[verify] transport = \"{transport}\" is unsupported (use {})",
+                crate::verifyops::SUPPORTED_TRANSPORTS.join(", ")
+            ),
         );
     }
 
