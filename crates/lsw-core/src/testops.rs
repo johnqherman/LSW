@@ -44,6 +44,15 @@ pub struct TestReport {
 #[derive(Debug, Default)]
 pub struct TestOptions {
     pub headless: bool,
+    pub junit: Option<std::path::PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TestKind {
+    Explicit,
+    Ctest,
+    Cargo,
+    Meson,
 }
 
 pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<TestReport> {
@@ -53,7 +62,22 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
         outcome: Outcome::Pass,
     };
 
-    let argv = test_command(project)?;
+    let (mut argv, extra_env, kind) = test_command(project, env)?;
+    if let Some(junit) = &opts.junit {
+        match kind {
+            TestKind::Ctest => {
+                let abs = std::path::absolute(junit).map_err(|e| Error::io(junit.clone(), e))?;
+                argv.push("--output-junit".into());
+                argv.push(abs.display().to_string());
+            }
+            TestKind::Meson => {}
+            TestKind::Explicit | TestKind::Cargo => {
+                tracing::warn!(
+                    "--junit is supported for ctest and meson test runs only; no report will be written"
+                );
+            }
+        }
+    }
     let rendered = argv.join(" ");
     let (program, args) = argv.split_first().expect("test_command never empty");
 
@@ -72,6 +96,9 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
     command.args(&spawn_args).current_dir(&project.root);
     lsw_runtime::scrub_wine_env(&mut command);
     for (k, v) in lsw_runtime::base_env(&env.layout.prefix()) {
+        command.env(k, v);
+    }
+    for (k, v) in &extra_env {
         command.env(k, v);
     }
     if opts.headless {
@@ -114,7 +141,23 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
     eprint!("{}", String::from_utf8_lossy(&out_stdout));
     eprint!("{}", String::from_utf8_lossy(&out_stderr));
 
-    let (tests_passed, tests_failed) = parse_ctest_summary(&String::from_utf8_lossy(&out_stdout));
+    let stdout_text = String::from_utf8_lossy(&out_stdout);
+    let (tests_passed, tests_failed) = match kind {
+        TestKind::Cargo => parse_cargo_summary(&stdout_text),
+        TestKind::Meson => parse_meson_summary(&stdout_text),
+        TestKind::Ctest | TestKind::Explicit => parse_ctest_summary(&stdout_text),
+    };
+
+    if kind == TestKind::Meson
+        && let Some(junit) = &opts.junit
+    {
+        let log = project.root.join("build/meson-logs/testlog.junit.xml");
+        if log.is_file() {
+            std::fs::copy(&log, junit).map_err(|e| Error::io(junit.clone(), e))?;
+        } else {
+            tracing::warn!("meson wrote no testlog.junit.xml; --junit report unavailable");
+        }
+    }
 
     let passed = status.success() && tests_failed.is_none_or(|f| f == 0);
 
@@ -142,26 +185,139 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
     })
 }
 
-fn test_command(project: &Project) -> Result<Vec<String>> {
+type TestPlan = (Vec<String>, Vec<(String, String)>, TestKind);
+
+fn test_command(project: &Project, env: &Environment) -> Result<TestPlan> {
     if let Some(spec) = &project.manifest.test
         && !spec.command.is_empty()
     {
-        return Ok(spec.command.clone());
+        return Ok((spec.command.clone(), Vec::new(), TestKind::Explicit));
     }
     let build_dir = project.root.join("build");
     if has_ctest_config(&build_dir) {
         if !configured_with_emulator(&build_dir) {
             return Err(Error::TestEmulatorMissing);
         }
-        return Ok(vec![
-            "ctest".into(),
-            "--test-dir".into(),
-            "build".into(),
-            "--output-on-failure".into(),
-            "--no-tests=error".into(),
-        ]);
+        return Ok((
+            vec![
+                "ctest".into(),
+                "--test-dir".into(),
+                "build".into(),
+                "--output-on-failure".into(),
+                "--no-tests=error".into(),
+            ],
+            Vec::new(),
+            TestKind::Ctest,
+        ));
+    }
+    if project.root.join("meson.build").is_file() && build_dir.join("meson-info").is_dir() {
+        return Ok((
+            vec![
+                "meson".into(),
+                "test".into(),
+                "-C".into(),
+                "build".into(),
+                "--print-errorlogs".into(),
+            ],
+            Vec::new(),
+            TestKind::Meson,
+        ));
+    }
+    if project.root.join("Cargo.toml").is_file() {
+        return Ok((
+            cargo_test_argv(env)?,
+            cargo_test_env(project, env)?,
+            TestKind::Cargo,
+        ));
     }
     Err(Error::NoTests)
+}
+
+fn cargo_test_argv(env: &Environment) -> Result<Vec<String>> {
+    let triple =
+        env.manifest
+            .target_arch
+            .rust_gnu_triple()
+            .ok_or_else(|| Error::RustTargetUnavailable {
+                arch: env.manifest.target_arch.to_string(),
+            })?;
+    Ok(vec![
+        "cargo".into(),
+        "test".into(),
+        "--target".into(),
+        triple.to_owned(),
+    ])
+}
+
+fn cargo_test_env(project: &Project, env: &Environment) -> Result<Vec<(String, String)>> {
+    let triple =
+        env.manifest
+            .target_arch
+            .rust_gnu_triple()
+            .ok_or_else(|| Error::RustTargetUnavailable {
+                arch: env.manifest.target_arch.to_string(),
+            })?;
+    let triple_env = triple.to_uppercase().replace('-', "_");
+    let mut vars = vec![(
+        format!("CARGO_TARGET_{triple_env}_RUNNER"),
+        env.manifest.runtime.executable.display().to_string(),
+    )];
+    let default_linker = format!("{}-gcc", env.manifest.target_arch.mingw_triple());
+    if crate::buildops::which(&default_linker).is_none() {
+        let tc = crate::buildops::effective_toolchain(env, project);
+        let link_args: String = tc
+            .c_flags
+            .iter()
+            .chain(&tc.link_flags)
+            .map(|f| format!("-Clink-arg={f}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        vars.push((
+            format!("CARGO_TARGET_{triple_env}_LINKER"),
+            tc.cc.display().to_string(),
+        ));
+        vars.push((format!("CARGO_TARGET_{triple_env}_RUSTFLAGS"), link_args));
+    }
+    Ok(vars)
+}
+
+fn parse_cargo_summary(stdout: &str) -> (Option<u32>, Option<u32>) {
+    let mut passed: Option<u32> = None;
+    let mut failed: Option<u32> = None;
+    for line in stdout.lines() {
+        let line = line.trim();
+        let Some(rest) = line.strip_prefix("test result:") else {
+            continue;
+        };
+        let take = |marker: &str| -> Option<u32> {
+            rest.split(';').find_map(|part| {
+                let part = part.trim();
+                part.strip_suffix(marker)
+                    .and_then(|n| n.trim().rsplit(' ').next())
+                    .and_then(|n| n.parse().ok())
+            })
+        };
+        if let Some(p) = take(" passed") {
+            passed = Some(passed.unwrap_or(0) + p);
+        }
+        if let Some(f) = take(" failed") {
+            failed = Some(failed.unwrap_or(0) + f);
+        }
+    }
+    (passed, failed)
+}
+
+fn parse_meson_summary(stdout: &str) -> (Option<u32>, Option<u32>) {
+    let mut result = (None, None);
+    for line in stdout.lines() {
+        let line = line.trim();
+        if let Some(n) = line.strip_prefix("Ok:") {
+            result.0 = n.trim().parse().ok();
+        } else if let Some(n) = line.strip_prefix("Fail:") {
+            result.1 = n.trim().parse().ok();
+        }
+    }
+    result
 }
 
 fn has_ctest_config(build_dir: &Path) -> bool {
@@ -226,6 +382,21 @@ mod tests {
 
         let (p, f) = parse_ctest_summary("100% tests passed out of 1");
         assert_eq!((p, f), (Some(1), Some(0)));
+    }
+
+    #[test]
+    fn cargo_summary_sums_across_crates() {
+        let out = "test result: ok. 3 passed; 0 failed; 0 ignored\n\
+                   junk\n\
+                   test result: FAILED. 2 passed; 1 failed; 0 ignored";
+        assert_eq!(parse_cargo_summary(out), (Some(5), Some(1)));
+        assert_eq!(parse_cargo_summary("nothing"), (None, None));
+    }
+
+    #[test]
+    fn meson_summary_parses_ok_and_fail() {
+        let out = "Ok:                 4\nExpected Fail:      0\nFail:               1\n";
+        assert_eq!(parse_meson_summary(out), (Some(4), Some(1)));
     }
 
     #[test]

@@ -143,13 +143,19 @@ pub(crate) fn exec(
     Ok(exit_from_status(report.status))
 }
 
-pub(crate) fn test(headless: &bool, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
+pub(crate) fn test(
+    headless: &bool,
+    junit: &Option<PathBuf>,
+    dirs: &Dirs,
+    format: Format,
+) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
     let report = lsw_core::test(
         &p,
         &env,
         &lsw_core::TestOptions {
             headless: *headless,
+            junit: junit.clone(),
         },
     )?;
     if format == Format::Json {

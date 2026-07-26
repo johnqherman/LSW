@@ -126,6 +126,9 @@ pub(crate) enum Cmd {
         /// CI mode: no interactive display (exports LSW_HEADLESS=1).
         #[arg(long)]
         headless: bool,
+        /// Write a JUnit XML report (ctest and meson runs).
+        #[arg(long, value_name = "FILE")]
+        junit: Option<PathBuf>,
     },
     /// Validate the project: build, wine execution, deps, hardening.
     Check {

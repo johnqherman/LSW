@@ -161,7 +161,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             dump_on_crash,
         } => cmd::build::run(program, args, domain, dump_on_crash, &dirs),
         Cmd::Exec { domain, command } => cmd::build::exec(domain, command, &dirs),
-        Cmd::Test { headless } => cmd::build::test(headless, &dirs, cli.format),
+        Cmd::Test { headless, junit } => cmd::build::test(headless, junit, &dirs, cli.format),
         Cmd::Check { headless } => cmd::tooling::check(*headless, &dirs, cli.format),
         Cmd::Verify {
             native,
