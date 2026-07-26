@@ -510,20 +510,7 @@ fn decode_artifact_manifest(bytes: &[u8]) -> Vec<PathBuf> {
 }
 
 fn file_hash(path: &Path) -> Option<String> {
-    use sha2::Digest;
-    use std::io::Read;
-    let file = fs::File::open(path).ok()?;
-    let mut hasher = sha2::Sha256::new();
-    let mut reader = std::io::BufReader::new(file);
-    let mut chunk = [0u8; 65536];
-    loop {
-        let n = reader.read(&mut chunk).ok()?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&chunk[..n]);
-    }
-    Some(format!("{:x}", hasher.finalize()))
+    lsw_toolchain::sha256_file(path).ok()
 }
 
 pub(super) fn read_capped(path: &Path, max: u64) -> Option<Vec<u8>> {

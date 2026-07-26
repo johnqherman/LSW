@@ -164,7 +164,7 @@ pub fn doctor(env: &Environment) -> Result<RustDoctor> {
     let arch = env.manifest.target_arch;
     let triple = arch.rust_gnu_triple();
 
-    let cargo = which("cargo").is_some();
+    let cargo = crate::buildops::which("cargo").is_some();
     let target_installed = triple.is_some_and(rust_target_installed);
 
     let linker_ok = env.manifest.toolchain.cc.is_file();
@@ -200,7 +200,7 @@ pub(crate) fn ensure_target(arch: TargetArch) -> Result<()> {
     if rust_target_installed(triple) {
         return Ok(());
     }
-    if which("rustup").is_none() {
+    if crate::buildops::which("rustup").is_none() {
         return Err(Error::ToolMissing {
             tool: "rustup".into(),
             fix: format!("install rustup, or run: rustup target add {triple}"),
@@ -231,10 +231,6 @@ fn rust_target_installed(triple: &str) -> bool {
                 .any(|l| l.trim() == triple)
         })
         .unwrap_or(false)
-}
-
-fn which(program: &str) -> Option<std::path::PathBuf> {
-    crate::buildops::which(program)
 }
 
 #[cfg(test)]

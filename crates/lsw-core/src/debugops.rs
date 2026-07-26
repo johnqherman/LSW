@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, ExitStatus};
 
 use crate::envops::Environment;
@@ -29,7 +29,7 @@ pub fn debug(
         crate::buildops::check_lock(p, env)?;
     }
 
-    let winedbg = find_winedbg().ok_or_else(|| Error::ToolMissing {
+    let winedbg = crate::buildops::which("winedbg").ok_or_else(|| Error::ToolMissing {
         tool: "winedbg".into(),
         fix: "install wine (winedbg ships with it)".into(),
     })?;
@@ -48,11 +48,4 @@ pub fn debug(
     command.env("WINEDLLOVERRIDES", "winemenubuilder.exe=d");
 
     command.status().map_err(|e| Error::io(winedbg.clone(), e))
-}
-
-fn find_winedbg() -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|d| d.join("winedbg"))
-        .find(|c| c.is_file())
 }

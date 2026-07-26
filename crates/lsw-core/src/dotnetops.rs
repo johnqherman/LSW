@@ -149,7 +149,7 @@ pub fn doctor(env: &Environment) -> Result<DotnetDoctor> {
     let arch = env.manifest.target_arch;
     let rid = dotnet_rid(arch);
 
-    let sdk_ok = which("dotnet").is_some();
+    let sdk_ok = crate::buildops::which("dotnet").is_some();
     let runtime_ok = env.manifest.runtime.executable.is_file();
 
     Ok(DotnetDoctor {
@@ -170,7 +170,7 @@ pub fn doctor(env: &Environment) -> Result<DotnetDoctor> {
         } else {
             Check::NotConfigured
         },
-        native_aot: if which("lld-link").is_some() && which("clang").is_some() {
+        native_aot: if crate::buildops::which("lld-link").is_some() && crate::buildops::which("clang").is_some() {
             Check::Ok
         } else {
             Check::Missing
@@ -186,10 +186,6 @@ pub fn dotnet_rid(arch: TargetArch) -> Option<&'static str> {
         TargetArch::Aarch64 | TargetArch::Arm64Ec => Some("win-arm64"),
         TargetArch::Armv7 => None,
     }
-}
-
-fn which(program: &str) -> Option<std::path::PathBuf> {
-    crate::buildops::which(program)
 }
 
 #[cfg(test)]

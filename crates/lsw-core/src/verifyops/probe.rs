@@ -6,7 +6,9 @@ use serde::Serialize;
 use crate::error::{Error, Result};
 use crate::project::Project;
 
-use super::{default_remote_dir, expand_tilde, ssh_opts, validate_windows_dir, which};
+use super::{default_remote_dir, expand_tilde, ssh_opts, validate_windows_dir};
+
+use crate::buildops::which;
 
 #[derive(Debug, Serialize)]
 pub struct DllProbe {

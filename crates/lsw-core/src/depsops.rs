@@ -380,21 +380,7 @@ fn resolve(dirs: &lsw_config::Dirs, repo: &str, prefix: &str, name: &str) -> Res
 }
 
 fn sha256_of(path: &Path) -> Result<String> {
-    use sha2::{Digest, Sha256};
-    use std::io::Read;
-    let mut file = std::fs::File::open(path).map_err(|e| Error::io(path.to_path_buf(), e))?;
-    let mut hasher = Sha256::new();
-    let mut buf = [0u8; 65536];
-    loop {
-        let n = file
-            .read(&mut buf)
-            .map_err(|e| Error::io(path.to_path_buf(), e))?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buf[..n]);
-    }
-    Ok(format!("{:x}", hasher.finalize()))
+    lsw_toolchain::sha256_file(path).map_err(|e| Error::io(path.to_path_buf(), e))
 }
 
 fn is_safe_filename(name: &str) -> bool {

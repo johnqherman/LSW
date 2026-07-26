@@ -1,42 +1,82 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitStatus};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use sha2::{Digest, Sha256};
 
 const MAX_TOOL_OUTPUT: u64 = 16 * 1024 * 1024;
+const DRAIN_WAIT: Duration = Duration::from_secs(5);
 
-pub(crate) fn capped_output(cmd: &mut Command) -> std::io::Result<std::process::Output> {
+pub struct CappedOutput {
+    pub status: ExitStatus,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub timed_out: bool,
+}
+
+pub fn drain_capped(
+    mut reader: impl std::io::Read + Send + 'static,
+    cap: u64,
+) -> mpsc::Receiver<Vec<u8>> {
     use std::io::Read;
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = reader.by_ref().take(cap).read_to_end(&mut b);
+        let _ = std::io::copy(&mut reader, &mut std::io::sink());
+        let _ = tx.send(b);
+    });
+    rx
+}
+
+pub fn capped_output_with(
+    cmd: &mut Command,
+    cap: u64,
+    timeout: Option<Duration>,
+) -> std::io::Result<CappedOutput> {
     use std::process::Stdio;
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = cmd.spawn()?;
-    let so = child.stdout.take().expect("piped stdout");
-    let mut se = child.stderr.take().expect("piped stderr");
-    let drain = move |mut p: std::process::ChildStdout| {
-        std::thread::spawn(move || {
-            let mut b = Vec::new();
-            let _ = p.by_ref().take(MAX_TOOL_OUTPUT).read_to_end(&mut b);
-            let _ = std::io::copy(&mut p, &mut std::io::sink());
-            b
-        })
+    let rx_out = drain_capped(child.stdout.take().expect("piped stdout"), cap);
+    let rx_err = drain_capped(child.stderr.take().expect("piped stderr"), cap);
+    let mut timed_out = false;
+    let status = match timeout {
+        None => child.wait()?,
+        Some(limit) => {
+            let deadline = Instant::now() + limit;
+            loop {
+                if let Some(status) = child.try_wait()? {
+                    break status;
+                }
+                if Instant::now() >= deadline {
+                    timed_out = true;
+                    let _ = child.kill();
+                    break child.wait()?;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
     };
-    let h_out = drain(so);
-    let h_err = std::thread::spawn(move || {
-        let mut b = Vec::new();
-        let _ = se.by_ref().take(MAX_TOOL_OUTPUT).read_to_end(&mut b);
-        let _ = std::io::copy(&mut se, &mut std::io::sink());
-        b
-    });
-    let status = child.wait()?;
-    let stdout = h_out.join().unwrap_or_default();
-    let stderr = h_err.join().unwrap_or_default();
-    Ok(std::process::Output {
+    let stdout = rx_out.recv_timeout(DRAIN_WAIT).unwrap_or_default();
+    let stderr = rx_err.recv_timeout(DRAIN_WAIT).unwrap_or_default();
+    Ok(CappedOutput {
         status,
         stdout,
         stderr,
+        timed_out,
+    })
+}
+
+pub(crate) fn capped_output(cmd: &mut Command) -> std::io::Result<std::process::Output> {
+    let out = capped_output_with(cmd, MAX_TOOL_OUTPUT, None)?;
+    Ok(std::process::Output {
+        status: out.status,
+        stdout: out.stdout,
+        stderr: out.stderr,
     })
 }
 
@@ -53,26 +93,26 @@ pub fn compiler_version(cc: &Path) -> String {
     }
 }
 
+pub(crate) fn starts_with_mz(path: &Path) -> bool {
+    use std::io::Read as _;
+    std::fs::File::open(path)
+        .ok()
+        .and_then(|mut f| {
+            let mut magic = [0u8; 2];
+            f.read_exact(&mut magic).ok().map(|_| magic)
+        })
+        .is_some_and(|m| &m == b"MZ")
+}
+
 pub fn sha256_file(path: &Path) -> std::io::Result<String> {
     let mut file = fs::File::open(path)?;
     let mut hasher = Sha256::new();
     std::io::copy(&mut file, &mut hasher)?;
-    Ok(to_hex(hasher.finalize()))
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 pub fn sha256_bytes(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    to_hex(hasher.finalize())
-}
-
-fn to_hex(digest: impl AsRef<[u8]>) -> String {
-    let digest = digest.as_ref();
-    let mut hex = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        hex.push_str(&format!("{byte:02x}"));
-    }
-    hex
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 pub(crate) fn which(name: &str) -> Option<PathBuf> {
