@@ -41,7 +41,11 @@ pub(crate) fn setup(dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     );
     println!("  toolchain {}", report.toolchain);
     println!("  runtime   {}", report.runtime);
-    println!("\nReady:\n  lsw build");
+    if report.build_system.is_some() {
+        println!("\nReady:\n  lsw build");
+    } else {
+        println!("\nNext:\n  lsw init    scaffold a starter project here");
+    }
     Ok(ExitCode::SUCCESS)
 }
 
