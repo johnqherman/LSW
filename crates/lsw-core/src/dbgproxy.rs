@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
@@ -79,7 +79,7 @@ pub(crate) fn parse_stop(payload: &[u8]) -> Option<Stop> {
 }
 
 pub(crate) struct RspConn {
-    stream: TcpStream,
+    stream: BufReader<TcpStream>,
     no_ack: bool,
 }
 
@@ -91,13 +91,13 @@ impl RspConn {
             ))
         })?;
         Ok(Self {
-            stream,
+            stream: BufReader::new(stream),
             no_ack: false,
         })
     }
 
     fn set_timeout(&self, d: Option<Duration>) {
-        let _ = self.stream.set_read_timeout(d);
+        let _ = self.stream.get_ref().set_read_timeout(d);
     }
 
     fn read_byte(&mut self) -> Result<u8> {
@@ -111,9 +111,11 @@ impl RspConn {
     fn send(&mut self, payload: &[u8]) -> Result<()> {
         let pkt = encode_packet(payload);
         self.stream
+            .get_mut()
             .write_all(&pkt)
             .map_err(|e| dap(format!("gdb stub write failed: {e}")))?;
         self.stream
+            .get_mut()
             .flush()
             .map_err(|e| dap(format!("gdb stub flush failed: {e}")))?;
         if !self.no_ack {
@@ -156,8 +158,9 @@ impl RspConn {
             let got = format!("{:02x}", checksum(&raw));
             let valid = want.eq_ignore_ascii_case(&got);
             if !self.no_ack {
-                self.stream.write_all(if valid { b"+" } else { b"-" }).ok();
-                self.stream.flush().ok();
+                let raw_stream = self.stream.get_mut();
+                raw_stream.write_all(if valid { b"+" } else { b"-" }).ok();
+                raw_stream.flush().ok();
             }
             if valid {
                 return Ok(payload);
@@ -271,8 +274,9 @@ impl RspConn {
 
     pub(crate) fn kill(&mut self) {
         let pkt = encode_packet(b"k");
-        let _ = self.stream.write_all(&pkt);
-        let _ = self.stream.flush();
+        let raw_stream = self.stream.get_mut();
+        let _ = raw_stream.write_all(&pkt);
+        let _ = raw_stream.flush();
     }
 }
 

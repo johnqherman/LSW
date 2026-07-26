@@ -699,9 +699,11 @@ impl<'a> Adapter<'a> {
 
     fn source_step(&mut self, step_over: bool, out: &mut Vec<ProtocolMessage>) -> Result<Stop> {
         self.step_output_bytes = 0;
-        let start = self.current_line();
-        let start_sp = self.current_sp().unwrap_or(0);
-        let start_range = self.current_func_range();
+        let start_regs = self.read_regs();
+        let (start_rip, start_sp) = Self::rip_sp(start_regs.as_deref());
+        let start_sp = start_sp.unwrap_or(0);
+        let start = self.line_for(start_rip);
+        let start_range = self.func_range_for(start_rip);
         let mut prev_in_func = true;
         let mut prev_sp = start_sp;
         for _ in 0..500_000 {
@@ -713,13 +715,15 @@ impl<'a> Adapter<'a> {
             if !matches!(stop, Stop::Signal { signal: 5 }) {
                 return Ok(stop);
             }
-            if self.at_user_breakpoint() {
+            let regs = self.read_regs();
+            let (rip, sp) = Self::rip_sp(regs.as_deref());
+            if rip.is_some_and(|rip| self.bp_at(rip)) {
                 return Ok(Stop::Signal { signal: 5 });
             }
-            let sp = self.current_sp().unwrap_or(start_sp);
-            let in_func = self.rip_in_range(start_range);
+            let sp = sp.unwrap_or(start_sp);
+            let in_func = self.in_range(rip, start_range);
             let at_entry = start_range
-                .zip(self.current_rip())
+                .zip(rip)
                 .is_some_and(|((low, _), rip)| rip.wrapping_sub(self.slide) == low);
             let recursive_call = at_entry && sp < prev_sp;
             let is_call =
@@ -731,13 +735,15 @@ impl<'a> Adapter<'a> {
                 {
                     return Ok(stop);
                 }
-                prev_in_func = self.rip_in_range(start_range);
-                prev_sp = self.current_sp().unwrap_or(sp);
+                let regs = self.read_regs();
+                let (rip, sp_after) = Self::rip_sp(regs.as_deref());
+                prev_in_func = self.in_range(rip, start_range);
+                prev_sp = sp_after.unwrap_or(sp);
                 continue;
             }
             prev_in_func = in_func;
             prev_sp = sp;
-            let now = self.current_line();
+            let now = self.line_for(rip);
             if now.is_some() && now != start {
                 return Ok(Stop::Signal { signal: 5 });
             }
@@ -750,20 +756,44 @@ impl<'a> Adapter<'a> {
         })
     }
 
-    fn current_func_range(&mut self) -> Option<(u64, u64)> {
-        let rip = self.current_rip()?;
-        self.info.as_ref()?.func_range(rip.wrapping_sub(self.slide))
+    fn read_regs(&mut self) -> Option<Vec<u8>> {
+        self.conn.as_mut()?.read_registers().ok()
     }
 
-    fn rip_in_range(&mut self, range: Option<(u64, u64)>) -> bool {
-        let Some((low, high)) = range else {
-            return false;
-        };
-        let Some(rip) = self.current_rip() else {
-            return false;
-        };
-        let file_addr = rip.wrapping_sub(self.slide);
-        file_addr >= low && file_addr < high
+    fn rip_sp(regs: Option<&[u8]>) -> (Option<u64>, Option<u64>) {
+        match regs {
+            Some(regs) => (
+                amd64::reg(regs, amd64::RIP),
+                amd64::reg(regs, amd64::RSP),
+            ),
+            None => (None, None),
+        }
+    }
+
+    fn bp_at(&self, rip: u64) -> bool {
+        self.breakpoints.iter().any(|b| b.verified && b.addr == rip)
+    }
+
+    fn in_range(&self, rip: Option<u64>, range: Option<(u64, u64)>) -> bool {
+        match (rip, range) {
+            (Some(rip), Some((low, high))) => {
+                let file_addr = rip.wrapping_sub(self.slide);
+                file_addr >= low && file_addr < high
+            }
+            _ => false,
+        }
+    }
+
+    fn line_for(&self, rip: Option<u64>) -> Option<(String, u32)> {
+        let rip = rip?;
+        self.info
+            .as_ref()?
+            .addr_to_line(rip.wrapping_sub(self.slide))
+    }
+
+    fn func_range_for(&self, rip: Option<u64>) -> Option<(u64, u64)> {
+        let rip = rip?;
+        self.info.as_ref()?.func_range(rip.wrapping_sub(self.slide))
     }
 
     fn finish_call(
@@ -855,15 +885,6 @@ impl<'a> Adapter<'a> {
         };
         self.report_stop(stop, reason, out);
         Ok(())
-    }
-
-    fn current_line(&mut self) -> Option<(String, u32)> {
-        let conn = self.conn.as_mut()?;
-        let regs = conn.read_registers().ok()?;
-        let rip = amd64::reg(&regs, amd64::RIP)?;
-        self.info
-            .as_ref()?
-            .addr_to_line(rip.wrapping_sub(self.slide))
     }
 
     fn current_sp(&mut self) -> Option<u64> {

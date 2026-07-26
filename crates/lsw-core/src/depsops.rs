@@ -46,21 +46,37 @@ fn is_system_dll(name: &str) -> bool {
         || SYSTEM_DLLS.contains(&lower.as_str())
 }
 
-fn resolve_dll(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
-    let wanted = name.to_ascii_lowercase();
-    for dir in dirs {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            continue;
-        };
-        for entry in entries.flatten().take(MAX_DIR_ENTRIES) {
-            if entry.file_name().to_string_lossy().to_ascii_lowercase() == wanted
-                && entry.path().is_file()
-            {
-                return Some(entry.path());
-            }
-        }
+struct DllIndex {
+    by_name: Vec<std::collections::HashMap<String, PathBuf>>,
+}
+
+impl DllIndex {
+    fn build(dirs: &[PathBuf]) -> Self {
+        let by_name = dirs
+            .iter()
+            .map(|dir| {
+                let mut map = std::collections::HashMap::new();
+                let Ok(entries) = std::fs::read_dir(dir) else {
+                    return map;
+                };
+                for entry in entries.flatten().take(MAX_DIR_ENTRIES) {
+                    let lower = entry.file_name().to_string_lossy().to_ascii_lowercase();
+                    if entry.path().is_file() {
+                        map.entry(lower).or_insert_with(|| entry.path());
+                    }
+                }
+                map
+            })
+            .collect();
+        Self { by_name }
     }
-    None
+
+    fn resolve(&self, name: &str) -> Option<PathBuf> {
+        let wanted = name.to_ascii_lowercase();
+        self.by_name
+            .iter()
+            .find_map(|map| map.get(&wanted).cloned())
+    }
 }
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
@@ -97,7 +113,7 @@ fn search_dirs(env: Option<&Environment>, pe: &Path) -> Vec<PathBuf> {
 fn build(
     name: &str,
     path: &Path,
-    dirs: &[PathBuf],
+    dirs: &DllIndex,
     seen: &mut BTreeSet<String>,
     depth: usize,
     nodes: &mut usize,
@@ -126,7 +142,7 @@ fn build(
 
 fn node(
     name: &str,
-    dirs: &[PathBuf],
+    dirs: &DllIndex,
     seen: &mut BTreeSet<String>,
     depth: usize,
     nodes: &mut usize,
@@ -141,7 +157,7 @@ fn node(
             children: Vec::new(),
         };
     }
-    match resolve_dll(name, dirs) {
+    match dirs.resolve(name) {
         Some(resolved) => {
             if !seen.insert(key) {
                 return DepNode {
@@ -180,13 +196,14 @@ pub fn tree_with_dirs(dirs: &[PathBuf], pe: &Path) -> Result<DepNode> {
         });
     }
     lsw_pe::detect(pe)?;
+    let index = DllIndex::build(dirs);
     let mut seen = BTreeSet::new();
     let mut nodes = 0usize;
     let name = pe
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "root".to_owned());
-    let children = build(&name, pe, dirs, &mut seen, 0, &mut nodes);
+    let children = build(&name, pe, &index, &mut seen, 0, &mut nodes);
     Ok(DepNode {
         name,
         kind: DepKind::Root,
@@ -617,8 +634,8 @@ mod tests {
     fn resolve_dll_is_case_insensitive() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("libFoo-1.dll"), b"x").unwrap();
-        let dirs = vec![dir.path().to_path_buf()];
-        assert!(resolve_dll("libfoo-1.dll", &dirs).is_some());
-        assert!(resolve_dll("missing.dll", &dirs).is_none());
+        let index = DllIndex::build(&[dir.path().to_path_buf()]);
+        assert!(index.resolve("libfoo-1.dll").is_some());
+        assert!(index.resolve("missing.dll").is_none());
     }
 }
