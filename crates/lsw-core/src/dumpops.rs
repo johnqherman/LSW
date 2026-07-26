@@ -100,7 +100,7 @@ pub fn capture_wine_dump(
     if std::fs::symlink_metadata(&out_abs).is_ok() {
         std::fs::remove_file(&out_abs).map_err(|e| Error::io(out_abs.clone(), e))?;
     }
-    let windows_out = crate::runops::z_drive_path(&out_abs);
+    let windows_out = format!("Z:{}", out_abs.display());
     let script = if break_immediately {
         format!("minidump \"{windows_out}\"\nquit\n")
     } else {
