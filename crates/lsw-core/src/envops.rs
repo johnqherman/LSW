@@ -499,6 +499,27 @@ pub fn mapper(env: &Environment, project: &Project) -> lsw_path::PathMapper {
     )
 }
 
+pub fn provision_winetricks(
+    env: &Environment,
+    verbs: &[String],
+) -> Result<std::process::ExitStatus> {
+    let Some(winetricks) = crate::buildops::which("winetricks") else {
+        return Err(Error::ToolMissing {
+            tool: "winetricks".into(),
+            fix: "install winetricks from your package manager".into(),
+        });
+    };
+    let mut command = std::process::Command::new(winetricks);
+    lsw_runtime::scrub_wine_env(&mut command);
+    command
+        .arg("-q")
+        .args(verbs)
+        .env("WINEPREFIX", env.layout.prefix());
+    command
+        .status()
+        .map_err(|e| Error::io(std::path::PathBuf::from("winetricks"), e))
+}
+
 pub fn lockfile_for(env: &Environment, project: Option<&Project>) -> Result<Lockfile> {
     let tc = &env.manifest.toolchain;
     let rt = &env.manifest.runtime;

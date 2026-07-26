@@ -192,12 +192,33 @@ pub fn find_windres(cc: &Path, triple: &str) -> Option<PathBuf> {
 }
 
 fn extra_toolchain_dirs() -> Vec<PathBuf> {
-    match std::env::var_os("LSW_TOOLCHAIN_DIRS") {
+    let mut dirs: Vec<PathBuf> = match std::env::var_os("LSW_TOOLCHAIN_DIRS") {
         Some(v) => std::env::split_paths(&v)
             .filter(|d| !d.as_os_str().is_empty())
             .collect(),
         None => Vec::new(),
-    }
+    };
+    dirs.extend(managed_toolchain_dirs());
+    dirs
+}
+
+fn managed_toolchain_dirs() -> Vec<PathBuf> {
+    let Ok(base) = lsw_config::Dirs::resolve() else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(base.toolchains()) else {
+        return Vec::new();
+    };
+    let mut named: Vec<(String, PathBuf)> = entries
+        .flatten()
+        .filter_map(|e| {
+            let bin = e.path().join("bin");
+            bin.is_dir()
+                .then(|| (e.file_name().to_string_lossy().into_owned(), bin))
+        })
+        .collect();
+    named.sort_by(|a, b| b.0.cmp(&a.0));
+    named.into_iter().map(|(_, p)| p).collect()
 }
 
 pub(crate) fn derive_sysroot(cc: &Path, triple: &str) -> PathBuf {

@@ -84,8 +84,10 @@ impl Project {
 pub enum Template {
     #[default]
     Console,
+    Cpp,
     Gui,
     Dll,
+    Service,
 }
 
 const CONSOLE_MAIN: &str = r#"#include <windows.h>
@@ -119,6 +121,58 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
 }
 "#;
 
+const CPP_MAIN: &str = r#"#include <windows.h>
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string greeting = "Hello from LSW";
+    std::cout << greeting << "\n";
+    std::cout << "Running on tick " << GetTickCount64() << "\n";
+    return 0;
+}
+"#;
+
+const SERVICE_MAIN: &str = r#"#include <windows.h>
+
+static SERVICE_STATUS_HANDLE status_handle;
+static SERVICE_STATUS status = {
+    SERVICE_WIN32_OWN_PROCESS, SERVICE_START_PENDING, SERVICE_ACCEPT_STOP, 0, 0, 0, 0
+};
+static HANDLE stop_event;
+
+static void WINAPI service_ctrl(DWORD ctrl) {
+    if (ctrl == SERVICE_CONTROL_STOP) {
+        status.dwCurrentState = SERVICE_STOP_PENDING;
+        SetServiceStatus(status_handle, &status);
+        SetEvent(stop_event);
+    }
+}
+
+static void WINAPI service_main(DWORD argc, LPSTR *argv) {
+    (void)argc; (void)argv;
+    status_handle = RegisterServiceCtrlHandlerA("{name}", service_ctrl);
+    if (!status_handle) return;
+    stop_event = CreateEventA(NULL, TRUE, FALSE, NULL);
+    status.dwCurrentState = SERVICE_RUNNING;
+    SetServiceStatus(status_handle, &status);
+    WaitForSingleObject(stop_event, INFINITE);
+    status.dwCurrentState = SERVICE_STOPPED;
+    SetServiceStatus(status_handle, &status);
+}
+
+int main(void) {
+    SERVICE_TABLE_ENTRYA table[] = {
+        { (LPSTR)"{name}", service_main },
+        { NULL, NULL }
+    };
+    if (!StartServiceCtrlDispatcherA(table)) {
+        return 1;
+    }
+    return 0;
+}
+"#;
+
 const CONSOLE_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
 project({name} C)
 
@@ -126,6 +180,21 @@ add_executable({name} src/main.c)
 
 enable_testing()
 add_test(NAME {name}_runs COMMAND {name})
+"#;
+
+const CPP_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
+project({name} CXX)
+
+add_executable({name} src/main.cpp)
+
+enable_testing()
+add_test(NAME {name}_runs COMMAND {name})
+"#;
+
+const SERVICE_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
+project({name} C)
+
+add_executable({name} src/main.c)
 "#;
 
 const GUI_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
@@ -141,11 +210,13 @@ add_library({name} SHARED src/main.c)
 set_target_properties({name} PROPERTIES PREFIX "")
 "#;
 
-fn template_sources(template: Template) -> (&'static str, &'static str) {
+fn template_sources(template: Template) -> (&'static str, &'static str, &'static str) {
     match template {
-        Template::Console => (CONSOLE_CMAKE, CONSOLE_MAIN),
-        Template::Gui => (GUI_CMAKE, GUI_MAIN),
-        Template::Dll => (DLL_CMAKE, DLL_MAIN),
+        Template::Console => (CONSOLE_CMAKE, "src/main.c", CONSOLE_MAIN),
+        Template::Cpp => (CPP_CMAKE, "src/main.cpp", CPP_MAIN),
+        Template::Gui => (GUI_CMAKE, "src/main.c", GUI_MAIN),
+        Template::Dll => (DLL_CMAKE, "src/main.c", DLL_MAIN),
+        Template::Service => (SERVICE_CMAKE, "src/main.c", SERVICE_MAIN),
     }
 }
 
@@ -303,7 +374,7 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
         let existing_build =
             crate::buildops::detect_build_system(&root).map(|s| s.label().to_owned());
         if existing_build.is_none() {
-            let (cmake, main_c) = template_sources(template);
+            let (cmake, source_path, source) = template_sources(template);
             write_file(
                 &root.join("CMakeLists.txt"),
                 &cmake.replace("{name}", &project_name),
@@ -311,8 +382,8 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
                 &mut created_dirs,
             )?;
             write_file(
-                &root.join("src/main.c"),
-                main_c,
+                &root.join(source_path),
+                &source.replace("{name}", &project_name),
                 &mut created,
                 &mut created_dirs,
             )?;

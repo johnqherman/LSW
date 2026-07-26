@@ -17,9 +17,11 @@ The `lsw.toml` schema and every `LSW_*` environment variable are in
   creates a default environment for the `[target]` arch if none is active
   (`windows-x64` for the default `x86_64`), writes `lsw.toml` and a
   `.gitignore` if missing, and prints the next command.
-- `lsw init [name] [--template console|gui|dll]` scaffolds a new project
-  (`lsw.toml` + CMake template). The default template is `console`. The `gui`
-  template uses WinMain. The `dll` template makes a shared library.
+- `lsw init [name] [--template console|cpp|gui|dll|service]` scaffolds a new
+  project (`lsw.toml` + CMake template). The default is `console` (C).
+  `cpp` is a C++ console app, `gui` uses WinMain, `dll` makes a shared
+  library, and `service` is a Windows service skeleton that pairs with
+  `lsw service create|start|stop`.
 - `lsw doctor` diagnoses host, runtime, toolchain, and project health.
 - `lsw check [--headless]` validates the project in one pass: configuration,
   environment, build, wine execution (tests or a console smoke run),
@@ -36,10 +38,16 @@ The `lsw.toml` schema and every `LSW_*` environment variable are in
   [--dump-on-crash] [program]` starts a program; omit the program to build and
   run the project's single executable.
 - `lsw exec [--host|--windows] <cmd>` runs one command in an explicit domain.
-- `lsw test [--headless]` runs the tests and shows the true compatibility
-  status.
+- `lsw test [--headless] [--junit <file>]` runs the tests and shows the true
+  compatibility status. ctest, `cargo test` (run under Wine via a target
+  runner), `meson test`, and an explicit `[test]` command are supported;
+  `--junit` writes a JUnit XML report for ctest and meson runs.
 - `lsw shell [--windows]` opens a shell (cmd.exe with `--windows`).
-- `lsw watch` rebuilds automatically when source files change.
+- `lsw watch [--run|--test]` rebuilds automatically when source files change;
+  `--run` restarts the project executable after each build, `--test` reruns
+  the suite.
+- `lsw clean [--deps]` removes `build/` and `dist/` (and `deps/` with
+  `--deps`).
 
 ## Binary analysis
 
@@ -123,6 +131,12 @@ project's artifact.
 - `lsw service create|start|stop|query|delete` manages Windows services.
 - `lsw sdk import|list|remove` manages user-supplied Windows SDK sysroots for
   MSVC-ABI builds.
+- `lsw toolchain install llvm-mingw[@version]` downloads a self-contained
+  llvm-mingw release into `~/.local/share/lsw/toolchains` (default: latest);
+  managed toolchains are found automatically by `lsw env create`, newest
+  first. `lsw toolchain list|remove` manage them.
+- `lsw env provision winetricks <verbs...>` runs winetricks against the
+  environment's prefix (e.g. `dxvk`, `vkd3d`, `corefonts`).
 - `lsw path --to-windows <linux-path>|--to-linux <windows-path>` converts a path between views (old `--windows`/`--linux` spellings remain as aliases).
 
 ## Languages

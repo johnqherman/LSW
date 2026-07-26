@@ -204,6 +204,8 @@ pub struct ToolchainSection {
     pub link: LinkMode,
     #[serde(default, skip_serializing_if = "is_false")]
     pub aot: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub ccache: bool,
 }
 
 fn is_false(value: &bool) -> bool {
