@@ -148,6 +148,33 @@ pub(crate) fn sdk(op: &SdkCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
             Ok(ExitCode::SUCCESS)
         }
 
+        SdkCmd::Acquire {
+            name,
+            accept_license,
+            force,
+        } => {
+            if !json {
+                println!("Acquiring SDK '{name}' via xwin (downloads Microsoft SDK content)...");
+            }
+            let report = lsw_core::sdkops::acquire(dirs, name, *accept_license, *force)?;
+            if json {
+                crate::cmd::emit_json(&serde_json::json!({
+                    "name": report.name,
+                    "files_copied": report.files_copied,
+                    "root": report.root.display().to_string(),
+                }));
+            } else {
+                println!(
+                    "Acquired '{}' ({} files) to {}\nUse it with: lsw env create msvc --sdk {}",
+                    report.name,
+                    report.files_copied,
+                    report.root.display(),
+                    report.name
+                );
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
         SdkCmd::List => {
             let sdks = lsw_core::sdkops::list(dirs)?;
             if json {
