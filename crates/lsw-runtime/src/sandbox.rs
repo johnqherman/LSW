@@ -139,7 +139,5 @@ pub fn find_xvfb_run() -> Option<PathBuf> {
 
 fn find_on_path(name: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|d| d.join(name))
-        .find(|c| c.is_file())
+    crate::wine::find_in_paths(name, &path)
 }

@@ -1,53 +1,22 @@
 use std::path::PathBuf;
-use std::process::{Command, Output, Stdio};
-use std::time::{Duration, Instant};
+use std::process::{Command, Output};
+use std::time::Duration;
 
 const SSH_MAX_OUTPUT: u64 = 16 * 1024 * 1024;
 const SSH_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub(crate) fn capped_output(cmd: &mut Command) -> std::io::Result<Output> {
-    use std::io::Read;
-    cmd.stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let mut child = cmd.spawn()?;
-    let mut so = child.stdout.take().expect("piped stdout");
-    let mut se = child.stderr.take().expect("piped stderr");
-    let h_out = std::thread::spawn(move || {
-        let mut b = Vec::new();
-        let _ = so.by_ref().take(SSH_MAX_OUTPUT).read_to_end(&mut b);
-        let _ = std::io::copy(&mut so, &mut std::io::sink());
-        b
-    });
-    let h_err = std::thread::spawn(move || {
-        let mut b = Vec::new();
-        let _ = se.by_ref().take(SSH_MAX_OUTPUT).read_to_end(&mut b);
-        let _ = std::io::copy(&mut se, &mut std::io::sink());
-        b
-    });
-    let deadline = Instant::now() + SSH_TIMEOUT;
-    let status = loop {
-        if let Some(status) = child.try_wait()? {
-            break status;
-        }
-        if Instant::now() >= deadline {
-            let _ = child.kill();
-            break child.wait()?;
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    };
-    let stdout = h_out.join().unwrap_or_default();
-    let stderr = h_err.join().unwrap_or_default();
+    let out = lsw_toolchain::capped_output_with(cmd, SSH_MAX_OUTPUT, Some(SSH_TIMEOUT))?;
     Ok(Output {
-        status,
-        stdout,
-        stderr,
+        status: out.status,
+        stdout: out.stdout,
+        stderr: out.stderr,
     })
 }
 
 use serde::Serialize;
 
-use crate::buildops::{self, BuildOptions};
+use crate::buildops::{self, BuildOptions, which};
 use crate::envops::Environment;
 use crate::error::{Error, Result};
 use crate::project::Project;
@@ -451,10 +420,6 @@ pub(crate) fn default_remote_dir(project: &Project) -> String {
         "C:\\lsw-verify\\{}",
         if safe.is_empty() { "project" } else { safe }
     )
-}
-
-pub(crate) fn which(program: &str) -> Option<PathBuf> {
-    buildops::which(program)
 }
 
 #[cfg(test)]

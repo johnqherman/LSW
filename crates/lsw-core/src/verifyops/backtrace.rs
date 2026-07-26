@@ -6,9 +6,9 @@ use serde::Serialize;
 use crate::error::{Error, Result};
 use crate::project::Project;
 
-use super::{
-    default_remote_dir, expand_tilde, ssh_opts, validate_windows_dir, validate_windows_name, which,
-};
+use super::{default_remote_dir, expand_tilde, ssh_opts, validate_windows_dir, validate_windows_name};
+
+use crate::buildops::which;
 
 const CDB_X64: &[&str] = &[
     "C:\\Program Files (x86)\\Windows Kits\\10\\Debuggers\\x64\\cdb.exe",

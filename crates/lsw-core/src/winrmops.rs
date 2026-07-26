@@ -1,6 +1,5 @@
-use std::io::{Read, Write};
+use std::io::Write;
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
 
 use base64::Engine as _;
 
@@ -10,26 +9,7 @@ const MAX_WINRM_BYTES: usize = 32 * 1024 * 1024;
 const MAX_RECEIVE_OUTPUT: usize = 64 * 1024 * 1024;
 const MAX_UPLOAD_BYTES: u64 = 512 * 1024 * 1024;
 
-fn drain_capped(mut reader: impl Read + Send + 'static, cap: usize) -> mpsc::Receiver<Vec<u8>> {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        let mut chunk = [0u8; 8192];
-        loop {
-            match reader.read(&mut chunk) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => {
-                    if buf.len() < cap {
-                        let take = (cap - buf.len()).min(n);
-                        buf.extend_from_slice(&chunk[..take]);
-                    }
-                }
-            }
-        }
-        let _ = tx.send(buf);
-    });
-    rx
-}
+use lsw_toolchain::drain_capped;
 use crate::project::Project;
 use crate::verifyops::{
     self, AgentResult, VerifyReport, VerifyStatus, default_remote_dir, validate_windows_dir,
@@ -57,7 +37,7 @@ impl Winrm {
         let Some(host) = cfg.host.clone() else {
             return Ok(None);
         };
-        if verifyops_which("curl").is_none() {
+        if crate::buildops::which("curl").is_none() {
             return Err(Error::ToolMissing {
                 tool: "curl".into(),
                 fix: "install curl to reach the Windows verification host over WinRM".into(),
@@ -138,11 +118,11 @@ impl Winrm {
         let out_rx = child
             .stdout
             .take()
-            .map(|s| drain_capped(s, MAX_WINRM_BYTES));
+            .map(|s| drain_capped(s, MAX_WINRM_BYTES as u64));
         let err_rx = child
             .stderr
             .take()
-            .map(|s| drain_capped(s, MAX_WINRM_BYTES));
+            .map(|s| drain_capped(s, MAX_WINRM_BYTES as u64));
         let write_res = child
             .stdin
             .take()
@@ -314,10 +294,6 @@ impl Winrm {
         }
         Ok(())
     }
-}
-
-fn verifyops_which(program: &str) -> Option<std::path::PathBuf> {
-    crate::buildops::which(program)
 }
 
 pub fn run_on_host(

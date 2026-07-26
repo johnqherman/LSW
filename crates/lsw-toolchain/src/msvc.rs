@@ -5,7 +5,7 @@ use lsw_config::{ResolvedToolchain, TargetArch};
 
 use crate::error::{CLANG_CL_ID, ProbeReport, ToolchainError};
 use crate::provider::unavailable;
-use crate::util::{compiler_version, which};
+use crate::util::{compiler_version, starts_with_mz, which};
 
 pub fn resolve_msvc(
     arch: TargetArch,
@@ -163,14 +163,3 @@ pub fn probe_msvc(tc: &ResolvedToolchain) -> ProbeReport {
     }
 }
 
-fn starts_with_mz(path: &Path) -> bool {
-    use std::io::Read as _;
-    std::fs::File::open(path)
-        .ok()
-        .and_then(|mut f| {
-            let mut magic = [0u8; 2];
-            f.read_exact(&mut magic).ok().map(|_| magic)
-        })
-        .map(|m| &m == b"MZ")
-        .unwrap_or(false)
-}

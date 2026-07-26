@@ -1,9 +1,7 @@
 use std::collections::BTreeSet;
-use std::io::Read;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::path::Path;
+use std::process::Command;
+use std::time::Duration;
 
 use serde::Serialize;
 
@@ -14,27 +12,6 @@ const TRACE_TIMEOUT: Duration = Duration::from_secs(120);
 const TRACE_MAX_OUTPUT: usize = 32 * 1024 * 1024;
 const TRACE_MAX_EVENTS: usize = 100_000;
 const TRACE_MAX_FIELD: usize = 512;
-
-fn drain_capped(mut reader: impl Read + Send + 'static) -> mpsc::Receiver<Vec<u8>> {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        let mut chunk = [0u8; 8192];
-        loop {
-            match reader.read(&mut chunk) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => {
-                    if buf.len() < TRACE_MAX_OUTPUT {
-                        let take = (TRACE_MAX_OUTPUT - buf.len()).min(n);
-                        buf.extend_from_slice(&chunk[..take]);
-                    }
-                }
-            }
-        }
-        let _ = tx.send(buf);
-    });
-    rx
-}
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -89,7 +66,7 @@ pub fn trace(
 
     let imported_dlls = lsw_pe::imports(&program)?;
 
-    let wine = find_wine().ok_or_else(|| Error::ToolMissing {
+    let wine = crate::buildops::which("wine").ok_or_else(|| Error::ToolMissing {
         tool: "wine".into(),
         fix: "install wine".into(),
     })?;
@@ -100,40 +77,21 @@ pub fn trace(
         "+timestamp,+loaddll,+reg,+file,fixme-all"
     };
 
-    let mut child = Command::new(&wine)
-        .arg(&program)
+    let mut cmd = Command::new(&wine);
+    cmd.arg(&program)
         .args(args)
         .env("WINEPREFIX", env.layout.prefix())
-        .env("WINEDEBUG", channels)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| Error::io(wine.clone(), e))?;
-    let out_rx = child.stdout.take().map(drain_capped);
-    let err_rx = child.stderr.take().map(drain_capped);
-    let deadline = Instant::now() + TRACE_TIMEOUT;
-    let (status, timed_out) = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break (Some(status), false),
-            Ok(None) => {
-                if Instant::now() >= deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    break (None, true);
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            }
-            Err(_) => break (None, false),
-        }
+        .env("WINEDEBUG", channels);
+    let capped =
+        lsw_toolchain::capped_output_with(&mut cmd, TRACE_MAX_OUTPUT as u64, Some(TRACE_TIMEOUT))
+            .map_err(|e| Error::io(wine.clone(), e))?;
+    let (status, timed_out) = if capped.timed_out {
+        (None, true)
+    } else {
+        (Some(capped.status), false)
     };
-    let drain_wait = Duration::from_secs(5);
-    let stdout_bytes = out_rx
-        .and_then(|rx| rx.recv_timeout(drain_wait).ok())
-        .unwrap_or_default();
-    let stderr_bytes = err_rx
-        .and_then(|rx| rx.recv_timeout(drain_wait).ok())
-        .unwrap_or_default();
+    let stdout_bytes = capped.stdout;
+    let stderr_bytes = capped.stderr;
 
     let stderr = String::from_utf8_lossy(&stderr_bytes);
     let parsed = parse_wine_trace(&stderr, opts.filter.as_deref());
@@ -386,13 +344,6 @@ fn extract_unimplemented(line: &str) -> Option<String> {
         }
     }
     None
-}
-
-fn find_wine() -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|d| d.join("wine"))
-        .find(|c| c.is_file())
 }
 
 #[cfg(test)]
