@@ -500,6 +500,16 @@ pub(crate) enum SdkCmd {
         #[arg(long)]
         force: bool,
     },
+    /// Download an SDK via xwin and import it (requires accepting the MS license).
+    Acquire {
+        name: String,
+        /// Accept the Microsoft software license terms xwin downloads under.
+        #[arg(long)]
+        accept_license: bool,
+        /// Overwrite an existing SDK of the same name.
+        #[arg(long)]
+        force: bool,
+    },
     /// List imported SDKs.
     List,
     /// Remove an imported SDK.
@@ -623,6 +633,11 @@ pub(crate) enum PackageTargetArg {
     Msi,
     #[value(name = "msix")]
     Msix,
+    #[value(name = "nsis")]
+    Nsis,
+    /// MSI plus a winget manifest trio (needs [package] installer_url).
+    #[value(name = "winget")]
+    Winget,
 }
 
 #[derive(Clone, Copy, ValueEnum)]

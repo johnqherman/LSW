@@ -27,6 +27,8 @@ pub(crate) fn package(
         PackageTargetArg::Zip => lsw_core::packageops::PackageTarget::Zip,
         PackageTargetArg::Msi => lsw_core::packageops::PackageTarget::Msi,
         PackageTargetArg::Msix => lsw_core::packageops::PackageTarget::Msix,
+        PackageTargetArg::Nsis => lsw_core::packageops::PackageTarget::Nsis,
+        PackageTargetArg::Winget => lsw_core::packageops::PackageTarget::Winget,
     };
     let report = lsw_core::packageops::package(&p, &env, target, bundle_deps)?;
     let verified = if verify && let Some(msi) = &report.msi {
@@ -48,6 +50,8 @@ pub(crate) fn package(
                 "zip": opt_path(&report.zip),
                 "msi": opt_path(&report.msi),
                 "msix": opt_path(&report.msix),
+                "nsis": opt_path(&report.nsis),
+                "winget": opt_path(&report.winget),
                 "files": report.files,
                 "bundled": report.bundled,
                 "assumed_system": report.assumed_system,
@@ -90,6 +94,12 @@ pub(crate) fn package(
     }
     if let Some(msix) = &report.msix {
         println!("MSIX:      {} (self-signed)", msix.display());
+    }
+    if let Some(nsis) = &report.nsis {
+        println!("Installer: {}", nsis.display());
+    }
+    if let Some(winget) = &report.winget {
+        println!("Winget manifests: {}", winget.display());
     }
     if let Some(check) = &verified {
         println!(
