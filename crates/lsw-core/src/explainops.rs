@@ -366,6 +366,11 @@ const TABLE: &[Explanation] = &[
         summary: "env restore cannot reconstruct an SDK/MSVC toolchain (lsw.lock has no SDK identity)",
         hint: "re-import the SDK and recreate the environment with `lsw env create <name> --sdk <name>`",
     },
+    Explanation {
+        code: "LSW2045",
+        summary: "the project or environment path resolves to a system directory, so strict sandbox isolation refuses to bind it",
+        hint: "move the project out of the filesystem root or a system path, or relax [sandbox] isolation",
+    },
 ];
 
 #[cfg(test)]
