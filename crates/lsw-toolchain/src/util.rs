@@ -16,19 +16,56 @@ pub struct CappedOutput {
     pub timed_out: bool,
 }
 
-pub fn drain_capped(
-    mut reader: impl std::io::Read + Send + 'static,
-    cap: u64,
-) -> mpsc::Receiver<Vec<u8>> {
-    use std::io::Read;
-    let (tx, rx) = mpsc::channel();
+pub struct Drain {
+    done: mpsc::Receiver<()>,
+    buf: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+}
+
+impl Drain {
+    pub fn wait_eof(self) -> Vec<u8> {
+        let _ = self.done.recv();
+        self.take()
+    }
+
+    pub fn wait_timeout(self, timeout: Duration) -> Vec<u8> {
+        let _ = self.done.recv_timeout(timeout);
+        self.take()
+    }
+
+    fn take(self) -> Vec<u8> {
+        let mut guard = self
+            .buf
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        std::mem::take(&mut *guard)
+    }
+}
+
+pub fn drain_capped(mut reader: impl std::io::Read + Send + 'static, cap: u64) -> Drain {
+    let (tx, done) = mpsc::channel();
+    let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let shared = std::sync::Arc::clone(&buf);
     std::thread::spawn(move || {
-        let mut b = Vec::new();
-        let _ = reader.by_ref().take(cap).read_to_end(&mut b);
-        let _ = std::io::copy(&mut reader, &mut std::io::sink());
-        let _ = tx.send(b);
+        let mut chunk = [0u8; 8192];
+        let mut kept = 0u64;
+        loop {
+            match reader.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if kept < cap {
+                        let take = usize::try_from(cap - kept).unwrap_or(usize::MAX).min(n);
+                        let mut guard = shared
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        guard.extend_from_slice(&chunk[..take]);
+                        kept += take as u64;
+                    }
+                }
+            }
+        }
+        let _ = tx.send(());
     });
-    rx
+    Drain { done, buf }
 }
 
 pub fn capped_output_with(
@@ -49,8 +86,14 @@ pub fn capped_output_with(
         Some(limit) => {
             let deadline = Instant::now() + limit;
             loop {
-                if let Some(status) = child.try_wait()? {
-                    break status;
+                match child.try_wait() {
+                    Ok(Some(status)) => break status,
+                    Ok(None) => {}
+                    Err(e) => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return Err(e);
+                    }
                 }
                 if Instant::now() >= deadline {
                     timed_out = true;
@@ -61,8 +104,8 @@ pub fn capped_output_with(
             }
         }
     };
-    let stdout = rx_out.recv_timeout(DRAIN_WAIT).unwrap_or_default();
-    let stderr = rx_err.recv_timeout(DRAIN_WAIT).unwrap_or_default();
+    let stdout = rx_out.wait_timeout(DRAIN_WAIT);
+    let stderr = rx_err.wait_timeout(DRAIN_WAIT);
     Ok(CappedOutput {
         status,
         stdout,

@@ -24,6 +24,17 @@ pub fn detect(path: &Path) -> Result<BinaryKind, PeError> {
         return Ok(BinaryKind::Script);
     }
     if prefix.starts_with(MZ_MAGIC) {
+        if let Ok(meta) = std::fs::metadata(path)
+            && meta.len() > crate::error::MAX_PE_BYTES
+        {
+            return Err(PeError::malformed(
+                path,
+                format!(
+                    "file exceeds {}-byte limit for PE parsing",
+                    crate::error::MAX_PE_BYTES
+                ),
+            ));
+        }
         return match parse_pe_info(path, &prefix) {
             Ok(info) => Ok(BinaryKind::Pe(info)),
             Err(_) if prefix.len() == DETECT_HEADER_BYTES => {
