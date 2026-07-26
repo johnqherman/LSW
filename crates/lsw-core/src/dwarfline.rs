@@ -1,5 +1,6 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
+use std::sync::Arc;
 
 use object::{Object, ObjectSection};
 
@@ -26,8 +27,8 @@ const MAX_PE_BYTES: u64 = 512 * 1024 * 1024;
 
 pub(crate) struct DebugInfo {
     pub image_base: u64,
-    lines: BTreeMap<(String, u32), Vec<(String, u64)>>,
-    by_addr: Vec<(u64, Option<(String, u32)>)>,
+    lines: BTreeMap<(String, u32), Vec<(Arc<str>, u64)>>,
+    by_addr: Vec<(u64, Option<(Arc<str>, u32)>)>,
     funcs: Vec<(u64, u64, String)>,
 }
 
@@ -83,8 +84,8 @@ impl DebugInfo {
             gimli::DwarfSections::load(load).map_err(|_: ()| dap("no DWARF sections"))?;
         let dwarf = sections.borrow(|section| gimli::EndianSlice::new(section, endian));
 
-        let mut lines: BTreeMap<(String, u32), Vec<(String, u64)>> = BTreeMap::new();
-        let mut by_addr: Vec<(u64, Option<(String, u32)>)> = Vec::new();
+        let mut lines: BTreeMap<(String, u32), Vec<(Arc<str>, u64)>> = BTreeMap::new();
+        let mut by_addr: Vec<(u64, Option<(Arc<str>, u32)>)> = Vec::new();
         let mut funcs: Vec<(u64, u64, String)> = Vec::new();
         let mut func_visited = 0usize;
         let mut rows_seen = 0usize;
@@ -113,6 +114,7 @@ impl DebugInfo {
                 continue;
             };
             let comp_dir = unit.comp_dir.and_then(bounded_string).unwrap_or_default();
+            let mut file_cache: HashMap<u64, Arc<str>> = HashMap::new();
             let mut rows = program.rows();
             while let Ok(Some((header, row))) = rows.next_row() {
                 if rows_seen >= MAX_LINE_ROWS {
@@ -130,13 +132,20 @@ impl DebugInfo {
                 let Ok(line) = u32::try_from(line.get()) else {
                     continue;
                 };
-                let file = cap_len(
-                    row.file(header)
-                        .and_then(|f| file_name(&dwarf, &unit, header, f, &comp_dir))
-                        .unwrap_or_default(),
-                );
+                let file: Arc<str> = match file_cache.entry(row.file_index()) {
+                    std::collections::hash_map::Entry::Occupied(e) => e.get().clone(),
+                    std::collections::hash_map::Entry::Vacant(e) => {
+                        let resolved = cap_len(
+                            row.file(header)
+                                .and_then(|f| file_name(&dwarf, &unit, header, f, &comp_dir))
+                                .unwrap_or_default(),
+                        );
+                        string_bytes =
+                            string_bytes.saturating_add(resolved.len().saturating_mul(2));
+                        e.insert(Arc::from(resolved)).clone()
+                    }
+                };
                 let addr = row.address();
-                string_bytes = string_bytes.saturating_add(file.len().saturating_mul(2));
                 lines
                     .entry((norm(&file), line))
                     .or_default()
@@ -150,7 +159,7 @@ impl DebugInfo {
             v.dedup();
         }
         by_addr.sort_by_key(|(a, _)| *a);
-        let mut collapsed: Vec<(u64, Option<(String, u32)>)> = Vec::with_capacity(by_addr.len());
+        let mut collapsed: Vec<(u64, Option<(Arc<str>, u32)>)> = Vec::with_capacity(by_addr.len());
         for entry in by_addr {
             match collapsed.last_mut() {
                 Some(last) if last.0 == entry.0 => {
@@ -201,7 +210,8 @@ impl DebugInfo {
             Err(0) => return None,
             Err(i) => i - 1,
         };
-        self.by_addr.get(idx)?.1.clone()
+        let (file, line) = self.by_addr.get(idx)?.1.as_ref()?;
+        Some((file.to_string(), *line))
     }
 
     fn containing_func(&self, addr: u64) -> Option<&(u64, u64, String)> {
@@ -432,8 +442,8 @@ mod tests {
             lines: BTreeMap::from([(
                 ("util.c".to_owned(), 10),
                 vec![
-                    ("/src/client/util.c".to_owned(), 0x2000),
-                    ("/src/server/util.c".to_owned(), 0x1000),
+                    (Arc::from("/src/client/util.c"), 0x2000),
+                    (Arc::from("/src/server/util.c"), 0x1000),
                 ],
             )]),
             by_addr: Vec::new(),
@@ -462,11 +472,11 @@ mod tests {
             lines: BTreeMap::from([
                 (
                     ("foo.c".to_owned(), 11),
-                    vec![("/b/foo.c".to_owned(), 0x200)],
+                    vec![(Arc::from("/b/foo.c"), 0x200)],
                 ),
                 (
                     ("foo.c".to_owned(), 12),
-                    vec![("/a/foo.c".to_owned(), 0x300)],
+                    vec![(Arc::from("/a/foo.c"), 0x300)],
                 ),
             ]),
             by_addr: Vec::new(),
@@ -481,9 +491,9 @@ mod tests {
             image_base: 0,
             lines: BTreeMap::new(),
             by_addr: vec![
-                (0x1000, Some(("a.c".to_owned(), 5))),
+                (0x1000, Some((Arc::from("a.c"), 5))),
                 (0x1010, None),
-                (0x2000, Some(("a.c".to_owned(), 6))),
+                (0x2000, Some((Arc::from("a.c"), 6))),
             ],
             funcs: Vec::new(),
         };
