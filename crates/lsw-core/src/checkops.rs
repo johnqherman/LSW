@@ -166,9 +166,9 @@ pub fn check(
         "build",
         StepStatus::Pass,
         format!(
-            "{} artifact(s) via {:?}",
+            "{} artifact(s) via {}",
             build.artifacts.len(),
-            build.system
+            build.system.label()
         ),
     );
 

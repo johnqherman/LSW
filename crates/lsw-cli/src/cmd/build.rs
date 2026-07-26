@@ -34,13 +34,13 @@ pub(crate) fn build(
             .map(|a| a.display().to_string())
             .collect();
         crate::cmd::emit_json(&serde_json::json!({
-            "system": format!("{:?}", report.system),
+            "system": report.system.label(),
             "commands": report.commands,
             "artifacts": artifacts,
             "lock_written": report.lock_written,
         }));
     } else {
-        println!("Build OK ({:?})", report.system);
+        println!("Build OK ({})", report.system.label());
         for a in &report.artifacts {
             println!("  {}", a.display());
         }

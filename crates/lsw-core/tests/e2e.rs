@@ -325,7 +325,7 @@ fn e2e_setup_bootstraps_project_and_environment() {
     assert!(first.manifest_created);
     assert!(first.environment_created);
     assert_eq!(first.environment, lsw_core::setupops::DEFAULT_ENV_NAME);
-    assert_eq!(first.build_system.as_deref(), Some("Cmake"));
+    assert_eq!(first.build_system.as_deref(), Some("CMake"));
 
     let again = lsw_core::setupops::setup(&c.dirs, &dir).unwrap();
     assert!(!again.manifest_created);

@@ -11,7 +11,7 @@ workflow.**
 ```
 $ cd existing-project
 $ lsw setup
-Detected Cmake project 'hello'
+Detected CMake project 'hello'
 Created lsw.toml
 Created environment 'windows-x64'
   toolchain llvm-mingw clang version 22.1.8
@@ -23,7 +23,7 @@ Ready:
 $ lsw check
   + configuration    lsw.toml valid
   + environment      windows-x64 (llvm-mingw clang version 22.1.8, wine 11.13)
-  + build            1 artifact(s) via Cmake
+  + build            1 artifact(s) via CMake
   + wine execution   1 test(s) passed under wine
   + dependencies     all DLL imports resolved (1 artifact(s))
   + hardening        ASLR + DEP enabled (1 artifact(s))
