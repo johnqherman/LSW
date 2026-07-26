@@ -33,6 +33,8 @@ pub use probe::{DllProbe, ImportProbe, probe_imports};
 
 use dumps::{collect_dump, newest_dump};
 
+pub const SUPPORTED_TRANSPORTS: &[&str] = &["ssh", "winrm", "https"];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum VerifyStatus {

@@ -265,7 +265,7 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
         Some(v) if v.host.is_some() => {
             let host = v.host.as_deref().unwrap_or("");
             let transport = v.transport.as_deref().unwrap_or("ssh");
-            if matches!(transport, "ssh" | "winrm" | "https") {
+            if crate::verifyops::SUPPORTED_TRANSPORTS.contains(&transport) {
                 row(
                     "Verification host",
                     format!("{host} (transport: {transport})"),
