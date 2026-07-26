@@ -92,7 +92,7 @@ pub fn capture_wine_dump(
         });
     }
     let program = std::path::absolute(program).map_err(|e| Error::io(program.to_path_buf(), e))?;
-    let winedbg = find_winedbg().ok_or_else(|| Error::ToolMissing {
+    let winedbg = crate::buildops::which("winedbg").ok_or_else(|| Error::ToolMissing {
         tool: "winedbg".into(),
         fix: "install wine (winedbg ships with it)".into(),
     })?;
@@ -100,7 +100,7 @@ pub fn capture_wine_dump(
     if std::fs::symlink_metadata(&out_abs).is_ok() {
         std::fs::remove_file(&out_abs).map_err(|e| Error::io(out_abs.clone(), e))?;
     }
-    let windows_out = format!("Z:{}", out_abs.display());
+    let windows_out = crate::runops::z_drive_path(&out_abs);
     let script = if break_immediately {
         format!("minidump \"{windows_out}\"\nquit\n")
     } else {
@@ -138,13 +138,6 @@ pub fn capture_wine_dump(
         }
     }
     Ok(out_abs.is_file())
-}
-
-fn find_winedbg() -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|d| d.join("winedbg"))
-        .find(|c| c.is_file())
 }
 
 fn basename(path: &str) -> String {

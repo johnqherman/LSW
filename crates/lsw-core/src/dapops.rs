@@ -1040,7 +1040,7 @@ impl<'a> Adapter<'a> {
             fix: "install wine (winedbg ships with it)".into(),
         })?;
         self.info = DebugInfo::load(&program).ok();
-        let win_path = z_drive_path(&program);
+        let win_path = crate::runops::z_drive_path(&program);
         let mut command = Command::new(winedbg);
         lsw_runtime::scrub_wine_env(&mut command);
         command.args(["--gdb", "--no-start", &win_path]);
@@ -1087,10 +1087,6 @@ enum ExecKind {
     Next,
     StepIn,
     StepOut,
-}
-
-fn z_drive_path(path: &Path) -> String {
-    format!("Z:{}", path.to_string_lossy().replace('/', "\\"))
 }
 
 fn read_gdb_port<R: Read + Send + 'static>(stream: R) -> Result<u16> {
@@ -1332,9 +1328,6 @@ mod tests {
         let mut adapter = Adapter::new(&env);
         let out = adapter.handle(&req(5, "terminate")).unwrap();
         assert_eq!(out[0].request_seq, Some(5));
-        assert!(
-            out.iter()
-                .any(|m| m.event.as_deref() == Some("terminated"))
-        );
+        assert!(out.iter().any(|m| m.event.as_deref() == Some("terminated")));
     }
 }

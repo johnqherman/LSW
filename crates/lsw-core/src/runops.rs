@@ -245,7 +245,7 @@ fn is_msi(path: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("msi"))
 }
 
-fn z_drive_path(path: &Path) -> String {
+pub(crate) fn z_drive_path(path: &Path) -> String {
     format!("Z:{}", path.to_string_lossy().replace('/', "\\"))
 }
 

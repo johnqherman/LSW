@@ -27,10 +27,6 @@ pub struct ReproReport {
     pub artifacts: Vec<ArtifactRepro>,
 }
 
-fn sha256_file(path: &Path) -> Result<String> {
-    lsw_toolchain::sha256_file(path).map_err(|e| Error::io(path.to_path_buf(), e))
-}
-
 fn matches_filter(rel: &Path, filter: Option<&str>) -> bool {
     match filter {
         None => true,
@@ -145,10 +141,8 @@ pub fn verify_reproducible(
     filter: Option<&str>,
 ) -> Result<ReproReport> {
     let opts = BuildOptions {
-        system: None,
-        update_lock: false,
         reproducible: true,
-        aot: false,
+        ..BuildOptions::default()
     };
 
     let stage = std::env::temp_dir().join(format!("lsw-repro-{}", std::process::id()));
@@ -208,7 +202,7 @@ fn verify_with_stage(
             artifacts.push(ArtifactRepro {
                 artifact: rel.display().to_string(),
                 identical: false,
-                sha256: [sha256_file(first_copy)?, String::new()],
+                sha256: [crate::sha256_file_checked(first_copy)?, String::new()],
                 diverging_sections: vec![SectionDivergence {
                     name: "(missing)".into(),
                     detail: "the second build did not produce this artifact".into(),
@@ -216,8 +210,8 @@ fn verify_with_stage(
             });
             continue;
         }
-        let hash_a = sha256_file(first_copy)?;
-        let hash_b = sha256_file(&rebuilt)?;
+        let hash_a = crate::sha256_file_checked(first_copy)?;
+        let hash_b = crate::sha256_file_checked(&rebuilt)?;
         let identical = hash_a == hash_b;
         let diverging_sections = if identical {
             Vec::new()
@@ -258,7 +252,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let a = tmp.path().join("a.bin");
         std::fs::write(&a, b"same-bytes").unwrap();
-        assert_eq!(sha256_file(&a).unwrap(), sha256_file(&a).unwrap());
+        assert_eq!(
+            crate::sha256_file_checked(&a).unwrap(),
+            crate::sha256_file_checked(&a).unwrap()
+        );
     }
 
     #[test]

@@ -45,16 +45,7 @@ pub fn package(
     target: PackageTarget,
     bundle_deps: bool,
 ) -> Result<PackageReport> {
-    let build = buildops::build(
-        project,
-        env,
-        &BuildOptions {
-            system: None,
-            update_lock: false,
-            reproducible: false,
-            aot: false,
-        },
-    )?;
+    let build = buildops::build(project, env, &BuildOptions::default())?;
     if build.artifacts.is_empty() {
         return Err(Error::NoBuildSystem);
     }

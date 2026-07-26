@@ -387,10 +387,6 @@ fn resolve(dirs: &lsw_config::Dirs, repo: &str, prefix: &str, name: &str) -> Res
     })
 }
 
-fn sha256_of(path: &Path) -> Result<String> {
-    lsw_toolchain::sha256_file(path).map_err(|e| Error::io(path.to_path_buf(), e))
-}
-
 fn is_safe_filename(name: &str) -> bool {
     !name.is_empty()
         && name != "."
@@ -420,7 +416,7 @@ pub fn add(
         curl_download(&format!("{MIRROR}/{repo}/{}", pkg.filename), &cached)?;
     }
     if !pkg.sha256.is_empty() {
-        let actual = sha256_of(&cached)?;
+        let actual = crate::sha256_file_checked(&cached)?;
         if !actual.eq_ignore_ascii_case(&pkg.sha256) {
             let _ = std::fs::remove_file(&cached);
             return Err(Error::ChecksumMismatch {

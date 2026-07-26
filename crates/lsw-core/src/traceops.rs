@@ -331,14 +331,11 @@ fn extract_channel_op(line: &str, tag: &str) -> Option<String> {
 }
 
 fn extract_module_name(line: &str) -> Option<String> {
-    let start = line.find('"')?;
-    let rest = &line[start + 1..];
-    let end = rest.find('"')?;
-    let path = &rest[..end];
+    let path = extract_quoted(line)?;
     let base = path
         .rsplit(['\\', '/'])
         .next()
-        .unwrap_or(path)
+        .unwrap_or(&path)
         .to_ascii_lowercase();
     if base.ends_with(".dll") {
         Some(base)

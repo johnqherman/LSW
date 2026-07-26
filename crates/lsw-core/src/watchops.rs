@@ -27,12 +27,7 @@ fn notify_err(root: &Path, e: notify::Error) -> Error {
 }
 
 fn rebuild(project: &Project, env: &Environment) -> Option<Vec<PathBuf>> {
-    let opts = BuildOptions {
-        system: None,
-        update_lock: false,
-        reproducible: false,
-        aot: false,
-    };
+    let opts = BuildOptions::default();
     match buildops::build(project, env, &opts) {
         Ok(report) => {
             println!("[watch] build ok: {} artifact(s)", report.artifacts.len());

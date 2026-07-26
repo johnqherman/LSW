@@ -1,3 +1,7 @@
+pub(crate) fn sha256_file_checked(path: &std::path::Path) -> Result<String> {
+    lsw_toolchain::sha256_file(path).map_err(|e| Error::io(path.to_path_buf(), e))
+}
+
 pub(crate) fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")

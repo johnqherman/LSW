@@ -30,16 +30,6 @@ pub enum BuildSystem {
     Explicit,
 }
 
-fn has_dotnet_project(root: &Path) -> bool {
-    std::fs::read_dir(root).is_ok_and(|entries| {
-        entries.flatten().take(MAX_DIR_ENTRIES).any(|e| {
-            let name = e.file_name();
-            let name = name.to_string_lossy();
-            name.ends_with(".csproj") || name.ends_with(".sln") || name.ends_with(".fsproj")
-        })
-    })
-}
-
 fn check_case_sensitivity(project: &Project) -> Result<()> {
     let hazards = crate::caseops::hazards(&project.root);
     if hazards.is_empty() {
@@ -72,7 +62,7 @@ pub(crate) fn detect_build_system(root: &Path) -> Option<BuildSystem> {
         Some(BuildSystem::Zig)
     } else if root.join("Cargo.toml").is_file() {
         Some(BuildSystem::Cargo)
-    } else if has_dotnet_project(root) {
+    } else if crate::dotnetops::has_dotnet_project(root) {
         Some(BuildSystem::Dotnet)
     } else if root.join("build.ninja").is_file() {
         Some(BuildSystem::Ninja)
@@ -103,15 +93,6 @@ fn zig_target(arch: TargetArch) -> Option<&'static str> {
         TargetArch::Aarch64 => Some("aarch64-windows-gnu"),
         TargetArch::Armv7 => Some("arm-windows-gnu"),
         TargetArch::Arm64Ec => None,
-    }
-}
-
-fn dotnet_rid(arch: TargetArch) -> Option<&'static str> {
-    match arch {
-        TargetArch::X86_64 => Some("win-x64"),
-        TargetArch::X86 => Some("win-x86"),
-        TargetArch::Aarch64 | TargetArch::Arm64Ec => Some("win-arm64"),
-        TargetArch::Armv7 => None,
     }
 }
 
@@ -356,8 +337,10 @@ fn build_dotnet(
     opts: &BuildOptions,
     commands: &mut Vec<String>,
 ) -> Result<PathBuf> {
-    let rid = dotnet_rid(env.manifest.target_arch).ok_or_else(|| Error::RustTargetUnavailable {
-        arch: env.manifest.target_arch.to_string(),
+    let rid = crate::dotnetops::dotnet_rid(env.manifest.target_arch).ok_or_else(|| {
+        Error::RustTargetUnavailable {
+            arch: env.manifest.target_arch.to_string(),
+        }
     })?;
     let mut args = vec![
         "dotnet".to_owned(),
@@ -390,7 +373,9 @@ fn build_meson(
     write_meson_cross_file(&cross_file, tc, env.manifest.target_arch)
         .map_err(|e| Error::io(cross_file.clone(), e))?;
     let (mc, mcxx, mlink) = toolchain::effective_flags(project, env, tc);
-    let cross_hash = file_hash(&cross_file).map(|h| format!("{h}\n{mc}\n{mcxx}\n{mlink}"));
+    let cross_hash = lsw_toolchain::sha256_file(&cross_file)
+        .ok()
+        .map(|h| format!("{h}\n{mc}\n{mcxx}\n{mlink}"));
     let configured = project.root.join("build").join("meson-info").is_dir();
     let fp_path = project.root.join("build").join(".lsw-meson-cross");
     let recorded_fp = read_capped_string(&fp_path, 1024 * 1024);
@@ -544,10 +529,6 @@ fn decode_artifact_manifest(bytes: &[u8]) -> Vec<PathBuf> {
         .filter(|s| !s.is_empty())
         .map(|s| PathBuf::from(std::ffi::OsStr::from_bytes(s)))
         .collect()
-}
-
-fn file_hash(path: &Path) -> Option<String> {
-    lsw_toolchain::sha256_file(path).ok()
 }
 
 pub(crate) fn read_capped(path: &Path, max: u64) -> Option<Vec<u8>> {

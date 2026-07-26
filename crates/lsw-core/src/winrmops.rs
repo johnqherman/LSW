@@ -87,7 +87,7 @@ impl Winrm {
              <a:MessageID>{mid}</a:MessageID>\
              <w:Locale xml:lang=\"en-US\" s:mustUnderstand=\"false\"/>\
              <w:OperationTimeout>PT120S</w:OperationTimeout>",
-            addr = xml(&self.addr),
+            addr = crate::xml_escape(&self.addr),
             mid = self.message_id(),
         )
     }
@@ -159,7 +159,7 @@ impl Winrm {
         );
         let resp = self.post(&env)?;
         extract(&resp, "<rsp:ShellId>", "<")
-            .map(|s| xml_attr(&s))
+            .map(|s| crate::xml_escape(&s))
             .ok_or_else(|| Error::ProbeFailed {
                 host: self.addr.clone(),
                 detail: format!("WinRM did not return a ShellId: {}", first_fault(&resp)),
@@ -169,10 +169,14 @@ impl Winrm {
     fn command(&self, shell: &str, program: &str, args: &[&str], skip_cmd: bool) -> Result<String> {
         let mut body = format!(
             "<rsp:CommandLine><rsp:Command>{}</rsp:Command>",
-            xml(program)
+            crate::xml_escape(program)
         );
         for a in args {
-            let _ = write!(body, "<rsp:Arguments>{}</rsp:Arguments>", xml(a));
+            let _ = write!(
+                body,
+                "<rsp:Arguments>{}</rsp:Arguments>",
+                crate::xml_escape(a)
+            );
         }
         body.push_str("</rsp:CommandLine>");
         let opt = format!(
@@ -187,7 +191,7 @@ impl Winrm {
         );
         let resp = self.post(&env)?;
         extract(&resp, "<rsp:CommandId>", "<")
-            .map(|s| xml_attr(&s))
+            .map(|s| crate::xml_escape(&s))
             .ok_or_else(|| Error::ProbeFailed {
                 host: self.addr.clone(),
                 detail: format!("WinRM did not return a CommandId: {}", first_fault(&resp)),
@@ -370,16 +374,6 @@ pub fn run_on_host(
     let (results, all_passed) = result?;
 
     Ok(verifyops::finish_report(winrm.addr, results, all_passed))
-}
-
-fn xml(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-}
-
-fn xml_attr(s: &str) -> String {
-    xml(s).replace('"', "&quot;").replace('\'', "&apos;")
 }
 
 fn extract(haystack: &str, start: &str, end: &str) -> Option<String> {
