@@ -7,7 +7,7 @@ use crate::active_env;
 use crate::cli::Format;
 
 pub(crate) fn verify(
-    native_windows: &bool,
+    native: &bool,
     reproducible: &bool,
     artifact: &Option<String>,
     dirs: &Dirs,
@@ -17,7 +17,7 @@ pub(crate) fn verify(
     if *reproducible {
         return verify_reproducible(&p, &env, artifact.as_deref(), format);
     }
-    let _ = native_windows;
+    let _ = native;
     let report = lsw_core::verifyops::verify(&p, &env)?;
     if format == Format::Json {
         crate::cmd::emit_json(&report);

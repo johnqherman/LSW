@@ -114,7 +114,7 @@ library.
 Useful next commands: `lsw test` (test suite under Wine with honest
 compatibility status), `lsw inspect` / `lsw audit` (PE analysis of the built
 artifact), `lsw doctor` (host diagnosis), `lsw watch` (rebuild on change),
-`lsw verify --native-windows` (run artifacts on a real Windows host).
+`lsw verify --native` (run artifacts on a real Windows host).
 
 Advanced workflows (multiple environments, other architectures, MSVC ABI) use
 `lsw env create <name> [--arch <arch>] [--sdk <name>]` and `lsw use <name>`
@@ -177,7 +177,7 @@ lsw dotnet doctor                       # report C#->Windows toolchain readiness
 Builds are self-contained by default. Thus the artifact runs under Wine
 without a .NET runtime in the prefix (LSW ships no runtime). Wine gives bad
 support to the GUI stacks (WPF and WinForms). The supported path is console
-and service apps. Use `lsw verify --native-windows` to get a real Windows
+and service apps. Use `lsw verify --native` to get a real Windows
 verdict.
 
 `lsw build --aot` (or `aot = true` in `[toolchain]`) compiles C# with
@@ -238,7 +238,7 @@ Point `LSW_WINE_AARCH64` (or `LSW_WINE_ARM`) to the applicable Wine. If
 necessary, set `QEMU_LD_PREFIX` to the sysroot of that Wine. Without these
 tools, `lsw run` fails with an error that names the missing tools. Same-family
 targets (an `x86` PE on `x86_64`) run directly without an emulator. You can
-also verify ARM64 output on real hardware with `lsw verify --native-windows`.
+also verify ARM64 output on real hardware with `lsw verify --native`.
 
 A binary from `lsw build` is a genuine Windows PE executable. When you run it
 under LSW, you use the local compatibility runtime (Wine). LSW does not tell

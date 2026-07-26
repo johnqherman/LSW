@@ -3,13 +3,13 @@ use std::process::ExitCode;
 
 use lsw_core::{BuildOptions, Dirs};
 
-use crate::cli::{DomainFlags, Format, display_from, sandbox_from};
+use crate::cli::{BuildSystemArg, DomainFlags, Format, display_from, sandbox_from};
 use crate::{active_env, exit_from_status, note_runtime_domain};
 
 use super::{Picked, pick_built};
 
 pub(crate) fn build(
-    system: &Option<String>,
+    system: &Option<BuildSystemArg>,
     update_lock: &bool,
     reproducible: &bool,
     aot: &bool,
@@ -21,7 +21,7 @@ pub(crate) fn build(
         &p,
         &env,
         &BuildOptions {
-            system: system.clone(),
+            system: system.map(|s| s.as_str().to_owned()),
             update_lock: *update_lock,
             reproducible: *reproducible,
             aot: *aot,

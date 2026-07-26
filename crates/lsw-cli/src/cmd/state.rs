@@ -2,15 +2,25 @@ use std::process::ExitCode;
 
 use lsw_core::Dirs;
 
-use crate::active_env;
 use crate::cli::{Format, RegistryCmd, ServiceCmd};
+use crate::{active_env, admin_env};
 
 pub(crate) fn registry(
     op: &RegistryCmd,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
-    let (p, env) = active_env(dirs)?;
+    let env = match op {
+        RegistryCmd::Seed => None,
+        _ => Some(admin_env(dirs)?),
+    };
+    let (p, env) = match env {
+        Some(env) => (None, env),
+        None => {
+            let (p, env) = active_env(dirs)?;
+            (Some(p), env)
+        }
+    };
     let json = format == Format::Json;
     let emit = |value: serde_json::Value, text: String| {
         if json {
@@ -57,6 +67,7 @@ pub(crate) fn registry(
             );
         }
         RegistryCmd::Seed => {
+            let p = p.expect("seed resolves the project above");
             let n = lsw_core::registryops::seed(&env, &p)?;
             emit(
                 serde_json::json!({"action": "seed", "environment": env.name, "applied": n}),
@@ -75,7 +86,7 @@ pub(crate) fn registry(
 }
 
 pub(crate) fn ps(all: bool, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
-    let (_p, env) = active_env(dirs)?;
+    let env = admin_env(dirs)?;
     let mut processes = lsw_core::psops::ps(&env)?;
     if !all {
         processes.retain(|p| !lsw_core::psops::is_wine_infrastructure(&p.command));
@@ -97,7 +108,11 @@ pub(crate) fn ps(all: bool, dirs: &Dirs, format: Format) -> lsw_core::Result<Exi
 }
 
 pub(crate) fn kill(pid: &Option<u32>, all: &bool, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
-    let (_p, env) = active_env(dirs)?;
+    if pid.is_none() && !*all {
+        eprintln!("usage: lsw kill <pid> | lsw kill --all");
+        return Ok(ExitCode::FAILURE);
+    }
+    let env = admin_env(dirs)?;
     if *all {
         lsw_core::psops::kill_all(&env)?;
         println!("environment '{}' shut down", env.name);
@@ -112,7 +127,7 @@ pub(crate) fn kill(pid: &Option<u32>, all: &bool, dirs: &Dirs) -> lsw_core::Resu
 }
 
 pub(crate) fn service(op: &ServiceCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
-    let (_p, env) = active_env(dirs)?;
+    let env = admin_env(dirs)?;
     let json = format == Format::Json;
     let ack = |action: &str, name: &str| {
         if json {
