@@ -133,20 +133,23 @@ impl RspConn {
             while b != b'$' {
                 b = self.read_byte()?;
             }
-            let mut raw = Vec::new();
+            let mut raw_len = 0usize;
+            let mut sum = 0u8;
             let mut payload = Vec::new();
             loop {
                 let c = self.read_byte()?;
                 if c == b'#' {
                     break;
                 }
-                if raw.len() >= MAX_PACKET_BYTES {
+                if raw_len >= MAX_PACKET_BYTES {
                     return Err(dap("gdb stub sent an oversized packet"));
                 }
-                raw.push(c);
+                raw_len += 1;
+                sum = sum.wrapping_add(c);
                 if c == b'}' {
                     let esc = self.read_byte()?;
-                    raw.push(esc);
+                    raw_len += 1;
+                    sum = sum.wrapping_add(esc);
                     payload.push(esc ^ 0x20);
                 } else {
                     payload.push(c);
@@ -154,9 +157,10 @@ impl RspConn {
             }
             let hi = self.read_byte()?;
             let lo = self.read_byte()?;
-            let want = format!("{hi}{lo}", hi = hi as char, lo = lo as char);
-            let got = format!("{:02x}", checksum(&raw));
-            let valid = want.eq_ignore_ascii_case(&got);
+            let want = (char::from(hi).to_digit(16))
+                .zip(char::from(lo).to_digit(16))
+                .map(|(h, l)| (h * 16 + l) as u8);
+            let valid = want == Some(sum);
             if !self.no_ack {
                 let raw_stream = self.stream.get_mut();
                 raw_stream.write_all(if valid { b"+" } else { b"-" }).ok();
