@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest a capability LSW should have
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The workflow or outcome, not the mechanism.
+      placeholder: I want to ship my app as ... but lsw only ...
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you do it today?
+      placeholder: manual steps, other tools, or not at all
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should lsw do?
+      placeholder: a command, a flag, an lsw.toml key ...

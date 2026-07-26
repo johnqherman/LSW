@@ -30,6 +30,9 @@ pub(crate) struct Cli {
         help_heading = "Global options"
     )]
     pub(crate) env: Option<String>,
+    /// Colored output (default: auto via tty + NO_COLOR).
+    #[arg(long, global = true, value_enum, default_value_t = ColorMode::Auto, help_heading = "Global options")]
+    pub(crate) color: ColorMode,
     #[command(subcommand)]
     pub(crate) command: Cmd,
 }
@@ -60,6 +63,13 @@ impl BuildSystemArg {
             BuildSystemArg::Explicit => "explicit",
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum ColorMode {
+    Auto,
+    Always,
+    Never,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -229,6 +239,9 @@ pub(crate) enum Cmd {
         /// RFC3161 timestamping authority so the signature outlives the cert.
         #[arg(long)]
         timestamp_url: Option<String>,
+        /// Verify the existing signature instead of signing.
+        #[arg(long, conflicts_with_all = ["publisher", "pfx", "pfx_pass_env", "timestamp_url"])]
+        verify: bool,
     },
     /// Translate paths between Linux and Windows views.
     Path {

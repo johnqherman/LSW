@@ -117,7 +117,21 @@ pub(crate) fn sign(
     pfx: &Option<PathBuf>,
     pfx_pass_env: &Option<String>,
     timestamp_url: &Option<String>,
+    verify: bool,
 ) -> lsw_core::Result<ExitCode> {
+    if verify {
+        let outcome = lsw_core::signops::verify_signature(file)?;
+        println!("{}", outcome.detail);
+        println!(
+            "{}",
+            if outcome.valid {
+                "signature: VALID"
+            } else {
+                "signature: INVALID or missing"
+            }
+        );
+        return crate::cmd::exit_ok(outcome.valid);
+    }
     lsw_core::signops::sign(
         file,
         &lsw_core::signops::SignOptions {

@@ -191,9 +191,8 @@ pub(crate) fn explain(code: &str, format: Format) -> lsw_core::Result<ExitCode> 
     match lsw_core::explainops::explain(code) {
         Some(e) => {
             if format == Format::Json {
-                println!(
-                    "{}",
-                    serde_json::json!({ "code": e.code, "summary": e.summary, "hint": e.hint })
+                crate::cmd::emit_json(
+                    &serde_json::json!({ "code": e.code, "summary": e.summary, "hint": e.hint }),
                 );
             } else {
                 println!("{}  {}", e.code, e.summary);

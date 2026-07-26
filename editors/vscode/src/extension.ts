@@ -98,6 +98,42 @@ export function activate(context: vscode.ExtensionContext): void {
   register("lsw.configureIntelliSense", configureIntelliSense);
 
   context.subscriptions.push(
+    vscode.tasks.registerTaskProvider("lsw", {
+      provideTasks: () =>
+        ["build", "test", "check", "package"].map((command) => {
+          const task = new vscode.Task(
+            { type: "lsw", command },
+            vscode.TaskScope.Workspace,
+            command,
+            "lsw",
+            new vscode.ShellExecution(lswPath(), [command]),
+            "$lsw-gcc"
+          );
+          if (command === "build") {
+            task.group = vscode.TaskGroup.Build;
+          } else if (command === "test" || command === "check") {
+            task.group = vscode.TaskGroup.Test;
+          }
+          return task;
+        }),
+      resolveTask: (task) => {
+        const command = (task.definition as { command?: string }).command;
+        if (!command) {
+          return undefined;
+        }
+        return new vscode.Task(
+          task.definition,
+          task.scope ?? vscode.TaskScope.Workspace,
+          command,
+          "lsw",
+          new vscode.ShellExecution(lswPath(), [command]),
+          "$lsw-gcc"
+        );
+      }
+    })
+  );
+
+  context.subscriptions.push(
     vscode.debug.registerDebugAdapterDescriptorFactory("lsw", {
       createDebugAdapterDescriptor: () => new vscode.DebugAdapterExecutable(lswPath(), ["dap"])
     })

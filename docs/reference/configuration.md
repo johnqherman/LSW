@@ -110,6 +110,8 @@ the built PE as an icon, VERSIONINFO resource, and application manifest
 | `description` | PE FileDescription and MSIX description |
 | `icon` | project-relative `.ico` for the PE icon (a `.png` is used as the MSIX logo instead) |
 | `upgrade_code` | explicit MSI UpgradeCode GUID (default: derived deterministically from the project name) |
+| `shortcuts` | `true` adds Start-menu shortcuts for each .exe to the MSI and NSIS installers |
+| `installer_url` | base URL where you will host the installer; required by `lsw package --target winget` |
 | `dpi_aware` | embed a dpiAware application manifest (`true` = per-monitor) |
 | `requires_admin` | embed `requireAdministrator` in the application manifest |
 

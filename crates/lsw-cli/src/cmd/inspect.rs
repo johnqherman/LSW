@@ -27,25 +27,22 @@ pub(crate) fn inspect(file: &Path, dirs: &Dirs, format: Format) -> lsw_core::Res
                 })
             })
             .collect();
-        println!(
-            "{}",
-            serde_json::json!({
-                "format": format!("{:?}", report.info.format),
-                "machine": format!("{:?}", report.info.machine),
-                "subsystem": format!("{:?}", report.info.subsystem),
-                "entry_point": report.details.entry_point,
-                "image_base": report.details.image_base,
-                "sections": sections,
-                "resources": {
-                    "has_manifest": report.resources.manifest.is_some(),
-                    "execution_level": report.resources.execution_level,
-                    "dpi_aware": report.resources.dpi_aware,
-                    "version": report.resources.version,
-                    "has_icon": report.resources.has_icon,
-                },
-                "imports": imports,
-            })
-        );
+        crate::cmd::emit_json(&serde_json::json!({
+            "format": format!("{:?}", report.info.format),
+            "machine": format!("{:?}", report.info.machine),
+            "subsystem": format!("{:?}", report.info.subsystem),
+            "entry_point": report.details.entry_point,
+            "image_base": report.details.image_base,
+            "sections": sections,
+            "resources": {
+                "has_manifest": report.resources.manifest.is_some(),
+                "execution_level": report.resources.execution_level,
+                "dpi_aware": report.resources.dpi_aware,
+                "version": report.resources.version,
+                "has_icon": report.resources.has_icon,
+            },
+            "imports": imports,
+        }));
     } else {
         println!("Format:      {:?}", report.info.format);
         println!("Machine:     {:?}", report.info.machine);
@@ -119,20 +116,17 @@ pub(crate) fn crash(
     };
     let s = lsw_core::dumpops::analyze(&file)?;
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::json!({
-                "reason": s.reason,
-                "crash_address": s.crash_address,
-                "instruction_pointer": s.instruction_pointer,
-                "faulting_module": s.faulting_module,
-                "faulting_offset": s.faulting_offset,
-                "crashing_thread": s.crashing_thread,
-                "os": s.os,
-                "cpu": s.cpu,
-                "module_count": s.module_count,
-            })
-        );
+        crate::cmd::emit_json(&serde_json::json!({
+            "reason": s.reason,
+            "crash_address": s.crash_address,
+            "instruction_pointer": s.instruction_pointer,
+            "faulting_module": s.faulting_module,
+            "faulting_offset": s.faulting_offset,
+            "crashing_thread": s.crashing_thread,
+            "os": s.os,
+            "cpu": s.cpu,
+            "module_count": s.module_count,
+        }));
     } else {
         println!("Exception:   {}", s.reason);
         println!("Address:     {:#x}", s.crash_address);
@@ -365,10 +359,7 @@ pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
             let (p, env) = active_env(dirs)?;
             let removed = lsw_core::depsops::remove(&p, env.manifest.target_arch, name)?;
             if format == Format::Json {
-                println!(
-                    "{}",
-                    serde_json::json!({ "name": name, "removed": removed })
-                );
+                crate::cmd::emit_json(&serde_json::json!({ "name": name, "removed": removed }));
             } else if removed {
                 println!("{} removed {name}", color::yellow("-"));
             } else {
