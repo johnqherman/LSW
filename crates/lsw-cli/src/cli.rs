@@ -339,6 +339,9 @@ pub(crate) enum Cmd {
     /// IDE integration helpers.
     #[command(subcommand)]
     Ide(IdeCmd),
+    /// Install and manage cross toolchains under ~/.local/share/lsw/toolchains.
+    #[command(subcommand)]
+    Toolchain(ToolchainCmd),
     /// Rebuild automatically when project source files change.
     Watch {
         /// Run the project executable after each successful build.
@@ -387,6 +390,25 @@ pub(crate) enum DepsCmd {
     Remove { name: String },
     /// List installed libraries.
     List,
+}
+
+#[derive(Subcommand)]
+pub(crate) enum ToolchainCmd {
+    /// Download and install a toolchain (llvm-mingw[@version], default latest).
+    Install { spec: String },
+    /// List managed toolchains.
+    List,
+    /// Remove a managed toolchain by directory name.
+    Remove { name: String },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum ProvisionCmd {
+    /// Run winetricks verbs in the environment's prefix (e.g. dxvk, corefonts).
+    Winetricks {
+        #[arg(required = true)]
+        verbs: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -543,6 +565,9 @@ pub(crate) enum EnvCmd {
     },
     /// Delete an environment and its Wine prefix.
     Remove { name: String },
+    /// Provision the environment's prefix with extra components.
+    #[command(subcommand)]
+    Provision(ProvisionCmd),
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -554,16 +579,21 @@ pub(crate) enum SandboxArg {
 #[derive(Clone, Copy, ValueEnum)]
 pub(crate) enum TemplateArg {
     Console,
+    Cpp,
     Gui,
     Dll,
+    /// Windows service skeleton (pairs with lsw service create/start/stop).
+    Service,
 }
 
 impl From<TemplateArg> for lsw_core::Template {
     fn from(value: TemplateArg) -> Self {
         match value {
             TemplateArg::Console => lsw_core::Template::Console,
+            TemplateArg::Cpp => lsw_core::Template::Cpp,
             TemplateArg::Gui => lsw_core::Template::Gui,
             TemplateArg::Dll => lsw_core::Template::Dll,
+            TemplateArg::Service => lsw_core::Template::Service,
         }
     }
 }

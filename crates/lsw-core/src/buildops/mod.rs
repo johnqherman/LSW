@@ -323,6 +323,16 @@ fn build_cmake(
         configure.push("-G".to_owned());
         configure.push(g.to_owned());
     }
+    if project.manifest.toolchain.ccache {
+        if which("ccache").is_some() {
+            configure.push("-DCMAKE_C_COMPILER_LAUNCHER=ccache".to_owned());
+            configure.push("-DCMAKE_CXX_COMPILER_LAUNCHER=ccache".to_owned());
+        } else {
+            tracing::warn!(
+                "[toolchain] ccache = true but ccache is not installed; building without it"
+            );
+        }
+    }
     run_step(project, env, tc, &configure, commands)?;
     run_step(
         project,

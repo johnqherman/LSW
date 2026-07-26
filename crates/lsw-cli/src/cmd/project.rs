@@ -167,6 +167,17 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
             Ok(ExitCode::SUCCESS)
         }
 
+        EnvCmd::Provision(crate::cli::ProvisionCmd::Winetricks { verbs }) => {
+            let env = crate::admin_env(dirs)?;
+            let status = lsw_core::provision_winetricks(&env, verbs)?;
+            if !status.success() {
+                eprintln!("winetricks exited with {status}");
+                return Ok(ExitCode::FAILURE);
+            }
+            println!("provisioned '{}' with: {}", env.name, verbs.join(" "));
+            Ok(ExitCode::SUCCESS)
+        }
+
         EnvCmd::Remove { name } => {
             lsw_core::env_remove(dirs, name)?;
             if format == Format::Json {

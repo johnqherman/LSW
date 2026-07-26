@@ -107,9 +107,9 @@ lsw setup                     # create + wire the default environment
 lsw check                     # validate the whole pipeline
 ```
 
-`lsw init --template gui|dll|console` selects the scaffold. The default is
-`console`. The `gui` template uses WinMain. The `dll` template makes a shared
-library.
+`lsw init --template console|cpp|gui|dll|service` selects the scaffold. The
+default is `console` (C). `cpp` is a C++ console app, `gui` uses WinMain,
+`dll` makes a shared library, and `service` is a Windows service skeleton.
 
 Useful next commands: `lsw test` (test suite under Wine with honest
 compatibility status), `lsw inspect` / `lsw audit` (PE analysis of the built
@@ -218,16 +218,17 @@ lsw build                               # produces an MSVC-ABI PE
 
 An environment targets `x86_64` (the default), `x86`, `aarch64`, `armv7`, or
 `arm64ec`. Select the architecture with `lsw env create --arch <arch>`. LSW
-finds the toolchain on `$PATH` and in the directories in `$LSW_TOOLCHAIN_DIRS`
-(colon-separated). Thus you can use a self-contained cross toolchain, for
-example a locally extracted
+finds the toolchain in `$LSW_TOOLCHAIN_DIRS` (colon-separated), in managed
+toolchains under `~/.local/share/lsw/toolchains`, and on `$PATH`. Thus you
+can use a self-contained cross toolchain, for example
 [llvm-mingw](https://github.com/mstorsjo/llvm-mingw), without changes to the
-system mingw-w64.
+system mingw-w64 - `lsw toolchain install llvm-mingw` downloads and manages
+one for you:
 
 ```
-export LSW_TOOLCHAIN_DIRS=/path/to/llvm-mingw/bin   # for aarch64
+lsw toolchain install llvm-mingw    # latest release, all five architectures
 lsw env create arm64 --arch aarch64
-lsw build                                           # -> build/app.exe (ARM64 PE)
+lsw build                           # -> build/<name>.exe (ARM64 PE)
 ```
 
 You can build an `aarch64` PE on an `x86_64` host. To run it locally, CPU
@@ -276,6 +277,11 @@ reports success. It clones the active environment to a scratch prefix. It runs
 Files. It uninstalls with `msiexec /x`. It makes sure that no files remain. It
 removes the scratch environment. Failures show as `LSW2040` with the msiexec
 output.
+
+A `[package]` section in `lsw.toml` (version, publisher, description, icon)
+feeds the MSI and MSIX metadata and is embedded into the built PE as an icon,
+VERSIONINFO resource, and application manifest. See
+[docs/reference/configuration.md](docs/reference/configuration.md).
 
 LSW builds MSIX packages natively (manifest, block map, OPC zip). LSW signs
 them with a cached self-signed identity (`~/.local/share/lsw/msix/`).

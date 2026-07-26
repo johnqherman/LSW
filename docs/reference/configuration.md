@@ -27,6 +27,7 @@ being ignored. Commit `lsw.toml` and `lsw.lock` to version control.
 |-----|---------|---------|
 | `link` | `static` | `static` links the C/C++ runtime into the artifact; `dynamic` deploys the mingw runtime DLLs next to it |
 | `aot` | `false` | compile C# with NativeAOT (native PE, no CLR) |
+| `ccache` | `false` | wrap CMake compilation in ccache when it is installed |
 | `provider` | none | reserved; toolchain selection lives on the environment (`lsw env create --toolchain`) |
 | `version` | none | reserved; pinning lives in `lsw.lock` |
 
@@ -95,6 +96,22 @@ type  = "dword"      # string (default) | dword | expand
 | `identity_file` | none | ssh identity for the verification host |
 | `remote_dir` | transport default | remote directory artifacts are copied to |
 | `dump_dir` | transport default | remote directory crash dumps are read from |
+
+### `[package]`
+
+Distribution metadata consumed by `lsw package` (MSI/MSIX) and embedded into
+the built PE as an icon, VERSIONINFO resource, and application manifest
+(needs a `windres`; llvm-mingw and mingw-w64 both ship one):
+
+| key | meaning |
+|-----|---------|
+| `version` | product version, e.g. `"2.5.1"` (MSI Version, MSIX Identity, PE FILEVERSION) |
+| `publisher` | company name (MSI Manufacturer, MSIX Publisher CN, PE CompanyName) |
+| `description` | PE FileDescription and MSIX description |
+| `icon` | project-relative `.ico` for the PE icon (a `.png` is used as the MSIX logo instead) |
+| `upgrade_code` | explicit MSI UpgradeCode GUID (default: derived deterministically from the project name) |
+| `dpi_aware` | embed a dpiAware application manifest (`true` = per-monitor) |
+| `requires_admin` | embed `requireAdministrator` in the application manifest |
 
 ### `[dependencies]`
 
