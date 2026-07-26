@@ -181,16 +181,16 @@ fn probe_script(
     );
     for (dll, funcs) in grouped {
         let dll_d = ps_dquote(dll);
-        let _ = write!(s, "$h=[LswProbe]::LoadLibraryW('{dll}')\n");
-        let _ = write!(
+        let _ = writeln!(s, "$h=[LswProbe]::LoadLibraryW('{dll}')");
+        let _ = writeln!(
             s,
-            "if($h -eq [IntPtr]::Zero){{Write-Output \"DLL`t{dll_d}`tMISSING\"}}else{{Write-Output \"DLL`t{dll_d}`tOK\"\n"
+            "if($h -eq [IntPtr]::Zero){{Write-Output \"DLL`t{dll_d}`tMISSING\"}}else{{Write-Output \"DLL`t{dll_d}`tOK\""
         );
         for func in funcs {
             let func_d = ps_dquote(func);
-            let _ = write!(
+            let _ = writeln!(
                 s,
-                "if([LswProbe]::GetProcAddress($h,'{func}') -eq [IntPtr]::Zero){{Write-Output \"FN`t{dll_d}`t{func_d}`tMISSING\"}}\n"
+                "if([LswProbe]::GetProcAddress($h,'{func}') -eq [IntPtr]::Zero){{Write-Output \"FN`t{dll_d}`t{func_d}`tMISSING\"}}"
             );
         }
         s.push_str("}\n");

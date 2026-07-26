@@ -282,7 +282,7 @@ mod tests {
             .execute(&ExecutionRequest {
                 program: PathBuf::from("cmd.exe"),
                 args: vec!["/c".into(), "exit".into(), "0".into()],
-                prefix: prefix,
+                prefix,
                 cwd: Some(dir.path().to_path_buf()),
                 env: Vec::new(),
                 sandbox: None,
