@@ -25,10 +25,7 @@ pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
             let (_p, env) = active_env(dirs)?;
             let report = lsw_core::rustops::doctor(&env)?;
             if format == Format::Json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&report).expect("serializes")
-                );
+                crate::cmd::emit_json(&report);
             } else {
                 let mark = |c: lsw_core::rustops::Check| match c {
                     lsw_core::rustops::Check::Ok => "OK",
@@ -52,11 +49,7 @@ pub(crate) fn rust(op: &RustCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
             ]
             .iter()
             .all(|c| *c == lsw_core::rustops::Check::Ok);
-            Ok(if healthy {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::FAILURE
-            })
+            crate::cmd::exit_ok(healthy)
         }
     }
 }
@@ -89,10 +82,7 @@ pub(crate) fn dotnet(op: &DotnetCmd, dirs: &Dirs, format: Format) -> lsw_core::R
             let (_p, env) = active_env(dirs)?;
             let report = lsw_core::dotnetops::doctor(&env)?;
             if format == Format::Json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&report).expect("serializes")
-                );
+                crate::cmd::emit_json(&report);
             } else {
                 let mark = |c: lsw_core::dotnetops::Check| match c {
                     lsw_core::dotnetops::Check::Ok => "OK",
@@ -115,11 +105,7 @@ pub(crate) fn dotnet(op: &DotnetCmd, dirs: &Dirs, format: Format) -> lsw_core::R
             ]
             .iter()
             .all(|c| *c == lsw_core::dotnetops::Check::Ok);
-            Ok(if healthy {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::FAILURE
-            })
+            crate::cmd::exit_ok(healthy)
         }
     }
 }
@@ -168,10 +154,7 @@ pub(crate) fn sdk(op: &SdkCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
                         })
                     })
                     .collect();
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&items).expect("serializes")
-                );
+                crate::cmd::emit_json(&items);
                 return Ok(ExitCode::SUCCESS);
             }
             if sdks.is_empty() {

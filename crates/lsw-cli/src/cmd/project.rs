@@ -12,10 +12,7 @@ pub(crate) fn setup(dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     }
     let report = lsw_core::setupops::setup(dirs, &cwd()?)?;
     if json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).expect("serializes")
-        );
+        crate::cmd::emit_json(&report);
         return Ok(ExitCode::SUCCESS);
     }
     match &report.build_system {
@@ -117,18 +114,14 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
                 }
             }
             if json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&serde_json::json!({
-                        "name": name,
-                        "arch": m.target_arch.to_string(),
-                        "toolchain": format!("{} {}", m.toolchain.provider, m.toolchain.version),
-                        "runtime": format!("{} {}", m.runtime.provider, m.runtime.version),
-                        "probe": report.probe.detail,
-                        "activated_for": activated,
-                    }))
-                    .expect("serializes")
-                );
+                crate::cmd::emit_json(&serde_json::json!({
+                    "name": name,
+                    "arch": m.target_arch.to_string(),
+                    "toolchain": format!("{} {}", m.toolchain.provider, m.toolchain.version),
+                    "runtime": format!("{} {}", m.runtime.provider, m.runtime.version),
+                    "probe": report.probe.detail,
+                    "activated_for": activated,
+                }));
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -148,10 +141,7 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
                         })
                     })
                     .collect();
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&items).expect("serializes")
-                );
+                crate::cmd::emit_json(&items);
                 return Ok(ExitCode::SUCCESS);
             }
             if envs.is_empty() {
@@ -173,11 +163,7 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
         EnvCmd::Remove { name } => {
             lsw_core::env_remove(dirs, name)?;
             if format == Format::Json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&serde_json::json!({ "removed": name }))
-                        .expect("serializes")
-                );
+                crate::cmd::emit_json(&serde_json::json!({ "removed": name }));
             } else {
                 println!("Removed environment '{name}'");
             }
@@ -187,14 +173,10 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
         EnvCmd::Clone { src, dst, force } => {
             let env = lsw_core::clone_env(dirs, src, dst, *force)?;
             if format == Format::Json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&serde_json::json!({
-                        "cloned": src,
-                        "to": env.name,
-                    }))
-                    .expect("serializes")
-                );
+                crate::cmd::emit_json(&serde_json::json!({
+                    "cloned": src,
+                    "to": env.name,
+                }));
             } else {
                 println!("Cloned environment '{src}' to '{}'", env.name);
             }
@@ -210,15 +192,11 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
             let report = lsw_core::env_restore(dirs, &p, name)?;
             let m = &report.environment.manifest;
             if json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&serde_json::json!({
-                        "restored": name,
-                        "arch": m.target_arch.to_string(),
-                        "toolchain": format!("{} {}", m.toolchain.provider, m.toolchain.version),
-                    }))
-                    .expect("serializes")
-                );
+                crate::cmd::emit_json(&serde_json::json!({
+                    "restored": name,
+                    "arch": m.target_arch.to_string(),
+                    "toolchain": format!("{} {}", m.toolchain.provider, m.toolchain.version),
+                }));
             } else {
                 println!("Environment '{name}' restored and verified against lsw.lock");
                 println!("  arch      {}", m.target_arch);

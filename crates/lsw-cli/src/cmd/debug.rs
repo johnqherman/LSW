@@ -53,7 +53,7 @@ pub(crate) fn debug(
                 None => Ok(crate::usage_failure(format, NO_HOST)),
                 Some(a) => {
                     if format == Format::Json {
-                        println!("{}", serde_json::to_string_pretty(&a).expect("serializes"));
+                        crate::cmd::emit_json(&a);
                     } else {
                         println!("Native crash analysis on {}", a.host);
                         if let Some(b) = &a.bucket_id {
@@ -88,7 +88,7 @@ pub(crate) fn debug(
             }
             Some(bt) => {
                 if format == Format::Json {
-                    println!("{}", serde_json::to_string_pretty(&bt).expect("serializes"));
+                    crate::cmd::emit_json(&bt);
                 } else {
                     println!("Native debug on {}", bt.host);
                     if let Some(e) = &bt.exception {

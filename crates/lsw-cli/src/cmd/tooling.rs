@@ -39,10 +39,7 @@ pub(crate) fn check(headless: bool, dirs: &Dirs, format: Format) -> lsw_core::Re
         &mut progress,
     )?;
     if json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).expect("serializes")
-        );
+        crate::cmd::emit_json(&report);
     } else {
         println!();
         if report.ok {
@@ -56,21 +53,14 @@ pub(crate) fn check(headless: bool, dirs: &Dirs, format: Format) -> lsw_core::Re
             println!("{}", color::red(&format!("{failed} check(s) failed")));
         }
     }
-    Ok(if report.ok {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::FAILURE
-    })
+    crate::cmd::exit_ok(report.ok)
 }
 
 pub(crate) fn doctor(dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     let p = project().ok();
     let report = lsw_core::doctor(dirs, p.as_ref())?;
     if format == Format::Json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&report).expect("report serializes")
-        );
+        crate::cmd::emit_json(&report);
     } else {
         println!("LSW Environment Doctor\n");
         for section in &report.sections {
@@ -94,11 +84,7 @@ pub(crate) fn doctor(dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> 
             }
         );
     }
-    Ok(if report.healthy {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::FAILURE
-    })
+    crate::cmd::exit_ok(report.healthy)
 }
 
 pub(crate) fn completions(shell: &clap_complete::Shell) -> lsw_core::Result<ExitCode> {

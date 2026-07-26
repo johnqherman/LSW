@@ -1,4 +1,45 @@
 use std::path::PathBuf;
+use std::process::ExitCode;
+
+pub(crate) fn emit_json(value: &impl serde::Serialize) {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(value).expect("serializes")
+    );
+}
+
+pub(crate) fn exit_ok(ok: bool) -> lsw_core::Result<ExitCode> {
+    Ok(if ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
+pub(crate) enum Picked {
+    None,
+    One(PathBuf),
+    Many(Vec<PathBuf>),
+}
+
+pub(crate) fn pick_built(build: &lsw_core::BuildReport, exe_only: bool) -> Picked {
+    let mut hits: Vec<PathBuf> = build
+        .artifacts
+        .iter()
+        .filter(|a| {
+            a.extension().is_some_and(|e| {
+                e.eq_ignore_ascii_case("exe") || (!exe_only && e.eq_ignore_ascii_case("dll"))
+            })
+        })
+        .cloned()
+        .collect();
+    hits.sort();
+    match hits.len() {
+        0 => Picked::None,
+        1 => Picked::One(hits.remove(0)),
+        _ => Picked::Many(hits),
+    }
+}
 
 pub(crate) fn resolve_pe(
     file: &Option<PathBuf>,
@@ -9,37 +50,25 @@ pub(crate) fn resolve_pe(
     }
     let (p, env) = crate::active_env(dirs)?;
     let build = lsw_core::build(&p, &env, &lsw_core::BuildOptions::default())?;
-    let mut pes: Vec<PathBuf> = build
-        .artifacts
-        .iter()
-        .filter(|a| {
-            a.extension()
-                .is_some_and(|e| e.eq_ignore_ascii_case("exe") || e.eq_ignore_ascii_case("dll"))
-        })
-        .map(|a| p.root.join(a))
-        .collect();
-    pes.sort();
-    match pes.as_slice() {
-        [] => {
+    match pick_built(&build, false) {
+        Picked::None => {
             eprintln!("the build produced no .exe or .dll; pass a file explicitly");
             Ok(None)
         }
-        [only] => {
+        Picked::One(only) => {
+            let only = p.root.join(only);
             eprintln!("[lsw] using {}", only.display());
-            Ok(Some(only.clone()))
+            Ok(Some(only))
         }
-        many => {
-            let exes: Vec<&PathBuf> = many
-                .iter()
-                .filter(|a| a.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")))
-                .collect();
-            if let [one_exe] = exes.as_slice() {
-                eprintln!("[lsw] using {}", one_exe.display());
-                return Ok(Some((*one_exe).clone()));
+        Picked::Many(many) => {
+            if let Picked::One(exe) = pick_built(&build, true) {
+                let exe = p.root.join(exe);
+                eprintln!("[lsw] using {}", exe.display());
+                return Ok(Some(exe));
             }
             eprintln!("the build produced multiple artifacts; pick one:");
-            for a in many {
-                eprintln!("  {}", a.display());
+            for a in &many {
+                eprintln!("  {}", p.root.join(a).display());
             }
             Ok(None)
         }
