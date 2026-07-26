@@ -33,13 +33,44 @@ downloaded: run only the binaries that you trust.
 - **No network.** Use the strict sandbox together with `network = "none"` (the
   default in the sandbox) to stop outbound traffic.
 
+## Network access LSW makes on your behalf
+
+LSW itself never phones home. Three commands download content, each only when
+you run it:
+
+- **`lsw deps add <name>`** fetches package metadata and tarballs from
+  `https://repo.msys2.org/mingw` with `curl`. Tarballs are verified against
+  the SHA-256 recorded in the repository database; the database itself is
+  fetched over HTTPS but its PGP signature is not currently checked. The
+  cache lives in `~/.cache/lsw/msys2/`.
+- **`lsw toolchain install`** downloads llvm-mingw release tarballs from
+  GitHub (`github.com/mstorsjo/llvm-mingw`) over HTTPS.
+- **`lsw sdk acquire`** runs `xwin`, which downloads Microsoft SDK content
+  from Microsoft's CDN under the Microsoft license you accept with
+  `--accept-license`.
+
+## Local executables LSW runs
+
+- **`lsw plugin list`** discovers and executes any `lsw-provider-*` binary on
+  your `PATH` (JSON-RPC handshake with a 30s timeout and 1 MiB line cap). A
+  malicious binary with that name prefix on `PATH` runs with your
+  privileges - the same trust model as any other program on `PATH`.
+- **`lsw env provision winetricks`** runs winetricks, which itself downloads
+  the components for the verbs you name.
+
 ## What LSW does not do
 
 - LSW does not redistribute proprietary Microsoft SDK, runtime, or OS content.
-  You supply that content with `lsw sdk import`.
+  You supply that content with `lsw sdk import` or fetch it yourself via
+  `lsw sdk acquire`.
 - LSW does not tell you that a program that runs under Wine has the same
-  behavior on native Windows. Use `lsw verify --native-windows` to get a real
+  behavior on native Windows. Use `lsw verify --native` to get a real
   Windows result.
+
+## Supported versions
+
+Security fixes land on the latest minor release line published on crates.io.
+Older versions do not get backports; upgrade with `cargo install lsw`.
 
 ## How to report a vulnerability
 

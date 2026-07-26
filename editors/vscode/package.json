@@ -69,6 +69,34 @@
         ]
       }
     ],
+    "taskDefinitions": [
+      {
+        "type": "lsw",
+        "required": ["command"],
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "The lsw subcommand to run (build, test, check, package)."
+          }
+        }
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "lsw-gcc",
+        "owner": "lsw",
+        "source": "lsw",
+        "fileLocation": ["autoDetect", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.*?):(\\d+):(\\d+):\\s+(warning|error|fatal error):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    ],
     "configuration": {
       "title": "LSW",
       "properties": {

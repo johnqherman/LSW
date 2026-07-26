@@ -1,9 +1,11 @@
+<img src="assets/logo.svg" alt="LSW" width="96" align="right"/>
+
 # LSW - Linux Subsystem for Windows Development
 
 [![CI](https://github.com/johnqherman/LSW/actions/workflows/ci.yml/badge.svg)](https://github.com/johnqherman/LSW/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/lsw.svg)](https://crates.io/crates/lsw)
 [![license](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](#license)
-[![msrv](https://img.shields.io/badge/rustc-1.85+-blue.svg)](rust-toolchain.toml)
+[![msrv](https://img.shields.io/badge/rustc-1.85+-blue.svg)](Cargo.toml)
 
 **Build, test, and package Windows applications from Linux - with one
 workflow.**

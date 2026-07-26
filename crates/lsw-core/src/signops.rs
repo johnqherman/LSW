@@ -13,6 +13,51 @@ pub struct SignOptions {
     pub timestamp_url: Option<String>,
 }
 
+pub struct VerifyOutcome {
+    pub valid: bool,
+    pub detail: String,
+}
+
+pub fn verify_signature(path: &Path) -> Result<VerifyOutcome> {
+    if !path.is_file() {
+        return Err(Error::NotExecutable {
+            program: path.to_path_buf(),
+            detail: "file not found".into(),
+        });
+    }
+    let Some(tool) = crate::buildops::which("osslsigncode") else {
+        return Err(Error::ToolMissing {
+            tool: "osslsigncode".into(),
+            fix: "install osslsigncode to verify Authenticode signatures".into(),
+        });
+    };
+    let out = std::process::Command::new(&tool)
+        .arg("verify")
+        .arg(path)
+        .output()
+        .map_err(|e| Error::io(tool.clone(), e))?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let valid = out.status.success() && stdout.contains("Signature verification: ok");
+    let detail = stdout
+        .lines()
+        .filter(|l| {
+            l.contains("Signature verification")
+                || l.contains("Subject:")
+                || l.contains("Issuer :")
+                || l.contains("no signature found")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    Ok(VerifyOutcome {
+        valid,
+        detail: if detail.is_empty() {
+            stdout.trim().to_owned()
+        } else {
+            detail
+        },
+    })
+}
+
 pub fn sign(path: &Path, opts: &SignOptions) -> Result<()> {
     if !path.is_file() {
         return Err(Error::NotExecutable {

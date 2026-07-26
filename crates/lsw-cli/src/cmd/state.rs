@@ -131,10 +131,7 @@ pub(crate) fn service(op: &ServiceCmd, dirs: &Dirs, format: Format) -> lsw_core:
     let json = format == Format::Json;
     let ack = |action: &str, name: &str| {
         if json {
-            println!(
-                "{}",
-                serde_json::json!({ "service": name, "action": action })
-            );
+            crate::cmd::emit_json(&serde_json::json!({ "service": name, "action": action }));
         } else {
             println!("{action} service '{name}'");
         }
