@@ -12,9 +12,10 @@ mod lockfile;
 mod toolchain;
 
 pub(crate) use lockfile::check_lock;
+pub(crate) use toolchain::effective_toolchain;
 
 use lockfile::{stamp_build_dir, sync_lockfile};
-use toolchain::{effective_toolchain, run_step, run_step_with_env, write_meson_cross_file};
+use toolchain::{run_step, run_step_with_env, write_meson_cross_file};
 
 const MAX_DIR_ENTRIES: usize = 1_000_000;
 
