@@ -84,6 +84,7 @@ fn discover_or_create(start: &Path) -> Result<(Project, bool)> {
             let name = crate::project::sanitize_project_name(&name);
             lsw_config::ProjectManifest::new(&name)
                 .save_new(&start.join(lsw_config::PROJECT_MANIFEST))?;
+            crate::project::ensure_gitignore(start)?;
             Ok((Project::discover(start)?, true))
         }
         Err(e) => Err(e),

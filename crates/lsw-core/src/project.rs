@@ -151,6 +151,15 @@ fn template_sources(template: Template) -> (&'static str, &'static str) {
 
 const TEMPLATE_GITIGNORE: &str = "build/\n";
 
+pub(crate) fn ensure_gitignore(root: &Path) -> Result<bool> {
+    let path = root.join(".gitignore");
+    if path.exists() {
+        return Ok(false);
+    }
+    fs::write(&path, TEMPLATE_GITIGNORE).map_err(|e| Error::io(path, e))?;
+    Ok(true)
+}
+
 #[derive(Debug)]
 pub struct InitReport {
     pub root: PathBuf,
@@ -229,10 +238,11 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
     }
 
     let manifest_path = root.join(PROJECT_MANIFEST);
-    if manifest_path.exists() {
+    let manifest_exists = manifest_path.exists();
+    if manifest_exists && crate::buildops::detect_build_system(&root).is_some() {
         return Err(Error::InitFailed {
             path: root,
-            detail: "lsw.toml already exists here".into(),
+            detail: "lsw.toml already exists here and a build system is present".into(),
         });
     }
 
@@ -286,8 +296,10 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
         created_dirs.push(root.clone());
     }
     let result: Result<Option<String>> = (|| {
-        ProjectManifest::new(&project_name).save_new(&manifest_path)?;
-        created.push(manifest_path.clone());
+        if !manifest_exists {
+            ProjectManifest::new(&project_name).save_new(&manifest_path)?;
+            created.push(manifest_path.clone());
+        }
         let existing_build = crate::buildops::detect_build_system(&root).map(|s| s.label().to_owned());
         if existing_build.is_none() {
             let (cmake, main_c) = template_sources(template);
@@ -388,6 +400,30 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         init(dir.path(), Some("x"), Template::Console).unwrap();
         let err = init(dir.path(), Some("x"), Template::Console).unwrap_err();
+        assert!(err.to_string().contains("LSW2009"));
+    }
+
+    #[test]
+    fn init_scaffolds_around_manifest_without_build_system() {
+        let dir = tempfile::tempdir().unwrap();
+        ProjectManifest::new("bare")
+            .save_new(&dir.path().join(PROJECT_MANIFEST))
+            .unwrap();
+        let report = init(dir.path(), None, Template::Console).unwrap();
+        assert!(dir.path().join("CMakeLists.txt").exists());
+        assert!(!report.created.iter().any(|p| p.ends_with(PROJECT_MANIFEST)));
+        let project = Project::discover(dir.path()).unwrap();
+        assert_eq!(project.manifest.project.name, "bare");
+    }
+
+    #[test]
+    fn init_refuses_manifest_with_build_system_present() {
+        let dir = tempfile::tempdir().unwrap();
+        ProjectManifest::new("full")
+            .save_new(&dir.path().join(PROJECT_MANIFEST))
+            .unwrap();
+        fs::write(dir.path().join("CMakeLists.txt"), "project(full C)\n").unwrap();
+        let err = init(dir.path(), None, Template::Console).unwrap_err();
         assert!(err.to_string().contains("LSW2009"));
     }
 
