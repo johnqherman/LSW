@@ -1,34 +1,21 @@
-use std::fs;
 use std::io::Read;
 use std::path::Path;
 
 use object::LittleEndian as LE;
 use object::pe;
-use object::pe::{ImageNtHeaders32, ImageNtHeaders64};
-use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile, optional_header_magic};
+use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile};
 
 use crate::MZ_MAGIC;
 use crate::error::PeError;
+use crate::image::{PeImage, dispatch_pe};
 use crate::types::*;
 
 const ELF_MAGIC: &[u8; 4] = b"\x7fELF";
 const SHEBANG_MAGIC: &[u8; 2] = b"#!";
+const DETECT_HEADER_BYTES: usize = 64 * 1024;
 
 pub fn detect(path: &Path) -> Result<BinaryKind, PeError> {
-    let mut file = fs::File::open(path).map_err(|e| PeError::io(path, e))?;
-    let mut prefix = [0u8; 4];
-    let mut filled = 0;
-    while filled < prefix.len() {
-        let n = file
-            .read(&mut prefix[filled..])
-            .map_err(|e| PeError::io(path, e))?;
-        if n == 0 {
-            break;
-        }
-        filled += n;
-    }
-    let prefix = &prefix[..filled];
-    drop(file);
+    let prefix = read_prefix(path, DETECT_HEADER_BYTES)?;
 
     if prefix.starts_with(ELF_MAGIC) {
         return Ok(BinaryKind::Elf);
@@ -37,35 +24,48 @@ pub fn detect(path: &Path) -> Result<BinaryKind, PeError> {
         return Ok(BinaryKind::Script);
     }
     if prefix.starts_with(MZ_MAGIC) {
-        let data = crate::error::read_pe(path)?;
-        return parse_pe_info(path, &data).map(BinaryKind::Pe);
+        return match parse_pe_info(path, &prefix) {
+            Ok(info) => Ok(BinaryKind::Pe(info)),
+            Err(_) if prefix.len() == DETECT_HEADER_BYTES => {
+                let data = crate::error::read_pe(path)?;
+                parse_pe_info(path, &data).map(BinaryKind::Pe)
+            }
+            Err(e) => Err(e),
+        };
     }
     Ok(BinaryKind::Unknown)
 }
 
-fn parse_pe_info(path: &Path, data: &[u8]) -> Result<PeInfo, PeError> {
-    match optional_header_magic(data).map_err(|e| PeError::malformed(path, e))? {
-        pe::IMAGE_NT_OPTIONAL_HDR32_MAGIC => {
-            let file =
-                PeFile::<ImageNtHeaders32>::parse(data).map_err(|e| PeError::malformed(path, e))?;
-            Ok(pe_info(PeFormat::Pe32, file.nt_headers()))
-        }
-        pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC => {
-            let file =
-                PeFile::<ImageNtHeaders64>::parse(data).map_err(|e| PeError::malformed(path, e))?;
-            Ok(pe_info(PeFormat::Pe32Plus, file.nt_headers()))
-        }
-        other => Err(PeError::malformed(
-            path,
-            format!("unrecognized optional header magic 0x{other:04x}"),
-        )),
+impl PeImage {
+    pub fn info(&self) -> Result<PeInfo, PeError> {
+        parse_pe_info(&self.path, &self.data)
     }
 }
 
-fn pe_info<Pe: ImageNtHeaders>(format: PeFormat, nt: &Pe) -> PeInfo {
-    PeInfo {
+fn read_prefix(path: &Path, max: usize) -> Result<Vec<u8>, PeError> {
+    let file = std::fs::File::open(path).map_err(|e| PeError::io(path, e))?;
+    let mut data = Vec::new();
+    file.take(max as u64)
+        .read_to_end(&mut data)
+        .map_err(|e| PeError::io(path, e))?;
+    Ok(data)
+}
+
+pub(crate) fn parse_pe_info(path: &Path, data: &[u8]) -> Result<PeInfo, PeError> {
+    dispatch_pe!(path, data, pe_info_typed)
+}
+
+fn pe_info_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<PeInfo, PeError> {
+    let file = PeFile::<Pe>::parse(data).map_err(|e| PeError::malformed(path, e))?;
+    let nt = file.nt_headers();
+    let format = if nt.optional_header().magic() == pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC {
+        PeFormat::Pe32Plus
+    } else {
+        PeFormat::Pe32
+    };
+    Ok(PeInfo {
         format,
         machine: Machine::from_coff(nt.file_header().machine.get(LE)),
         subsystem: Subsystem::from_pe(nt.optional_header().subsystem()),
-    }
+    })
 }

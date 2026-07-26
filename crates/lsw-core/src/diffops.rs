@@ -88,12 +88,14 @@ fn file_len(path: &Path) -> Result<u64> {
 pub fn diff(a: &Path, b: &Path) -> Result<DiffReport> {
     require_file(a)?;
     require_file(b)?;
-    let old_sections = keyed_sizes(&lsw_pe::details(a)?.sections);
-    let new_sections = keyed_sizes(&lsw_pe::details(b)?.sections);
+    let old = lsw_pe::PeImage::open(a)?;
+    let new = lsw_pe::PeImage::open(b)?;
+    let old_sections = keyed_sizes(&old.details()?.sections);
+    let new_sections = keyed_sizes(&new.details()?.sections);
     let (sections, resized) = keyed_delta(&old_sections, &new_sections);
     Ok(DiffReport {
-        imports: delta(&lsw_pe::imports(a)?, &lsw_pe::imports(b)?),
-        exports: delta(&lsw_pe::exports(a)?, &lsw_pe::exports(b)?),
+        imports: delta(&old.imports()?, &new.imports()?),
+        exports: delta(&old.exports()?, &new.exports()?),
         sections,
         resized,
         size_delta: file_len(b)? as i64 - file_len(a)? as i64,

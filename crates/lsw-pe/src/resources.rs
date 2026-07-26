@@ -1,12 +1,10 @@
 use std::path::Path;
 
 use object::LittleEndian as LE;
-use object::pe;
-use object::pe::{ImageNtHeaders32, ImageNtHeaders64};
-use object::read::pe::{ImageNtHeaders, PeFile, optional_header_magic};
+use object::read::pe::{ImageNtHeaders, PeFile};
 
-use crate::MZ_MAGIC;
 use crate::error::PeError;
+use crate::image::{PeImage, dispatch_pe};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Resources {
@@ -26,19 +24,12 @@ const MAX_SECTIONS: usize = 96;
 const MAX_RESOURCE_PAYLOAD_TOTAL: usize = 64 * 1024 * 1024;
 
 pub fn resources(path: &Path) -> Result<Resources, PeError> {
-    let data = crate::error::read_pe(path)?;
-    if !data.starts_with(MZ_MAGIC) {
-        return Err(PeError::NotPe {
-            path: path.to_path_buf(),
-        });
-    }
-    match optional_header_magic(&*data).map_err(|e| PeError::malformed(path, e))? {
-        pe::IMAGE_NT_OPTIONAL_HDR32_MAGIC => resources_typed::<ImageNtHeaders32>(path, &data),
-        pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC => resources_typed::<ImageNtHeaders64>(path, &data),
-        other => Err(PeError::malformed(
-            path,
-            format!("unrecognized optional header magic 0x{other:04x}"),
-        )),
+    PeImage::open(path)?.resources()
+}
+
+impl PeImage {
+    pub fn resources(&self) -> Result<Resources, PeError> {
+        dispatch_pe!(&self.path, &self.data, resources_typed)
     }
 }
 
