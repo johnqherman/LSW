@@ -74,6 +74,19 @@ pub fn lint(manifest: &ProjectManifest) -> Vec<Finding> {
         );
     }
 
+    if manifest.toolchain.provider.is_some() || manifest.toolchain.version.is_some() {
+        warn(
+            &mut out,
+            "[toolchain] provider/version in lsw.toml are ignored; the environment owns toolchain selection (lsw env create --toolchain) and lsw.lock owns pinning".into(),
+        );
+    }
+    if manifest.runtime.version.is_some() {
+        warn(
+            &mut out,
+            "[runtime] version in lsw.toml is ignored; the environment resolves the runtime and lsw.lock owns pinning".into(),
+        );
+    }
+
     if manifest.filesystem.project_drive != "C:" || manifest.filesystem.mount_project != "/src" {
         error(
             &mut out,

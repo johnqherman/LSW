@@ -193,14 +193,20 @@ pub fn run(
                 buildops::check_lock(p, env)?;
                 crate::envops::link_project(env, p)?;
             }
+            let resolved_display =
+                display_override.unwrap_or_else(|| display_mode(display, is_gui));
+            let mut child_env = windows_env(env, project);
+            if resolved_display == lsw_runtime::DisplayMode::Virtual {
+                child_env.push(("LSW_HEADLESS".to_owned(), "1".to_owned()));
+            }
             WineRuntime.execute(&ExecutionRequest {
                 program: launch,
                 args: run_args,
                 prefix: env.layout.prefix(),
                 cwd: windows_cwd(env, project),
-                env: windows_env(env, project),
+                env: child_env,
                 sandbox: sandbox_spec(env, project, sandbox)?,
-                display: display_override.unwrap_or_else(|| display_mode(display, is_gui)),
+                display: resolved_display,
                 emulate: crate::emulateops::resolve(env.manifest.target_arch)?,
             })?
         }

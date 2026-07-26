@@ -71,7 +71,7 @@ Use the style of the module that you change.
 
 ## Tests against real Windows
 
-The native-verification paths (`lsw verify --native-windows`,
+The native-verification paths (`lsw verify --native`,
 `lsw compat --native`, `lsw debug --native`, and the WinRM/HTTPS transports)
 need a Windows host that you can get access to. Configure the host in
 `[verify]` in `lsw.toml`. These paths are tested manually, not in CI. The
