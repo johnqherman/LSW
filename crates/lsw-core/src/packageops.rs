@@ -290,7 +290,7 @@ fn build_msi(
     }
 
     let name = &project.manifest.project.name;
-    let wxs = render_wxs(name, files);
+    let wxs = render_wxs(name, &project.manifest.package, files);
     let wxs_path = dist.join(format!("{stem}.wxs"));
     if fs::symlink_metadata(&wxs_path).is_ok_and(|m| m.file_type().is_symlink()) {
         fs::remove_file(&wxs_path).map_err(|e| Error::io(wxs_path.clone(), e))?;
@@ -327,8 +327,13 @@ fn build_msi(
     Ok(msi_path)
 }
 
-fn render_wxs(name: &str, files: &[String]) -> String {
-    let upgrade_code = deterministic_guid(&format!("lsw:{name}:upgrade"));
+fn render_wxs(name: &str, package: &lsw_config::PackageSection, files: &[String]) -> String {
+    let upgrade_code = package
+        .upgrade_code
+        .clone()
+        .unwrap_or_else(|| deterministic_guid(&format!("lsw:{name}:upgrade")));
+    let version = crate::xml_escape(package.version.as_deref().unwrap_or("1.0.0"));
+    let manufacturer = crate::xml_escape(package.publisher.as_deref().unwrap_or("LSW"));
     let ename = crate::xml_escape(name);
 
     let mut components = String::new();
@@ -350,8 +355,8 @@ fn render_wxs(name: &str, files: &[String]) -> String {
     format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
          <Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\">\n\
-         \x20 <Product Id=\"*\" Name=\"{ename}\" Language=\"1033\" Version=\"1.0.0\"\n\
-         \x20          Manufacturer=\"LSW\" UpgradeCode=\"{upgrade_code}\">\n\
+         \x20 <Product Id=\"*\" Name=\"{ename}\" Language=\"1033\" Version=\"{version}\"\n\
+         \x20          Manufacturer=\"{manufacturer}\" UpgradeCode=\"{upgrade_code}\">\n\
          \x20   <Package InstallerVersion=\"200\" Compressed=\"yes\" InstallScope=\"perMachine\"/>\n\
          \x20   <Media Id=\"1\" Cabinet=\"main.cab\" EmbedCab=\"yes\"/>\n\
          \x20   <Directory Id=\"TARGETDIR\" Name=\"SourceDir\">\n\

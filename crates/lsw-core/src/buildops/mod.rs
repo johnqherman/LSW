@@ -149,6 +149,17 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
     if opts.reproducible {
         tc.link_flags.push("-Wl,--no-insert-timestamp".to_owned());
     }
+    if matches!(
+        system,
+        BuildSystem::Cmake
+            | BuildSystem::Meson
+            | BuildSystem::Make
+            | BuildSystem::Ninja
+            | BuildSystem::Explicit
+    ) && let Some(obj) = crate::resourceops::embed_object(project, env, &tc)?
+    {
+        tc.link_flags.push(obj.display().to_string());
+    }
     let mut commands = Vec::new();
     let flat_layout = matches!(
         system,
@@ -293,6 +304,7 @@ fn build_cmake(
         ambient_env_fingerprint()
     );
     refresh_stale_cmake_build_dir(&project.root.join("build"), &cmake_config)?;
+    crate::resourceops::embed_object(project, env, tc)?;
     let mut configure = vec![
         "cmake".to_owned(),
         "-S".to_owned(),
