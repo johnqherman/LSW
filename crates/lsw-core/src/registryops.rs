@@ -42,6 +42,28 @@ pub fn get(env: &Environment, key: &str, value: Option<&str>) -> Result<()> {
     run_registry_tool(env, "reg.exe", args)
 }
 
+pub fn get_captured(env: &Environment, key: &str, value: Option<&str>) -> Result<String> {
+    let wine = lsw_runtime::WineRuntime.resolve()?.executable;
+    let mut command = std::process::Command::new(wine);
+    lsw_runtime::scrub_wine_env(&mut command);
+    for (k, v) in lsw_runtime::base_env(&env.layout.prefix()) {
+        command.env(k, v);
+    }
+    command.arg("reg.exe").arg("query").arg(key);
+    if let Some(v) = value {
+        command.arg("/v").arg(v);
+    }
+    let out = command
+        .output()
+        .map_err(|e| Error::io(PathBuf::from("reg.exe"), e))?;
+    if !out.status.success() {
+        return Err(Error::RegistryOperationFailed {
+            code: out.status.code(),
+        });
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 pub fn set(env: &Environment, key: &str, value: &str, data: &str, kind: &str) -> Result<()> {
     run_registry_tool(
         env,

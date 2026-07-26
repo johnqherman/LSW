@@ -17,27 +17,40 @@ pub struct SetupReport {
     pub environment_created: bool,
     pub toolchain: String,
     pub runtime: String,
+    pub arch_mismatch: Option<String>,
 }
 
 pub const DEFAULT_ENV_NAME: &str = "windows-x64";
+
+pub fn default_env_name(arch: TargetArch) -> &'static str {
+    match arch {
+        TargetArch::X86_64 => DEFAULT_ENV_NAME,
+        TargetArch::X86 => "windows-x86",
+        TargetArch::Aarch64 => "windows-arm64",
+        TargetArch::Armv7 => "windows-arm",
+        TargetArch::Arm64Ec => "windows-arm64ec",
+    }
+}
 
 pub fn setup(dirs: &Dirs, start: &Path) -> Result<SetupReport> {
     let (mut project, manifest_created) = discover_or_create(start)?;
     let build_system =
         crate::buildops::detect_build_system(&project.root).map(|s| s.label().to_owned());
 
+    let arch = project.manifest.target.arch;
+    let env_name = default_env_name(arch);
     let mut environment_created = false;
     let env = match envops::resolve_active(dirs, &project) {
         Ok(env) => env,
         Err(Error::NoActiveEnvironment | Error::EnvironmentNotFound { .. }) => {
-            match envops::Environment::open(dirs, DEFAULT_ENV_NAME) {
+            match envops::Environment::open(dirs, env_name) {
                 Ok(env) => env,
                 Err(Error::EnvironmentNotFound { .. }) => {
                     let report = envops::create(
                         dirs,
                         &EnvCreateOptions {
-                            name: DEFAULT_ENV_NAME.to_owned(),
-                            arch: TargetArch::X86_64,
+                            name: env_name.to_owned(),
+                            arch,
                             toolchain: None,
                             sdk: None,
                             force: false,
@@ -58,6 +71,12 @@ pub fn setup(dirs: &Dirs, start: &Path) -> Result<SetupReport> {
     }
 
     let m = &env.manifest;
+    let arch_mismatch = (m.target_arch != arch).then(|| {
+        format!(
+            "lsw.toml sets [target] arch = \"{arch}\" but environment '{}' targets {}; create one with: lsw env create {} --arch {arch}",
+            env.name, m.target_arch, default_env_name(arch),
+        )
+    });
     Ok(SetupReport {
         project_name: project.manifest.project.name.clone(),
         project_root: project.root.display().to_string(),
@@ -67,6 +86,7 @@ pub fn setup(dirs: &Dirs, start: &Path) -> Result<SetupReport> {
         environment_created,
         toolchain: format!("{} {}", m.toolchain.provider, m.toolchain.version),
         runtime: format!("{} {}", m.runtime.provider, m.runtime.version),
+        arch_mismatch,
     })
 }
 

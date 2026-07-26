@@ -41,6 +41,9 @@ pub(crate) fn setup(dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     );
     println!("  toolchain {}", report.toolchain);
     println!("  runtime   {}", report.runtime);
+    if let Some(warning) = &report.arch_mismatch {
+        eprintln!("warning: {warning}");
+    }
     if report.build_system.is_some() {
         println!("\nReady:\n  lsw build");
     } else {

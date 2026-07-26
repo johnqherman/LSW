@@ -56,6 +56,9 @@ pub(crate) fn run_install(prefix: &std::path::Path) -> lsw_core::Result<()> {
         &p.fish.join("lsw.fish"),
     )?;
     println!("installed completions under {}", p.bash.display());
+    println!(
+        "(powershell and elvish are not installed automatically; use `lsw completions <shell>`)"
+    );
 
     write_man_page(&cmd, &p.man, "lsw")?;
     for sub in cmd.get_subcommands() {

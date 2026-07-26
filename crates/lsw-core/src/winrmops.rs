@@ -133,8 +133,12 @@ impl Winrm {
             .wait()
             .map_err(|e| Error::io(std::path::PathBuf::from("curl"), e))?;
         write_res.map_err(|e| Error::io(std::path::PathBuf::from("curl"), e))?;
-        let stdout = out_rx.map(lsw_toolchain::Drain::wait_eof).unwrap_or_default();
-        let stderr = err_rx.map(lsw_toolchain::Drain::wait_eof).unwrap_or_default();
+        let stdout = out_rx
+            .map(lsw_toolchain::Drain::wait_eof)
+            .unwrap_or_default();
+        let stderr = err_rx
+            .map(lsw_toolchain::Drain::wait_eof)
+            .unwrap_or_default();
         let body = String::from_utf8_lossy(&stdout).into_owned();
         if !status.success() && body.is_empty() {
             return Err(Error::ProbeFailed {
