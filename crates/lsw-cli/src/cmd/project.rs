@@ -178,6 +178,18 @@ pub(crate) fn env(op: &EnvCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<
             Ok(ExitCode::SUCCESS)
         }
 
+        EnvCmd::Export { name, file } => {
+            lsw_core::envops::export_env(dirs, name, file)?;
+            println!("exported '{name}' to {}", file.display());
+            Ok(ExitCode::SUCCESS)
+        }
+
+        EnvCmd::ImportArchive { name, file, force } => {
+            lsw_core::envops::import_env(dirs, name, file, *force)?;
+            println!("imported '{name}' from {}", file.display());
+            Ok(ExitCode::SUCCESS)
+        }
+
         EnvCmd::Remove { name } => {
             lsw_core::env_remove(dirs, name)?;
             if format == Format::Json {

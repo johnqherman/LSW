@@ -25,6 +25,7 @@ pub(crate) fn build(
             update_lock: *update_lock,
             reproducible: *reproducible,
             aot: *aot,
+            coverage: false,
         },
     )?;
     if format == Format::Json {
@@ -146,6 +147,7 @@ pub(crate) fn exec(
 pub(crate) fn test(
     headless: &bool,
     junit: &Option<PathBuf>,
+    coverage: bool,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
@@ -156,6 +158,7 @@ pub(crate) fn test(
         &lsw_core::TestOptions {
             headless: *headless,
             junit: junit.clone(),
+            coverage,
         },
     )?;
     if format == Format::Json {

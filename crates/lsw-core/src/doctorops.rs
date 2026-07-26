@@ -170,6 +170,38 @@ fn build_tool_rows(project: Option<&Project>) -> Vec<Row> {
         .collect()
 }
 
+fn target_support_rows(arch: lsw_config::TargetArch) -> Vec<Row> {
+    let mut rows = Vec::new();
+    let yes_no = |label: &str, supported: bool, detail: &str| {
+        row(
+            label,
+            if supported {
+                format!("supported ({detail})")
+            } else {
+                format!("not available for {arch} ({detail})")
+            },
+            if supported { Status::Ok } else { Status::Warn },
+        )
+    };
+    rows.push(match arch.rust_gnu_triple() {
+        Some(t) => yes_no("Rust", true, t),
+        None => yes_no("Rust", false, "no GNU-ABI Windows target"),
+    });
+    rows.push(match crate::buildops::zig_target(arch) {
+        Some(t) => yes_no("Zig", true, t),
+        None => yes_no("Zig", false, "no zig cross target"),
+    });
+    rows.push(match crate::dotnetops::dotnet_rid(arch) {
+        Some(r) => yes_no(".NET", true, r),
+        None => yes_no(".NET", false, "no Windows RID"),
+    });
+    rows.push(match crate::depsops::repo_for(arch) {
+        Ok((repo, _)) => yes_no("deps add (msys2)", true, repo),
+        Err(_) => yes_no("deps add (msys2)", false, "no mingw package repository"),
+    });
+    rows
+}
+
 pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
     let mut sections = Vec::new();
 
@@ -237,6 +269,11 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
     sections.push(Section {
         name: "Build tools".into(),
         rows: build_tool_rows(project),
+    });
+
+    sections.push(Section {
+        name: "Target support".into(),
+        rows: target_support_rows(arch),
     });
 
     if let Some(p) = project {

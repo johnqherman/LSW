@@ -270,7 +270,7 @@ pub struct InstalledDep {
     pub version: String,
 }
 
-fn repo_for(arch: lsw_config::TargetArch) -> Result<(&'static str, &'static str)> {
+pub(crate) fn repo_for(arch: lsw_config::TargetArch) -> Result<(&'static str, &'static str)> {
     use lsw_config::TargetArch::*;
     match arch {
         X86_64 => Ok(("mingw64", "mingw-w64-x86_64")),
@@ -543,6 +543,93 @@ pub fn add(
         .insert(name.to_owned(), pkg.version.clone());
     manifest.save(&manifest_path)?;
     Ok(pkg)
+}
+
+pub fn vendor(
+    project: &crate::project::Project,
+    arch: lsw_config::TargetArch,
+    src: &Path,
+) -> Result<usize> {
+    let meta = std::fs::symlink_metadata(src).map_err(|e| Error::io(src.to_path_buf(), e))?;
+    if meta.file_type().is_symlink() || !meta.is_dir() {
+        return Err(Error::ExtractFailed {
+            name: src.display().to_string(),
+            detail: "vendor source is not a directory (or is a symlink)".into(),
+        });
+    }
+    let has_any = ["include", "lib", "bin"]
+        .iter()
+        .any(|d| src.join(d).is_dir());
+    if !has_any {
+        return Err(Error::ExtractFailed {
+            name: src.display().to_string(),
+            detail: "vendor source has no include/, lib/, or bin/ subdirectory".into(),
+        });
+    }
+    let root = deps_root(project, arch);
+    std::fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
+    if !dep_root_contained(project, &root) {
+        return Err(Error::ExtractFailed {
+            name: src.display().to_string(),
+            detail: "dependency directory resolves outside the project; refusing to copy".into(),
+        });
+    }
+    let mut copied = 0usize;
+    for sub in ["include", "lib", "bin"] {
+        let from = src.join(sub);
+        if from.is_dir() {
+            copied += copy_dir_capped(&from, &root.join(sub), 64, &mut 0)?;
+        }
+    }
+    let name = src.file_name().map_or_else(
+        || "vendored".to_owned(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    let name = crate::project::sanitize_project_name(&name);
+    let manifest_path = project.root.join("lsw.toml");
+    let mut manifest = lsw_config::ProjectManifest::load(&manifest_path)?;
+    manifest.dependencies.insert(name, "vendored".to_owned());
+    manifest.save(&manifest_path)?;
+    Ok(copied)
+}
+
+fn copy_dir_capped(src: &Path, dst: &Path, depth: usize, visited: &mut usize) -> Result<usize> {
+    const MAX_ENTRIES: usize = 500_000;
+    if depth == 0 {
+        return Err(Error::ExtractFailed {
+            name: src.display().to_string(),
+            detail: "vendor tree is too deep".into(),
+        });
+    }
+    std::fs::create_dir_all(dst).map_err(|e| Error::io(dst.to_path_buf(), e))?;
+    let mut copied = 0;
+    for entry in std::fs::read_dir(src)
+        .map_err(|e| Error::io(src.to_path_buf(), e))?
+        .flatten()
+    {
+        *visited += 1;
+        if *visited > MAX_ENTRIES {
+            return Err(Error::ExtractFailed {
+                name: src.display().to_string(),
+                detail: format!("vendor tree exceeds {MAX_ENTRIES} entries"),
+            });
+        }
+        let meta = match std::fs::symlink_metadata(entry.path()) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
+        let to = dst.join(entry.file_name());
+        if meta.is_dir() {
+            copied += copy_dir_capped(&entry.path(), &to, depth - 1, visited)?;
+        } else if meta.is_file() {
+            std::fs::copy(entry.path(), &to).map_err(|e| Error::io(entry.path(), e))?;
+            copied += 1;
+        }
+    }
+    Ok(copied)
 }
 
 pub fn remove(

@@ -203,6 +203,7 @@ fn wine_execution(
         &TestOptions {
             headless: opts.headless,
             junit: None,
+            coverage: false,
         },
     ) {
         Ok(t) if t.runtime.outcome == Outcome::Pass => {

@@ -162,7 +162,11 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             dump_on_crash,
         } => cmd::build::run(program, args, domain, dump_on_crash, &dirs),
         Cmd::Exec { domain, command } => cmd::build::exec(domain, command, &dirs),
-        Cmd::Test { headless, junit } => cmd::build::test(headless, junit, &dirs, cli.format),
+        Cmd::Test {
+            headless,
+            junit,
+            coverage,
+        } => cmd::build::test(headless, junit, *coverage, &dirs, cli.format),
         Cmd::Check { headless } => cmd::tooling::check(*headless, &dirs, cli.format),
         Cmd::Verify {
             native,
@@ -206,6 +210,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Debug {
             program,
             args,
+            attach,
             gdb,
             no_start,
             native,
@@ -215,6 +220,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             program,
             args,
             &cmd::debug::DebugFlags {
+                attach: *attach,
                 gdb: *gdb,
                 no_start: *no_start,
                 native: *native,

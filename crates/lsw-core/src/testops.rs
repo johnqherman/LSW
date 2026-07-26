@@ -45,6 +45,7 @@ pub struct TestReport {
 pub struct TestOptions {
     pub headless: bool,
     pub junit: Option<std::path::PathBuf>,
+    pub coverage: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,11 +57,29 @@ enum TestKind {
 }
 
 pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<TestReport> {
-    buildops::build(project, env, &BuildOptions::default())?;
+    if opts.coverage && env.manifest.toolchain.provider != "llvm-mingw" {
+        return Err(Error::ToolMissing {
+            tool: "llvm-mingw".into(),
+            fix: "--coverage needs the llvm-mingw toolchain (clang instrumentation); install it with lsw toolchain install llvm-mingw and recreate the environment".into(),
+        });
+    }
+    let build_report = buildops::build(
+        project,
+        env,
+        &BuildOptions {
+            coverage: opts.coverage,
+            ..BuildOptions::default()
+        },
+    )?;
     let build = Component {
         label: format!("{}-windows", env.manifest.target_arch),
         outcome: Outcome::Pass,
     };
+    let cov_dir = project.root.join("build").join("cov");
+    if opts.coverage {
+        let _ = std::fs::remove_dir_all(&cov_dir);
+        std::fs::create_dir_all(&cov_dir).map_err(|e| Error::io(cov_dir.clone(), e))?;
+    }
 
     let (mut argv, extra_env, kind) = test_command(project, env)?;
     if let Some(junit) = &opts.junit {
@@ -100,6 +119,11 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
     }
     for (k, v) in &extra_env {
         command.env(k, v);
+    }
+    if opts.coverage {
+        let mapper = crate::envops::mapper(env, project);
+        let win_dir = mapper.to_windows(&cov_dir)?;
+        command.env("LLVM_PROFILE_FILE", format!("{win_dir}\\%p.profraw"));
     }
     if opts.headless {
         command.env("LSW_HEADLESS", "1");
@@ -159,6 +183,10 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
         }
     }
 
+    if opts.coverage {
+        report_coverage(project, env, &cov_dir, &build_report.artifacts);
+    }
+
     let passed = status.success() && tests_failed.is_none_or(|f| f == 0);
 
     Ok(TestReport {
@@ -183,6 +211,101 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
             CompatStatus::LocalCompatibilityFailed
         },
     })
+}
+
+fn coverage_tool(env: &Environment, name: &str) -> Option<std::path::PathBuf> {
+    let sibling = env
+        .manifest
+        .toolchain
+        .cc
+        .parent()
+        .map(|d| d.join(name))
+        .filter(|p| p.is_file());
+    sibling.or_else(|| crate::buildops::which(name))
+}
+
+fn report_coverage(
+    project: &Project,
+    env: &Environment,
+    cov_dir: &Path,
+    artifacts: &[std::path::PathBuf],
+) {
+    let raws: Vec<std::path::PathBuf> = std::fs::read_dir(cov_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "profraw"))
+        .collect();
+    if raws.is_empty() {
+        eprintln!(
+            "[coverage] no .profraw files produced; the tests may not have run instrumented code"
+        );
+        return;
+    }
+    let (Some(profdata), Some(llvm_cov)) = (
+        coverage_tool(env, "llvm-profdata"),
+        coverage_tool(env, "llvm-cov"),
+    ) else {
+        eprintln!("[coverage] llvm-profdata/llvm-cov not found next to the toolchain or on PATH");
+        return;
+    };
+    let merged = cov_dir.join("merged.profdata");
+    let merge = Command::new(&profdata)
+        .arg("merge")
+        .arg("-sparse")
+        .args(&raws)
+        .arg("-o")
+        .arg(&merged)
+        .output();
+    match merge {
+        Ok(out) if out.status.success() => {}
+        Ok(out) => {
+            eprintln!(
+                "[coverage] llvm-profdata merge failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+            return;
+        }
+        Err(e) => {
+            eprintln!("[coverage] cannot run llvm-profdata: {e}");
+            return;
+        }
+    }
+    let mut cov = Command::new(&llvm_cov);
+    cov.arg("report")
+        .arg(format!("--instr-profile={}", merged.display()));
+    let mut first = true;
+    for artifact in artifacts {
+        let abs = project.root.join(artifact);
+        if abs
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+        {
+            if first {
+                cov.arg(&abs);
+                first = false;
+            } else {
+                cov.arg("-object").arg(&abs);
+            }
+        }
+    }
+    if first {
+        eprintln!("[coverage] no executables to report on");
+        return;
+    }
+    match cov.output() {
+        Ok(out) if out.status.success() => {
+            println!("\nCoverage:");
+            print!("{}", String::from_utf8_lossy(&out.stdout));
+            println!("(profile data: {})", merged.display());
+        }
+        Ok(out) => eprintln!(
+            "[coverage] llvm-cov report failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        Err(e) => eprintln!("[coverage] cannot run llvm-cov: {e}"),
+    }
 }
 
 type TestPlan = (Vec<String>, Vec<(String, String)>, TestKind);
