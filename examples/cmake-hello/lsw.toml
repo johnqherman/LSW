@@ -1,0 +1,8 @@
+[project]
+name = "cmake-hello"
+
+[target]
+api = "win10"
+
+[env.vars]
+HELLO_GREETING = "Hello from lsw.toml"

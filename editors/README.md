@@ -28,7 +28,7 @@ checks and makes the bundle smaller first). To debug, add a `launch.json`
 entry:
 
 ```json
-{ "type": "lsw", "request": "launch", "name": "Debug PE", "program": "${workspaceFolder}/build/app.exe" }
+{ "type": "lsw", "request": "launch", "name": "Debug PE", "program": "${workspaceFolder}/build/${workspaceFolderBasename}.exe" }
 ```
 
 ## Neovim (`nvim/`)

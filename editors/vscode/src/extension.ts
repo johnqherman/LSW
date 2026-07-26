@@ -79,17 +79,21 @@ export function activate(context: vscode.ExtensionContext): void {
   const register = (id: string, handler: (...args: unknown[]) => unknown): void => {
     context.subscriptions.push(vscode.commands.registerCommand(id, handler));
   };
+  register("lsw.setup", () => runInTerminal(["setup"]));
+  register("lsw.init", () => runInTerminal(["init"]));
   register("lsw.build", () => runInTerminal(["build"]));
   register("lsw.test", () => runInTerminal(["test"]));
+  register("lsw.doctor", () => runInTerminal(["doctor"]));
   register("lsw.verify", () => runInTerminal(["verify", "--native-windows"]));
   register("lsw.run", async () => {
     const program = await vscode.window.showInputBox({
-      prompt: "Program to run",
-      value: "build/app.exe"
+      prompt: "Program to run (empty = build and run the project executable)",
+      value: ""
     });
-    if (program) {
-      runInTerminal(["run", program]);
+    if (program === undefined) {
+      return;
     }
+    runInTerminal(program === "" ? ["run"] : ["run", program]);
   });
   register("lsw.configureIntelliSense", configureIntelliSense);
 
