@@ -300,7 +300,8 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
             ProjectManifest::new(&project_name).save_new(&manifest_path)?;
             created.push(manifest_path.clone());
         }
-        let existing_build = crate::buildops::detect_build_system(&root).map(|s| s.label().to_owned());
+        let existing_build =
+            crate::buildops::detect_build_system(&root).map(|s| s.label().to_owned());
         if existing_build.is_none() {
             let (cmake, main_c) = template_sources(template);
             write_file(

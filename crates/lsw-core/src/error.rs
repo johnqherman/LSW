@@ -251,6 +251,12 @@ pub enum Error {
          Recreate it with: lsw sdk import <name> --from <path>  then  lsw env create {name} --sdk <name>"
     )]
     RestoreUnsupportedToolchain { provider: String, name: String },
+
+    #[error(
+        "LSW2046: unknown build system '{name}'\n\
+         Valid values: cmake, cargo, make, ninja, meson, zig, dotnet, or explicit (needs a [build] command in lsw.toml)"
+    )]
+    UnknownBuildSystem { name: String },
 }
 
 impl Error {

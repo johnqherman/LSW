@@ -22,6 +22,11 @@ fn normalize(code: &str) -> String {
 
 const TABLE: &[Explanation] = &[
     Explanation {
+        code: "LSW0000",
+        summary: "a command-line usage error (bad flags or arguments), not a build or environment failure",
+        hint: "run the command with --help to see its accepted flags and arguments",
+    },
+    Explanation {
         code: "LSW1001",
         summary: "a configuration or state file could not be read",
         hint: "check that the path named in the error exists and is readable",
@@ -371,6 +376,11 @@ const TABLE: &[Explanation] = &[
         summary: "the project or environment path resolves to a system directory, so strict sandbox isolation refuses to bind it",
         hint: "move the project out of the filesystem root or a system path, or relax [sandbox] isolation",
     },
+    Explanation {
+        code: "LSW2046",
+        summary: "the --system value is not a build system LSW knows",
+        hint: "use cmake, cargo, make, ninja, meson, zig, dotnet, or explicit with a [build] command",
+    },
 ];
 
 #[cfg(test)]
@@ -424,7 +434,6 @@ mod tests {
                 collect_codes(&src, &mut codes);
             }
         }
-        codes.remove("LSW0000");
         codes.remove("LSW9999");
         assert!(codes.len() >= TABLE.len());
         for code in codes {

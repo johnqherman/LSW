@@ -21,7 +21,14 @@ pub(crate) fn registry(
     };
     match op {
         RegistryCmd::Get { key, value } => {
-            lsw_core::registryops::get(&env, key, value.as_deref())?;
+            if json {
+                let output = lsw_core::registryops::get_captured(&env, key, value.as_deref())?;
+                crate::cmd::emit_json(&serde_json::json!({
+                    "action": "get", "key": key, "value": value, "output": output,
+                }));
+            } else {
+                lsw_core::registryops::get(&env, key, value.as_deref())?;
+            }
         }
         RegistryCmd::Set {
             key,

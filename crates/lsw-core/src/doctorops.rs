@@ -112,6 +112,64 @@ fn vc_runtime_row(project: &Project, env: &envops::Environment) -> Option<Row> {
     })
 }
 
+fn build_tool_rows(project: Option<&Project>) -> Vec<Row> {
+    let mut checks: Vec<(String, bool)> = Vec::new();
+    match project {
+        Some(p) => {
+            if let Some(build) = &p.manifest.build {
+                if let Some(program) = build.command.first() {
+                    checks.push((program.clone(), true));
+                }
+            } else if let Some(system) = crate::buildops::detect_build_system(&p.root) {
+                match system {
+                    crate::buildops::BuildSystem::Cmake => {
+                        checks.push(("cmake".into(), true));
+                        checks.push(("ninja".into(), false));
+                    }
+                    crate::buildops::BuildSystem::Cargo => checks.push(("cargo".into(), true)),
+                    crate::buildops::BuildSystem::Make => checks.push(("make".into(), true)),
+                    crate::buildops::BuildSystem::Ninja => checks.push(("ninja".into(), true)),
+                    crate::buildops::BuildSystem::Meson => {
+                        checks.push(("meson".into(), true));
+                        checks.push(("ninja".into(), true));
+                    }
+                    crate::buildops::BuildSystem::Zig => checks.push(("zig".into(), true)),
+                    crate::buildops::BuildSystem::Dotnet => checks.push(("dotnet".into(), true)),
+                    crate::buildops::BuildSystem::Explicit => {}
+                }
+            }
+            if !p.manifest.dependencies.is_empty() {
+                checks.push(("curl".into(), true));
+                checks.push(("tar".into(), true));
+            }
+        }
+        None => {
+            checks.push(("cmake".into(), false));
+            checks.push(("ninja".into(), false));
+        }
+    }
+    if checks.is_empty() {
+        return vec![row(
+            "Build system",
+            "none detected - scaffold one with lsw init, or set a [build] command",
+            Status::Warn,
+        )];
+    }
+    checks
+        .into_iter()
+        .map(
+            |(program, required)| match crate::buildops::which(&program) {
+                Some(path) => row(&program, path.display().to_string(), Status::Ok),
+                None => row(
+                    &program,
+                    format!("'{program}' not found on PATH - install it with your package manager"),
+                    if required { Status::Fail } else { Status::Warn },
+                ),
+            },
+        )
+        .collect()
+}
+
 pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
     let mut sections = Vec::new();
 
@@ -174,6 +232,11 @@ pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
     sections.push(Section {
         name: "Toolchain".into(),
         rows: tc_rows,
+    });
+
+    sections.push(Section {
+        name: "Build tools".into(),
+        rows: build_tool_rows(project),
     });
 
     if let Some(p) = project {

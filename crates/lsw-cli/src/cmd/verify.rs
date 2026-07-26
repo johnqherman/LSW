@@ -17,9 +17,7 @@ pub(crate) fn verify(
     if *reproducible {
         return verify_reproducible(&p, &env, artifact.as_deref(), format);
     }
-    if !*native_windows {
-        eprintln!("note: only --native-windows and --reproducible verification are supported");
-    }
+    let _ = native_windows;
     let report = lsw_core::verifyops::verify(&p, &env)?;
     if format == Format::Json {
         crate::cmd::emit_json(&report);

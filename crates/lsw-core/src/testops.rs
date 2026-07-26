@@ -104,8 +104,12 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
     let status = child
         .wait()
         .map_err(|e| Error::io(project.root.clone(), e))?;
-    let out_stdout = out_rx.map(lsw_toolchain::Drain::wait_eof).unwrap_or_default();
-    let out_stderr = err_rx.map(lsw_toolchain::Drain::wait_eof).unwrap_or_default();
+    let out_stdout = out_rx
+        .map(lsw_toolchain::Drain::wait_eof)
+        .unwrap_or_default();
+    let out_stderr = err_rx
+        .map(lsw_toolchain::Drain::wait_eof)
+        .unwrap_or_default();
 
     eprint!("{}", String::from_utf8_lossy(&out_stdout));
     eprint!("{}", String::from_utf8_lossy(&out_stderr));

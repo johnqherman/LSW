@@ -69,7 +69,7 @@ pub(crate) fn run(
                     return Ok(ExitCode::FAILURE);
                 }
                 Picked::One(only) => {
-                    println!("Running {}", only.display());
+                    eprintln!("Running {}", only.display());
                     only
                 }
                 Picked::Many(many) => {
