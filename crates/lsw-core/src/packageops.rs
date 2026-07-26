@@ -353,7 +353,7 @@ fn render_wxs(name: &str, files: &[String]) -> String {
              \x20           <File Id=\"{file_id}\" Source=\"{efile}\" KeyPath=\"yes\"/>\n\
              \x20         </Component>\n"
         );
-        let _ = write!(refs, "        <ComponentRef Id=\"{comp_id}\"/>\n");
+        let _ = writeln!(refs, "        <ComponentRef Id=\"{comp_id}\"/>");
     }
 
     format!(

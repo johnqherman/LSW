@@ -25,10 +25,13 @@ const MAX_UNIT_SCAN: usize = 100_000;
 const MAX_STRING_BYTES: usize = 256 * 1024 * 1024;
 const MAX_PE_BYTES: u64 = 512 * 1024 * 1024;
 
+type LineTable = BTreeMap<(String, u32), Vec<(Arc<str>, u64)>>;
+type AddrRow = (u64, Option<(Arc<str>, u32)>);
+
 pub(crate) struct DebugInfo {
     pub image_base: u64,
-    lines: BTreeMap<(String, u32), Vec<(Arc<str>, u64)>>,
-    by_addr: Vec<(u64, Option<(Arc<str>, u32)>)>,
+    lines: LineTable,
+    by_addr: Vec<AddrRow>,
     funcs: Vec<(u64, u64, String)>,
 }
 
@@ -83,8 +86,8 @@ impl DebugInfo {
             gimli::DwarfSections::load(load).map_err(|_: ()| dap("no DWARF sections"))?;
         let dwarf = sections.borrow(|section| gimli::EndianSlice::new(section, endian));
 
-        let mut lines: BTreeMap<(String, u32), Vec<(Arc<str>, u64)>> = BTreeMap::new();
-        let mut by_addr: Vec<(u64, Option<(Arc<str>, u32)>)> = Vec::new();
+        let mut lines = LineTable::new();
+        let mut by_addr: Vec<AddrRow> = Vec::new();
         let mut funcs: Vec<(u64, u64, String)> = Vec::new();
         let mut func_visited = 0usize;
         let mut rows_seen = 0usize;
@@ -158,7 +161,7 @@ impl DebugInfo {
             v.dedup();
         }
         by_addr.sort_by_key(|(a, _)| *a);
-        let mut collapsed: Vec<(u64, Option<(Arc<str>, u32)>)> = Vec::with_capacity(by_addr.len());
+        let mut collapsed: Vec<AddrRow> = Vec::with_capacity(by_addr.len());
         for entry in by_addr {
             match collapsed.last_mut() {
                 Some(last) if last.0 == entry.0 => {

@@ -442,9 +442,9 @@ HashMethod=\"http://www.w3.org/2001/04/xmlenc#sha256\">\n",
             });
         }
         let lfh = 30 + file.len();
-        let _ = write!(
+        let _ = writeln!(
             out,
-            "  <File Name=\"{}\" Size=\"{}\" LfhSize=\"{}\">\n",
+            "  <File Name=\"{}\" Size=\"{}\" LfhSize=\"{}\">",
             crate::xml_escape(&file.replace('/', "\\")),
             size,
             lfh
@@ -471,14 +471,14 @@ HashMethod=\"http://www.w3.org/2001/04/xmlenc#sha256\">\n",
             emitted = true;
             let digest = Sha256::digest(&block[..filled]);
             let hash = base64::engine::general_purpose::STANDARD.encode(digest);
-            let _ = write!(out, "    <Block Hash=\"{hash}\"/>\n");
+            let _ = writeln!(out, "    <Block Hash=\"{hash}\"/>");
             if filled < BLOCK_SIZE {
                 break;
             }
         }
         if !emitted {
             let hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest([]));
-            let _ = write!(out, "    <Block Hash=\"{hash}\"/>\n");
+            let _ = writeln!(out, "    <Block Hash=\"{hash}\"/>");
         }
         out.push_str("  </File>\n");
     }
@@ -503,9 +503,9 @@ fn content_types_xml(files: &[String]) -> String {
             "png" => "image/png",
             _ => "application/octet-stream",
         };
-        let _ = write!(
+        let _ = writeln!(
             out,
-            "  <Default Extension=\"{}\" ContentType=\"{ct}\"/>\n",
+            "  <Default Extension=\"{}\" ContentType=\"{ct}\"/>",
             crate::xml_escape(ext)
         );
     }
