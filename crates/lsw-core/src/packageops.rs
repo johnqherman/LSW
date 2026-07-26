@@ -25,6 +25,8 @@ pub enum PackageTarget {
     Zip,
     Msi,
     Msix,
+    Nsis,
+    Winget,
 }
 
 #[derive(Debug, Serialize)]
@@ -33,6 +35,8 @@ pub struct PackageReport {
     pub zip: Option<PathBuf>,
     pub msi: Option<PathBuf>,
     pub msix: Option<PathBuf>,
+    pub nsis: Option<PathBuf>,
+    pub winget: Option<PathBuf>,
     pub files: Vec<String>,
     pub bundled: Vec<String>,
     pub assumed_system: Vec<String>,
@@ -132,6 +136,8 @@ pub fn package(
     let mut zip = None;
     let mut msi = None;
     let mut msix = None;
+    let mut nsis = None;
+    let mut winget = None;
     match target {
         PackageTarget::PortableDirectory => {}
         PackageTarget::Zip => {
@@ -171,6 +177,14 @@ pub fn package(
                 &files,
             )?);
         }
+        PackageTarget::Nsis => {
+            nsis = Some(build_nsis(project, &dist, &dir, &stem, &files)?);
+        }
+        PackageTarget::Winget => {
+            let installer = build_msi(project, env, &dist, &dir, &stem, &files)?;
+            msi = Some(installer.clone());
+            winget = Some(build_winget(project, env, &dist, &installer)?);
+        }
     }
 
     Ok(PackageReport {
@@ -178,6 +192,8 @@ pub fn package(
         zip,
         msi,
         msix,
+        nsis,
+        winget,
         files,
         bundled,
         assumed_system,
@@ -352,6 +368,49 @@ fn render_wxs(name: &str, package: &lsw_config::PackageSection, files: &[String]
         let _ = writeln!(refs, "        <ComponentRef Id=\"{comp_id}\"/>");
     }
 
+    let mut menu_dir = String::new();
+    let mut menu_component = String::new();
+    if package.shortcuts == Some(true) {
+        let exes: Vec<&String> = files
+            .iter()
+            .filter(|f| {
+                std::path::Path::new(f)
+                    .extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+            })
+            .collect();
+        if !exes.is_empty() {
+            menu_dir = format!(
+                "\x20   <Directory Id=\"ProgramMenuFolder\">\n\
+                 \x20     <Directory Id=\"AppMenuFolder\" Name=\"{ename}\"/>\n\
+                 \x20   </Directory>\n"
+            );
+            let guid = deterministic_guid(&format!("lsw:{name}:shortcuts"));
+            let mut shortcuts = String::new();
+            for (i, exe) in exes.iter().enumerate() {
+                let stem = std::path::Path::new(exe.as_str())
+                    .file_stem()
+                    .map_or_else(|| exe.to_string(), |s| s.to_string_lossy().into_owned());
+                let _ = write!(
+                    shortcuts,
+                    "\x20       <Shortcut Id=\"menu{i}\" Name=\"{}\" Target=\"[INSTALLDIR]{}\" WorkingDirectory=\"INSTALLDIR\"/>\n",
+                    crate::xml_escape(&stem),
+                    crate::xml_escape(exe)
+                );
+            }
+            menu_component = format!(
+                "\x20   <DirectoryRef Id=\"AppMenuFolder\">\n\
+                 \x20     <Component Id=\"menuShortcuts\" Guid=\"{guid}\">\n\
+                 {shortcuts}\
+                 \x20       <RemoveFolder Id=\"AppMenuFolder\" On=\"uninstall\"/>\n\
+                 \x20       <RegistryValue Root=\"HKCU\" Key=\"Software\\{ename}\\Install\" Name=\"shortcuts\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\"/>\n\
+                 \x20     </Component>\n\
+                 \x20   </DirectoryRef>\n"
+            );
+            let _ = writeln!(refs, "        <ComponentRef Id=\"menuShortcuts\"/>");
+        }
+    }
+
     format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
          <Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\">\n\
@@ -365,13 +424,216 @@ fn render_wxs(name: &str, package: &lsw_config::PackageSection, files: &[String]
          {components}\
          \x20       </Directory>\n\
          \x20     </Directory>\n\
+         {menu_dir}\
          \x20   </Directory>\n\
+         {menu_component}\
          \x20   <Feature Id=\"Main\" Title=\"{ename}\" Level=\"1\">\n\
          {refs}\
          \x20   </Feature>\n\
          \x20 </Product>\n\
          </Wix>\n"
     )
+}
+
+fn build_nsis(
+    project: &Project,
+    dist: &std::path::Path,
+    dir: &std::path::Path,
+    stem: &str,
+    files: &[String],
+) -> Result<PathBuf> {
+    if which("makensis").is_none() {
+        return Err(Error::ToolMissing {
+            tool: "makensis".into(),
+            fix: "install nsis (provides makensis), or use --target msi".into(),
+        });
+    }
+    let name = &project.manifest.project.name;
+    let pkg = &project.manifest.package;
+    let version = pkg.version.as_deref().unwrap_or("1.0.0");
+    let publisher = pkg.publisher.as_deref().unwrap_or("LSW");
+    let out_name = format!("{stem}-setup.exe");
+
+    let mut install_files = String::new();
+    let mut delete_files = String::new();
+    for f in files {
+        let win = f.replace('/', "\\");
+        install_files.push_str(&format!("  File \"/oname={win}\" \"{f}\"\n"));
+        delete_files.push_str(&format!("  Delete \"$INSTDIR\\{win}\"\n"));
+    }
+    let mut shortcuts = String::new();
+    let mut delete_shortcuts = String::new();
+    if pkg.shortcuts == Some(true) {
+        shortcuts.push_str(&format!("  CreateDirectory \"$SMPROGRAMS\\{name}\"\n"));
+        delete_shortcuts.push_str(&format!("  RMDir /r \"$SMPROGRAMS\\{name}\"\n"));
+        for f in files {
+            let p = std::path::Path::new(f);
+            if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")) {
+                let title = p
+                    .file_stem()
+                    .map_or_else(|| f.clone(), |s| s.to_string_lossy().into_owned());
+                let win = f.replace('/', "\\");
+                shortcuts.push_str(&format!(
+                    "  CreateShortcut \"$SMPROGRAMS\\{name}\\{title}.lnk\" \"$INSTDIR\\{win}\"\n"
+                ));
+            }
+        }
+    }
+
+    let nsi = format!(
+        "Unicode true\n\
+         Name \"{name}\"\n\
+         OutFile \"{out}\"\n\
+         InstallDir \"$PROGRAMFILES64\\{name}\"\n\
+         RequestExecutionLevel admin\n\
+         VIProductVersion \"{vi_version}\"\n\
+         VIAddVersionKey ProductName \"{name}\"\n\
+         VIAddVersionKey CompanyName \"{publisher}\"\n\
+         VIAddVersionKey FileVersion \"{version}\"\n\
+         VIAddVersionKey ProductVersion \"{version}\"\n\
+         \n\
+         Section \"Install\"\n\
+         \x20 SetOutPath \"$INSTDIR\"\n\
+         {install_files}\
+         {shortcuts}\
+         \x20 WriteUninstaller \"$INSTDIR\\uninstall.exe\"\n\
+         \x20 WriteRegStr HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{name}\" DisplayName \"{name}\"\n\
+         \x20 WriteRegStr HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{name}\" DisplayVersion \"{version}\"\n\
+         \x20 WriteRegStr HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{name}\" Publisher \"{publisher}\"\n\
+         \x20 WriteRegStr HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{name}\" UninstallString \"$INSTDIR\\uninstall.exe\"\n\
+         SectionEnd\n\
+         \n\
+         Section \"Uninstall\"\n\
+         {delete_files}\
+         {delete_shortcuts}\
+         \x20 Delete \"$INSTDIR\\uninstall.exe\"\n\
+         \x20 RMDir \"$INSTDIR\"\n\
+         \x20 DeleteRegKey HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{name}\"\n\
+         SectionEnd\n",
+        out = dist_relative_out(dist, dir, &out_name),
+        vi_version = nsis_vi_version(pkg.version.as_deref()),
+    );
+    let nsi_path = dist.join(format!("{stem}.nsi"));
+    strip_existing(&nsi_path)?;
+    fs::write(&nsi_path, nsi).map_err(|e| Error::io(nsi_path.clone(), e))?;
+
+    let out_path = dist.join(&out_name);
+    strip_existing(&out_path)?;
+    let abs_nsi = std::path::absolute(&nsi_path).map_err(|e| Error::io(nsi_path.clone(), e))?;
+    let output = Command::new("makensis")
+        .arg(&abs_nsi)
+        .current_dir(dir)
+        .output()
+        .map_err(|e| Error::io(PathBuf::from("makensis"), e))?;
+    if !output.status.success() {
+        return Err(Error::BuildFailed {
+            command: format!(
+                "makensis {}: {}",
+                nsi_path.display(),
+                String::from_utf8_lossy(&output.stdout).trim()
+            ),
+            code: output.status.code(),
+        });
+    }
+    Ok(out_path)
+}
+
+fn dist_relative_out(dist: &std::path::Path, dir: &std::path::Path, out_name: &str) -> String {
+    let out = dist.join(out_name);
+    pathdiff_display(&out, dir)
+}
+
+fn pathdiff_display(target: &std::path::Path, base: &std::path::Path) -> String {
+    match (std::path::absolute(target), std::path::absolute(base)) {
+        (Ok(t), Ok(b)) => match t.strip_prefix(&b) {
+            Ok(rel) => rel.display().to_string(),
+            Err(_) => t.display().to_string(),
+        },
+        _ => target.display().to_string(),
+    }
+}
+
+fn nsis_vi_version(raw: Option<&str>) -> String {
+    let mut parts: Vec<u64> = raw
+        .unwrap_or("1.0.0")
+        .split('.')
+        .map(|p| p.parse().unwrap_or(0))
+        .take(4)
+        .collect();
+    while parts.len() < 4 {
+        parts.push(0);
+    }
+    parts
+        .iter()
+        .map(u64::to_string)
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+fn build_winget(
+    project: &Project,
+    env: &Environment,
+    dist: &std::path::Path,
+    installer: &std::path::Path,
+) -> Result<PathBuf> {
+    let pkg = &project.manifest.package;
+    let name = &project.manifest.project.name;
+    let Some(url_base) = pkg.installer_url.as_deref() else {
+        return Err(Error::InitFailed {
+            path: dist.to_path_buf(),
+            detail: "winget manifests need [package] installer_url (the URL where you will host the installer)".into(),
+        });
+    };
+    let publisher = pkg.publisher.as_deref().unwrap_or("LSW");
+    let version = pkg.version.as_deref().unwrap_or("1.0.0");
+    let sha256 = crate::sha256_file_checked(installer)?.to_uppercase();
+    let installer_name = installer
+        .file_name()
+        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let url = if url_base.ends_with('/') {
+        format!("{url_base}{installer_name}")
+    } else {
+        format!("{url_base}/{installer_name}")
+    };
+    let ident_publisher: String = publisher
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect();
+    let ident_name: String = name.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    let identifier = format!("{ident_publisher}.{ident_name}");
+    let arch = match env.manifest.target_arch {
+        lsw_config::TargetArch::X86_64 => "x64",
+        lsw_config::TargetArch::X86 => "x86",
+        lsw_config::TargetArch::Aarch64 | lsw_config::TargetArch::Arm64Ec => "arm64",
+        lsw_config::TargetArch::Armv7 => "arm",
+    };
+
+    let out_dir = dist.join("winget");
+    fs::create_dir_all(&out_dir).map_err(|e| Error::io(out_dir.clone(), e))?;
+    let write = |file: &str, contents: String| -> Result<()> {
+        let path = out_dir.join(file);
+        fs::write(&path, contents).map_err(|e| Error::io(path, e))
+    };
+    write(
+        &format!("{identifier}.yaml"),
+        format!(
+            "PackageIdentifier: {identifier}\nPackageVersion: {version}\nDefaultLocale: en-US\nManifestType: version\nManifestVersion: 1.6.0\n"
+        ),
+    )?;
+    write(
+        &format!("{identifier}.locale.en-US.yaml"),
+        format!(
+            "PackageIdentifier: {identifier}\nPackageVersion: {version}\nPackageLocale: en-US\nPublisher: {publisher}\nPackageName: {name}\nLicense: proprietary\nShortDescription: {desc}\nManifestType: defaultLocale\nManifestVersion: 1.6.0\n",
+            desc = pkg.description.as_deref().unwrap_or(name),
+        ),
+    )?;
+    write(
+        &format!("{identifier}.installer.yaml"),
+        format!(
+            "PackageIdentifier: {identifier}\nPackageVersion: {version}\nInstallers:\n- Architecture: {arch}\n  InstallerType: wix\n  InstallerUrl: {url}\n  InstallerSha256: {sha256}\nManifestType: installer\nManifestVersion: 1.6.0\n"
+        ),
+    )?;
+    Ok(out_dir)
 }
 
 fn deterministic_guid(seed: &str) -> String {

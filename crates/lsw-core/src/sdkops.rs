@@ -37,6 +37,48 @@ fn has_sdk_dir(root: &Path, kind: &str) -> bool {
         .any(|base| base.join(kind).is_dir() || base.join(&cap).is_dir())
 }
 
+pub fn acquire(
+    dirs: &Dirs,
+    name: &str,
+    accept_license: bool,
+    force: bool,
+) -> Result<SdkImportReport> {
+    validate_name("sdk", name)?;
+    if !accept_license {
+        return Err(Error::SdkImportFailed {
+            path: PathBuf::from("xwin"),
+            detail: "downloading the Windows SDK requires accepting the Microsoft license; re-run with --accept-license".into(),
+        });
+    }
+    let Some(xwin) = crate::buildops::which("xwin") else {
+        return Err(Error::ToolMissing {
+            tool: "xwin".into(),
+            fix: "install xwin (cargo install xwin), or obtain an SDK yourself and use lsw sdk import".into(),
+        });
+    };
+    let staging = dirs.cache.join(format!("xwin-splat-{name}"));
+    let _ = fs::remove_dir_all(&staging);
+    fs::create_dir_all(&staging).map_err(|e| Error::io(staging.clone(), e))?;
+    let out = std::process::Command::new(&xwin)
+        .args(["--accept-license", "splat", "--output"])
+        .arg(&staging)
+        .output()
+        .map_err(|e| Error::io(xwin.clone(), e))?;
+    if !out.status.success() {
+        let _ = fs::remove_dir_all(&staging);
+        return Err(Error::SdkImportFailed {
+            path: xwin,
+            detail: format!(
+                "xwin splat failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+        });
+    }
+    let result = import(dirs, name, &staging, force);
+    let _ = fs::remove_dir_all(&staging);
+    result
+}
+
 pub fn import(dirs: &Dirs, name: &str, from: &Path, force: bool) -> Result<SdkImportReport> {
     validate_name("sdk", name)?;
     let from_meta = fs::symlink_metadata(from).map_err(|e| Error::io(from.to_path_buf(), e))?;

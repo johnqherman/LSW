@@ -55,6 +55,10 @@ pub struct PackageSection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub upgrade_code: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shortcuts: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installer_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dpi_aware: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub requires_admin: Option<bool>,
