@@ -178,6 +178,19 @@ pub(crate) fn which(name: &str) -> Option<PathBuf> {
     None
 }
 
+pub fn find_windres(cc: &Path, triple: &str) -> Option<PathBuf> {
+    let triple_tool = format!("{triple}-windres");
+    if let Some(bindir) = cc.parent() {
+        for name in [triple_tool.as_str(), "llvm-windres"] {
+            let candidate = bindir.join(name);
+            if is_executable_file(&candidate) {
+                return Some(candidate);
+            }
+        }
+    }
+    which(&triple_tool).or_else(|| which("llvm-windres"))
+}
+
 fn extra_toolchain_dirs() -> Vec<PathBuf> {
     match std::env::var_os("LSW_TOOLCHAIN_DIRS") {
         Some(v) => std::env::split_paths(&v)

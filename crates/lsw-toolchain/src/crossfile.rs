@@ -4,8 +4,6 @@ use std::path::Path;
 
 use lsw_config::{ResolvedToolchain, TargetArch};
 
-use crate::util::which;
-
 fn cmake_escape(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('"', "\\\"")
@@ -68,7 +66,7 @@ pub fn write_cmake_toolchain_file(
     text.push_str("set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)\n");
     text.push_str("set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)\n");
     text.push_str("set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)\n");
-    if let Some(windres) = which(&format!("{}-windres", arch.mingw_triple())) {
+    if let Some(windres) = crate::util::find_windres(&tc.cc, arch.mingw_triple()) {
         let _ = writeln!(
             text,
             "set(CMAKE_RC_COMPILER \"{}\")",
