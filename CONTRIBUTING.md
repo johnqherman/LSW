@@ -75,8 +75,9 @@ The native-verification paths (`lsw verify --native-windows`,
 `lsw compat --native`, `lsw debug --native`, and the WinRM/HTTPS transports)
 need a Windows host that you can get access to. Configure the host in
 `[verify]` in `lsw.toml`. These paths are tested manually, not in CI. The
-native-verification section of the README describes the transports and the
-setup.
+"Native verification" section of `docs/reference/commands.md` and the
+`[verify]` table in `docs/reference/configuration.md` describe the
+transports and the setup.
 
 ## Scope
 
