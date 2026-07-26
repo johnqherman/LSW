@@ -155,7 +155,6 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
         tc.link_flags.push("-Wl,--no-insert-timestamp".to_owned());
     }
     let mut commands = Vec::new();
-    let mut artifact_dir = project.root.join("build");
     let flat_layout = matches!(
         system,
         BuildSystem::Make | BuildSystem::Ninja | BuildSystem::Explicit
@@ -165,230 +164,30 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
     } else {
         std::collections::HashMap::new()
     };
-    match system {
+    let artifact_dir = match system {
         BuildSystem::Explicit => {
             let spec = explicit.ok_or(Error::NoBuildSystem)?;
             run_step(project, env, &tc, &spec.command, &mut commands)?;
-            artifact_dir = project.root.clone();
+            project.root.clone()
         }
-        BuildSystem::Cargo => {
-            let triple = env.manifest.target_arch.rust_gnu_triple().ok_or_else(|| {
-                Error::RustTargetUnavailable {
-                    arch: env.manifest.target_arch.to_string(),
-                }
-            })?;
-            crate::rustops::ensure_target(env.manifest.target_arch)?;
-            let default_linker = format!("{}-gcc", env.manifest.target_arch.mingw_triple());
-            let cargo_env = if which(&default_linker).is_some() {
-                Vec::new()
-            } else {
-                let triple_env = triple.to_uppercase().replace('-', "_");
-                let link_args: String = tc
-                    .c_flags
-                    .iter()
-                    .chain(&tc.link_flags)
-                    .map(|f| format!("-Clink-arg={f}"))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                vec![
-                    (
-                        format!("CARGO_TARGET_{triple_env}_LINKER"),
-                        tc.cc.display().to_string(),
-                    ),
-                    (format!("CARGO_TARGET_{triple_env}_RUSTFLAGS"), link_args),
-                ]
-            };
-            run_step_with_env(
-                project,
-                env,
-                &tc,
-                &[
-                    "cargo".to_owned(),
-                    "build".to_owned(),
-                    "--target".to_owned(),
-                    triple.to_owned(),
-                ],
-                &cargo_env,
-                &mut commands,
-            )?;
-            artifact_dir = project.root.join("target").join(triple).join("debug");
-        }
-        BuildSystem::Cmake => {
-            let toolchain_file = env.layout.cmake_toolchain_file();
-            lsw_toolchain::write_cmake_toolchain_file(
-                &toolchain_file,
-                &tc,
-                env.manifest.target_arch,
-            )
-            .map_err(|e| Error::io(toolchain_file.clone(), e))?;
-
-            let generator = if which("ninja").is_some() {
-                Some("Ninja")
-            } else {
-                None
-            };
-            let toolchain_contents =
-                read_capped_string(&toolchain_file, 4 * 1024 * 1024).unwrap_or_default();
-            let cmake_config = format!(
-                "{tc:?}|arch={}|generator={generator:?}|toolchain_path={}|toolchain_body={}|prefix={}|emulator={}|deps={:?}|env={}",
-                env.manifest.target_arch,
-                toolchain_file.display(),
-                toolchain_contents,
-                env.layout.prefix().display(),
-                env.manifest.runtime.executable.display(),
-                crate::depsops::dep_dirs(project, env.manifest.target_arch),
-                ambient_env_fingerprint()
-            );
-            refresh_stale_cmake_build_dir(&project.root.join("build"), &cmake_config)?;
-            let mut configure = vec![
-                "cmake".to_owned(),
-                "-S".to_owned(),
-                ".".to_owned(),
-                "-B".to_owned(),
-                "build".to_owned(),
-                format!("-DCMAKE_TOOLCHAIN_FILE={}", toolchain_file.display()),
-                "-DCMAKE_BUILD_TYPE=Debug".to_owned(),
-                format!(
-                    "-DCMAKE_CROSSCOMPILING_EMULATOR={}",
-                    env.manifest.runtime.executable.display()
-                ),
-            ];
-            if let Some(g) = generator {
-                configure.push("-G".to_owned());
-                configure.push(g.to_owned());
-            }
-            run_step(project, env, &tc, &configure, &mut commands)?;
-            run_step(
-                project,
-                env,
-                &tc,
-                &["cmake".to_owned(), "--build".to_owned(), "build".to_owned()],
-                &mut commands,
-            )?;
-            write_cmake_toolchain_marker(&project.root.join("build"), &cmake_config);
-        }
+        BuildSystem::Cargo => build_cargo(project, env, &tc, &mut commands)?,
+        BuildSystem::Cmake => build_cmake(project, env, &tc, &mut commands)?,
         BuildSystem::Make => {
             run_step(project, env, &tc, &["make".to_owned()], &mut commands)?;
-            artifact_dir = project.root.clone();
+            project.root.clone()
         }
         BuildSystem::Ninja => {
             run_step(project, env, &tc, &["ninja".to_owned()], &mut commands)?;
-            artifact_dir = project.root.clone();
+            project.root.clone()
         }
-        BuildSystem::Zig => {
-            let target = zig_target(env.manifest.target_arch).ok_or_else(|| {
-                Error::RustTargetUnavailable {
-                    arch: env.manifest.target_arch.to_string(),
-                }
-            })?;
-            run_step(
-                project,
-                env,
-                &tc,
-                &[
-                    "zig".to_owned(),
-                    "build".to_owned(),
-                    format!("-Dtarget={target}"),
-                ],
-                &mut commands,
-            )?;
-            artifact_dir = project.root.join("zig-out");
-        }
-        BuildSystem::Dotnet => {
-            let rid = dotnet_rid(env.manifest.target_arch).ok_or_else(|| {
-                Error::RustTargetUnavailable {
-                    arch: env.manifest.target_arch.to_string(),
-                }
-            })?;
-            let mut args = vec![
-                "dotnet".to_owned(),
-                "publish".to_owned(),
-                "-c".to_owned(),
-                "Debug".to_owned(),
-                "-r".to_owned(),
-                rid.to_owned(),
-                "--self-contained".to_owned(),
-                "true".to_owned(),
-            ];
-            if opts.aot || project.manifest.toolchain.aot {
-                let setup = aot::prepare(project, env, &tc)?;
-                args.extend(aot::publish_args(&setup));
-            }
-            let publish_dir = project.root.join("bin").join("lsw-publish");
-            args.push("-o".to_owned());
-            args.push(publish_dir.display().to_string());
-            run_step(project, env, &tc, &args, &mut commands)?;
-            artifact_dir = publish_dir;
-        }
-        BuildSystem::Meson => {
-            let cross_file = env.layout.root.join("meson-cross.ini");
-            write_meson_cross_file(&cross_file, &tc, env.manifest.target_arch)
-                .map_err(|e| Error::io(cross_file.clone(), e))?;
-            let (mc, mcxx, mlink) = toolchain::effective_flags(project, env, &tc);
-            let cross_hash = file_hash(&cross_file).map(|h| format!("{h}\n{mc}\n{mcxx}\n{mlink}"));
-            let configured = project.root.join("build").join("meson-info").is_dir();
-            let fp_path = project.root.join("build").join(".lsw-meson-cross");
-            let recorded_fp =
-                read_capped_string(&fp_path, 1024 * 1024);
-            let fp_match = configured && recorded_fp.as_deref() == cross_hash.as_deref();
-            if !fp_match {
-                let mut setup = vec![
-                    "meson".to_owned(),
-                    "setup".to_owned(),
-                    "build".to_owned(),
-                    format!("--cross-file={}", cross_file.display()),
-                ];
-                if configured {
-                    setup.push("--reconfigure".to_owned());
-                }
-                run_step(project, env, &tc, &setup, &mut commands)?;
-                if let Some(hash) = &cross_hash {
-                    safe_marker_write(&fp_path, hash);
-                }
-            }
-            run_step(
-                project,
-                env,
-                &tc,
-                &[
-                    "meson".to_owned(),
-                    "compile".to_owned(),
-                    "-C".to_owned(),
-                    "build".to_owned(),
-                ],
-                &mut commands,
-            )?;
-        }
-    }
+        BuildSystem::Zig => build_zig(project, env, &tc, &mut commands)?,
+        BuildSystem::Dotnet => build_dotnet(project, env, &tc, opts, &mut commands)?,
+        BuildSystem::Meson => build_meson(project, env, &tc, &mut commands)?,
+    };
 
     let mut artifacts = find_artifacts(&artifact_dir, &project.root);
     if flat_layout {
-        let manifest = project.root.join("build").join(".lsw-artifacts");
-        artifacts.retain(|rel| is_safe_artifact(rel));
-        let touched: Vec<PathBuf> = artifacts
-            .iter()
-            .filter(|rel| {
-                let abs = project.root.join(rel);
-                match (file_hash(&abs), pre_build.get(abs.as_path())) {
-                    (Some(now), Some(before)) => now != *before,
-                    (Some(_), None) => true,
-                    _ => false,
-                }
-            })
-            .cloned()
-            .collect();
-        if !touched.is_empty() {
-            artifacts = touched;
-            safe_marker_write(&manifest, encode_artifact_manifest(&artifacts));
-        } else if let Some(recorded) = read_capped(&manifest, 4 * 1024 * 1024) {
-            let remembered: Vec<PathBuf> = decode_artifact_manifest(&recorded)
-                .into_iter()
-                .filter(|rel| is_safe_artifact(rel) && project.root.join(rel).is_file())
-                .collect();
-            if !remembered.is_empty() {
-                artifacts = remembered;
-            }
-        }
+        artifacts = reconcile_flat_artifacts(project, artifacts, &pre_build);
     }
     verify_artifacts_are_pe(project, &artifacts)?;
 
@@ -419,6 +218,246 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
         artifacts,
         lock_written,
     })
+}
+
+fn build_cargo(
+    project: &Project,
+    env: &Environment,
+    tc: &ResolvedToolchain,
+    commands: &mut Vec<String>,
+) -> Result<PathBuf> {
+    let triple = env.manifest.target_arch.rust_gnu_triple().ok_or_else(|| {
+        Error::RustTargetUnavailable {
+            arch: env.manifest.target_arch.to_string(),
+        }
+    })?;
+    crate::rustops::ensure_target(env.manifest.target_arch)?;
+    let default_linker = format!("{}-gcc", env.manifest.target_arch.mingw_triple());
+    let cargo_env = if which(&default_linker).is_some() {
+        Vec::new()
+    } else {
+        let triple_env = triple.to_uppercase().replace('-', "_");
+        let link_args: String = tc
+            .c_flags
+            .iter()
+            .chain(&tc.link_flags)
+            .map(|f| format!("-Clink-arg={f}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        vec![
+            (
+                format!("CARGO_TARGET_{triple_env}_LINKER"),
+                tc.cc.display().to_string(),
+            ),
+            (format!("CARGO_TARGET_{triple_env}_RUSTFLAGS"), link_args),
+        ]
+    };
+    run_step_with_env(
+        project,
+        env,
+        tc,
+        &[
+            "cargo".to_owned(),
+            "build".to_owned(),
+            "--target".to_owned(),
+            triple.to_owned(),
+        ],
+        &cargo_env,
+        commands,
+    )?;
+    Ok(project.root.join("target").join(triple).join("debug"))
+}
+
+fn build_cmake(
+    project: &Project,
+    env: &Environment,
+    tc: &ResolvedToolchain,
+    commands: &mut Vec<String>,
+) -> Result<PathBuf> {
+    let toolchain_file = env.layout.cmake_toolchain_file();
+    lsw_toolchain::write_cmake_toolchain_file(&toolchain_file, tc, env.manifest.target_arch)
+        .map_err(|e| Error::io(toolchain_file.clone(), e))?;
+
+    let generator = if which("ninja").is_some() {
+        Some("Ninja")
+    } else {
+        None
+    };
+    let toolchain_contents =
+        read_capped_string(&toolchain_file, 4 * 1024 * 1024).unwrap_or_default();
+    let cmake_config = format!(
+        "{tc:?}|arch={}|generator={generator:?}|toolchain_path={}|toolchain_body={}|prefix={}|emulator={}|deps={:?}|env={}",
+        env.manifest.target_arch,
+        toolchain_file.display(),
+        toolchain_contents,
+        env.layout.prefix().display(),
+        env.manifest.runtime.executable.display(),
+        crate::depsops::dep_dirs(project, env.manifest.target_arch),
+        ambient_env_fingerprint()
+    );
+    refresh_stale_cmake_build_dir(&project.root.join("build"), &cmake_config)?;
+    let mut configure = vec![
+        "cmake".to_owned(),
+        "-S".to_owned(),
+        ".".to_owned(),
+        "-B".to_owned(),
+        "build".to_owned(),
+        format!("-DCMAKE_TOOLCHAIN_FILE={}", toolchain_file.display()),
+        "-DCMAKE_BUILD_TYPE=Debug".to_owned(),
+        format!(
+            "-DCMAKE_CROSSCOMPILING_EMULATOR={}",
+            env.manifest.runtime.executable.display()
+        ),
+    ];
+    if let Some(g) = generator {
+        configure.push("-G".to_owned());
+        configure.push(g.to_owned());
+    }
+    run_step(project, env, tc, &configure, commands)?;
+    run_step(
+        project,
+        env,
+        tc,
+        &["cmake".to_owned(), "--build".to_owned(), "build".to_owned()],
+        commands,
+    )?;
+    write_cmake_toolchain_marker(&project.root.join("build"), &cmake_config);
+    Ok(project.root.join("build"))
+}
+
+fn build_zig(
+    project: &Project,
+    env: &Environment,
+    tc: &ResolvedToolchain,
+    commands: &mut Vec<String>,
+) -> Result<PathBuf> {
+    let target =
+        zig_target(env.manifest.target_arch).ok_or_else(|| Error::RustTargetUnavailable {
+            arch: env.manifest.target_arch.to_string(),
+        })?;
+    run_step(
+        project,
+        env,
+        tc,
+        &[
+            "zig".to_owned(),
+            "build".to_owned(),
+            format!("-Dtarget={target}"),
+        ],
+        commands,
+    )?;
+    Ok(project.root.join("zig-out"))
+}
+
+fn build_dotnet(
+    project: &Project,
+    env: &Environment,
+    tc: &ResolvedToolchain,
+    opts: &BuildOptions,
+    commands: &mut Vec<String>,
+) -> Result<PathBuf> {
+    let rid =
+        dotnet_rid(env.manifest.target_arch).ok_or_else(|| Error::RustTargetUnavailable {
+            arch: env.manifest.target_arch.to_string(),
+        })?;
+    let mut args = vec![
+        "dotnet".to_owned(),
+        "publish".to_owned(),
+        "-c".to_owned(),
+        "Debug".to_owned(),
+        "-r".to_owned(),
+        rid.to_owned(),
+        "--self-contained".to_owned(),
+        "true".to_owned(),
+    ];
+    if opts.aot || project.manifest.toolchain.aot {
+        let setup = aot::prepare(project, env, tc)?;
+        args.extend(aot::publish_args(&setup));
+    }
+    let publish_dir = project.root.join("bin").join("lsw-publish");
+    args.push("-o".to_owned());
+    args.push(publish_dir.display().to_string());
+    run_step(project, env, tc, &args, commands)?;
+    Ok(publish_dir)
+}
+
+fn build_meson(
+    project: &Project,
+    env: &Environment,
+    tc: &ResolvedToolchain,
+    commands: &mut Vec<String>,
+) -> Result<PathBuf> {
+    let cross_file = env.layout.root.join("meson-cross.ini");
+    write_meson_cross_file(&cross_file, tc, env.manifest.target_arch)
+        .map_err(|e| Error::io(cross_file.clone(), e))?;
+    let (mc, mcxx, mlink) = toolchain::effective_flags(project, env, tc);
+    let cross_hash = file_hash(&cross_file).map(|h| format!("{h}\n{mc}\n{mcxx}\n{mlink}"));
+    let configured = project.root.join("build").join("meson-info").is_dir();
+    let fp_path = project.root.join("build").join(".lsw-meson-cross");
+    let recorded_fp = read_capped_string(&fp_path, 1024 * 1024);
+    let fp_match = configured && recorded_fp.as_deref() == cross_hash.as_deref();
+    if !fp_match {
+        let mut setup = vec![
+            "meson".to_owned(),
+            "setup".to_owned(),
+            "build".to_owned(),
+            format!("--cross-file={}", cross_file.display()),
+        ];
+        if configured {
+            setup.push("--reconfigure".to_owned());
+        }
+        run_step(project, env, tc, &setup, commands)?;
+        if let Some(hash) = &cross_hash {
+            safe_marker_write(&fp_path, hash);
+        }
+    }
+    run_step(
+        project,
+        env,
+        tc,
+        &[
+            "meson".to_owned(),
+            "compile".to_owned(),
+            "-C".to_owned(),
+            "build".to_owned(),
+        ],
+        commands,
+    )?;
+    Ok(project.root.join("build"))
+}
+
+fn reconcile_flat_artifacts(
+    project: &Project,
+    mut artifacts: Vec<PathBuf>,
+    pre_build: &std::collections::HashMap<PathBuf, String>,
+) -> Vec<PathBuf> {
+    let manifest = project.root.join("build").join(".lsw-artifacts");
+    artifacts.retain(|rel| is_safe_artifact(rel));
+    let touched: Vec<PathBuf> = artifacts
+        .iter()
+        .filter(|rel| {
+            let abs = project.root.join(rel);
+            match (file_hash(&abs), pre_build.get(abs.as_path())) {
+                (Some(now), Some(before)) => now != *before,
+                (Some(_), None) => true,
+                _ => false,
+            }
+        })
+        .cloned()
+        .collect();
+    if !touched.is_empty() {
+        artifacts = touched;
+        safe_marker_write(&manifest, encode_artifact_manifest(&artifacts));
+    } else if let Some(recorded) = read_capped(&manifest, 4 * 1024 * 1024) {
+        let remembered: Vec<PathBuf> = decode_artifact_manifest(&recorded)
+            .into_iter()
+            .filter(|rel| is_safe_artifact(rel) && project.root.join(rel).is_file())
+            .collect();
+        if !remembered.is_empty() {
+            artifacts = remembered;
+        }
+    }
+    artifacts
 }
 
 fn verify_artifacts_are_pe(project: &Project, artifacts: &[PathBuf]) -> Result<()> {
