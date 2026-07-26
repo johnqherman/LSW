@@ -353,12 +353,7 @@ fn minimal_png() -> Vec<u8> {
 }
 
 fn manifest_xml(name: &str, publisher: &str, arch: TargetArch, entry: &str, logo: &str) -> String {
-    let proc_arch = match arch {
-        TargetArch::X86_64 => "x64",
-        TargetArch::X86 => "x86",
-        TargetArch::Aarch64 | TargetArch::Arm64Ec => "arm64",
-        TargetArch::Armv7 => "arm",
-    };
+    let proc_arch = arch.win_arch_name();
     let ident = sanitize_identity(name);
     let name = crate::xml_escape(name);
     let entry = crate::xml_escape(entry);

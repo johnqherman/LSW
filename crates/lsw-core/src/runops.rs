@@ -141,35 +141,17 @@ pub fn run(
 ) -> Result<RunReport> {
     let resolved = resolve_program(program, domain)?;
 
-    if domain != Domain::Host
-        && let ResolvedProgram::HostPath(p) = &resolved
-        && is_msi(p)
-    {
-        if let Some(pr) = project {
-            buildops::check_lock(pr, env)?;
-            crate::envops::link_project(env, pr)?;
-        }
-        let mut msi_args = vec!["/i".to_owned(), z_drive_path(p)];
-        msi_args.extend(args.iter().cloned());
-        let status = WineRuntime.execute(&ExecutionRequest {
-            program: PathBuf::from("msiexec"),
-            args: msi_args,
-            prefix: env.layout.prefix(),
-            cwd: windows_cwd(env, project),
-            env: windows_env(env, project),
-            sandbox: sandbox_spec(env, project, sandbox)?,
-            display: lsw_runtime::DisplayMode::Inherit,
-            emulate: crate::emulateops::resolve(env.manifest.target_arch)?,
-        })?;
-        return Ok(RunReport {
-            domain: Domain::Windows,
-            status,
-        });
-    }
-
     let mut is_gui: Option<bool> = None;
+    let mut run_args = args.to_vec();
+    let mut display_override = None;
 
     let (chosen, launch) = match resolved {
+        ResolvedProgram::HostPath(p) if domain != Domain::Host && is_msi(&p) => {
+            run_args = vec!["/i".to_owned(), z_drive_path(&p)];
+            run_args.extend(args.iter().cloned());
+            display_override = Some(lsw_runtime::DisplayMode::Inherit);
+            (Domain::Windows, PathBuf::from("msiexec"))
+        }
         ResolvedProgram::RuntimeResolved(p) => match domain {
             Domain::Host => {
                 return Err(Error::NotExecutable {
@@ -215,12 +197,12 @@ pub fn run(
             }
             WineRuntime.execute(&ExecutionRequest {
                 program: launch,
-                args: args.to_vec(),
+                args: run_args,
                 prefix: env.layout.prefix(),
                 cwd: windows_cwd(env, project),
                 env: windows_env(env, project),
                 sandbox: sandbox_spec(env, project, sandbox)?,
-                display: display_mode(display, is_gui),
+                display: display_override.unwrap_or_else(|| display_mode(display, is_gui)),
                 emulate: crate::emulateops::resolve(env.manifest.target_arch)?,
             })?
         }

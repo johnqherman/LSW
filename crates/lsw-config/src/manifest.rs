@@ -291,17 +291,7 @@ impl ProjectManifest {
             }
             fs::create_dir_all(parent).map_err(|e| ConfigError::write(path, e))?;
         }
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)
-            .map_err(|e| ConfigError::write(path, e))?;
-        if let Err(e) = file.write_all(text.as_bytes()) {
-            drop(file);
-            let _ = fs::remove_file(path);
-            return Err(ConfigError::write(path, e));
-        }
-        Ok(())
+        create_new_file(path, &text)
     }
 
     pub fn discover(start: &Path) -> Result<(PathBuf, Self)> {
@@ -369,19 +359,23 @@ pub(crate) fn write_toml<T: Serialize>(path: &Path, value: &T, what: &'static st
         Some(ext) => format!("{ext}.{uniq}.tmp"),
         None => format!("{uniq}.tmp"),
     });
+    create_new_file(&tmp, &text)?;
+    if let Err(e) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(ConfigError::write(path, e));
+    }
+    Ok(())
+}
+
+fn create_new_file(path: &Path, text: &str) -> Result<()> {
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(&tmp)
-        .map_err(|e| ConfigError::write(&tmp, e))?;
+        .open(path)
+        .map_err(|e| ConfigError::write(path, e))?;
     if let Err(e) = file.write_all(text.as_bytes()) {
         drop(file);
-        let _ = fs::remove_file(&tmp);
-        return Err(ConfigError::write(&tmp, e));
-    }
-    drop(file);
-    if let Err(e) = fs::rename(&tmp, path) {
-        let _ = fs::remove_file(&tmp);
+        let _ = fs::remove_file(path);
         return Err(ConfigError::write(path, e));
     }
     Ok(())

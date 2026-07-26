@@ -334,14 +334,6 @@ fn dep_root_contained(project: &crate::project::Project, root: &Path) -> bool {
     }
 }
 
-fn read_capped_string(path: &Path, max: u64) -> Option<String> {
-    use std::io::Read;
-    let file = std::fs::File::open(path).ok()?;
-    let mut buf = Vec::new();
-    file.take(max).read_to_end(&mut buf).ok()?;
-    String::from_utf8(buf).ok()
-}
-
 fn desc_field(desc: &str, key: &str) -> Option<String> {
     let mut lines = desc.lines();
     while let Some(line) = lines.next() {
@@ -361,7 +353,7 @@ fn resolve(dirs: &lsw_config::Dirs, repo: &str, prefix: &str, name: &str) -> Res
         .take(MAX_DIR_ENTRIES)
     {
         let desc_path = entry.path().join("desc");
-        let Some(desc) = read_capped_string(&desc_path, 4 * 1024 * 1024) else {
+        let Some(desc) = crate::buildops::read_capped_string(&desc_path, 4 * 1024 * 1024) else {
             continue;
         };
         if desc_field(&desc, "%NAME%").as_deref() == Some(full.as_str()) {
@@ -533,7 +525,7 @@ pub fn remove(
     }
     let files_manifest = root.join(".lsw").join(format!("{name}.files"));
     if let (Some(list), Ok(canon_root)) = (
-        read_capped_string(&files_manifest, 16 * 1024 * 1024),
+        crate::buildops::read_capped_string(&files_manifest, 16 * 1024 * 1024),
         root.canonicalize(),
     ) {
         for rel in list.lines() {
