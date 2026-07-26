@@ -122,11 +122,9 @@ pub struct Adapter<'a> {
     conn: Option<RspConn>,
     info: Option<DebugInfo>,
     slide: u64,
-    program: Option<PathBuf>,
     breakpoints: Vec<Breakpoint>,
     next_bp_id: i64,
     stop_on_entry: bool,
-    started: bool,
     exited: bool,
     current_thread: i64,
     frame_threads: HashMap<i64, i64>,
@@ -149,11 +147,9 @@ impl<'a> Adapter<'a> {
             conn: None,
             info: None,
             slide: 0,
-            program: None,
             breakpoints: Vec::new(),
             next_bp_id: 1,
             stop_on_entry: false,
-            started: false,
             exited: false,
             current_thread: 1,
             frame_threads: HashMap::new(),
@@ -415,7 +411,6 @@ impl<'a> Adapter<'a> {
 
     fn handle_configuration_done(&mut self, req: &ProtocolMessage) -> Result<Vec<ProtocolMessage>> {
         let response = self.success_response(req, serde_json::Value::Null);
-        self.started = true;
         if self.conn.is_none() {
             return Ok(vec![response]);
         }
@@ -532,7 +527,6 @@ impl<'a> Adapter<'a> {
             }
             rip = ret;
             rbp = next_rbp;
-            let _ = depth;
         }
         Ok(frames)
     }
@@ -1070,7 +1064,6 @@ impl<'a> Adapter<'a> {
         let port = read_gdb_port(stderr)?;
         let mut conn = RspConn::connect(port)?;
         self.slide = compute_slide(&mut conn, self.info.as_ref());
-        self.program = Some(program);
         self.conn = Some(conn);
         Ok(())
     }
@@ -1134,7 +1127,32 @@ fn compute_slide(conn: &mut RspConn, info: Option<&DebugInfo>) -> u64 {
     {
         return 0;
     }
-    0
+    let Ok(reply) = conn.command("qOffsets") else {
+        return 0;
+    };
+    let Some(candidate) = std::str::from_utf8(&reply)
+        .ok()
+        .and_then(|s| parse_q_offsets(s, info.image_base))
+    else {
+        return 0;
+    };
+    match conn.read_memory(info.image_base.wrapping_add(candidate), 2) {
+        Ok(head) if head == b"MZ" => candidate,
+        _ => 0,
+    }
+}
+
+fn parse_q_offsets(reply: &str, image_base: u64) -> Option<u64> {
+    for field in reply.trim().split(';') {
+        let (key, value) = field.split_once('=')?;
+        let value = u64::from_str_radix(value.trim_start_matches("0x"), 16).ok()?;
+        match key {
+            "TextSeg" => return Some(value.wrapping_sub(image_base)),
+            "Text" => return Some(value),
+            _ => {}
+        }
+    }
+    None
 }
 
 fn find_winedbg() -> Option<std::path::PathBuf> {
@@ -1173,6 +1191,26 @@ pub fn serve<R: BufRead, W: Write>(
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[test]
+    fn q_offsets_textseg_yields_slide_relative_to_image_base() {
+        assert_eq!(
+            parse_q_offsets("TextSeg=140001000", 0x140000000),
+            Some(0x1000)
+        );
+    }
+
+    #[test]
+    fn q_offsets_text_form_is_the_slide_itself() {
+        assert_eq!(parse_q_offsets("Text=2000;Data=2000;Bss=2000", 0), Some(0x2000));
+    }
+
+    #[test]
+    fn q_offsets_garbage_is_none() {
+        assert_eq!(parse_q_offsets("", 0), None);
+        assert_eq!(parse_q_offsets("E01", 0), None);
+        assert_eq!(parse_q_offsets("Frob=12", 0), None);
+    }
 
     fn request(seq: i64, command: &str, arguments: serde_json::Value) -> Vec<u8> {
         let msg = ProtocolMessage {

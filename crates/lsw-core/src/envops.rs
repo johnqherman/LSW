@@ -320,7 +320,7 @@ pub fn resolve_active(dirs: &Dirs, project: &Project) -> Result<Environment> {
     Environment::open(dirs, &name)
 }
 
-pub fn profile_dir(layout: &EnvironmentLayout) -> PathBuf {
+fn profile_dir(layout: &EnvironmentLayout) -> PathBuf {
     layout
         .drive_c()
         .join("users")

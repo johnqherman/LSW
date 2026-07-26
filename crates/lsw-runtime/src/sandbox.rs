@@ -4,7 +4,7 @@ use std::process::Command;
 
 use crate::types::{NetworkMode, SandboxSpec};
 
-pub fn find_pasta() -> Option<PathBuf> {
+pub(crate) fn find_pasta() -> Option<PathBuf> {
     find_on_path("pasta").or_else(|| find_on_path("slirp4netns"))
 }
 
@@ -16,7 +16,7 @@ pub(crate) fn should_unshare_net(mode: NetworkMode, pasta_available: bool) -> bo
     }
 }
 
-pub fn bwrap_args(spec: &SandboxSpec, unshare_net: bool) -> Vec<String> {
+pub(crate) fn bwrap_args(spec: &SandboxSpec, unshare_net: bool) -> Vec<String> {
     let mut args: Vec<String> = [
         "--die-with-parent",
         "--proc",

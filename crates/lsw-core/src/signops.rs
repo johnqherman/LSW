@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::error::{Error, Result};
 use crate::msixops::SignIdentity;
 
-pub const DEFAULT_PUBLISHER: &str = "CN=LSW Self-Signed, O=LSW";
+const DEFAULT_PUBLISHER: &str = "CN=LSW Self-Signed, O=LSW";
 
 #[derive(Debug, Default)]
 pub struct SignOptions {

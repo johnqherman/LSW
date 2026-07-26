@@ -191,7 +191,7 @@ fn bool_check(ok: bool) -> Check {
     if ok { Check::Ok } else { Check::NotConfigured }
 }
 
-pub fn ensure_target(arch: TargetArch) -> Result<()> {
+pub(crate) fn ensure_target(arch: TargetArch) -> Result<()> {
     let triple = arch
         .rust_gnu_triple()
         .ok_or_else(|| Error::RustTargetUnavailable {

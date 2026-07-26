@@ -561,14 +561,11 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 name = "lsw"
 version = "0.3.1"
 dependencies = [
- "anyhow",
  "clap",
  "clap_complete",
  "clap_mangen",
- "lsw-config",
  "lsw-core",
  "serde_json",
- "tracing",
  "tracing-subscriber",
 ]
 

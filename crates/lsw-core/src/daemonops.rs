@@ -45,9 +45,6 @@ struct Request {
     #[serde(default)]
     id: Option<u64>,
     method: String,
-    #[serde(default)]
-    #[allow(dead_code)]
-    params: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]

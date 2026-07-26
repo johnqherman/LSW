@@ -4,7 +4,7 @@ use std::process::{Command, ExitStatus};
 
 use lsw_config::ResolvedRuntime;
 
-use crate::env::{process_in_prefix, scrub_host_wine_vars};
+use crate::env::{process_in_prefix, scrub_wine_env};
 use crate::sandbox::{
     apply_rlimits, bwrap_args, find_bwrap, find_pasta, find_xvfb_run, sandbox_base_env,
     should_unshare_net,
@@ -23,10 +23,6 @@ pub trait RuntimeProvider {
     fn kill(&self, prefix: &Path, pid: u32) -> Result<(), RuntimeError>;
 
     fn diagnostics(&self, prefix: &Path) -> RuntimeDiagnostics;
-}
-
-pub fn providers() -> Vec<Box<dyn RuntimeProvider>> {
-    vec![Box::new(WineRuntime)]
 }
 
 const WINE_ID: &str = "wine";
@@ -212,7 +208,7 @@ impl WineRuntime {
                 apply_rlimits(&mut command, spec);
             }
         } else {
-            scrub_host_wine_vars(&mut command);
+            scrub_wine_env(&mut command);
             command.envs(full_env(&req.prefix, &req.env));
         }
         if let Some(cwd) = &req.cwd {
@@ -230,7 +226,7 @@ impl WineRuntime {
 
 fn command_with_prefix(program: &Path, prefix: &Path) -> Command {
     let mut command = Command::new(program);
-    scrub_host_wine_vars(&mut command);
+    scrub_wine_env(&mut command);
     command.env("WINEPREFIX", prefix.as_os_str());
     command
 }
@@ -274,7 +270,7 @@ impl RuntimeProvider for WineRuntime {
 
         tracing::debug!(prefix = %prefix.display(), "initializing wine prefix via wineboot -u");
         let mut command = Command::new(&executable);
-        scrub_host_wine_vars(&mut command);
+        scrub_wine_env(&mut command);
         let output = command
             .args(["wineboot", "-u"])
             .envs(base_env(prefix))

@@ -124,7 +124,7 @@ pub enum SignIdentity<'a> {
     },
 }
 
-pub fn authenticode_sign(unsigned: &Path, out: &Path, publisher: &str) -> Result<()> {
+fn authenticode_sign(unsigned: &Path, out: &Path, publisher: &str) -> Result<()> {
     authenticode_sign_with(unsigned, out, &SignIdentity::DevCert { publisher }, None)
 }
 

@@ -38,7 +38,7 @@ impl Project {
         self.root.join(lsw_config::PROJECT_LOCKFILE)
     }
 
-    pub fn save_manifest(&self) -> Result<()> {
+    pub(crate) fn save_manifest(&self) -> Result<()> {
         Ok(self.manifest.save(&self.manifest_path())?)
     }
 }
