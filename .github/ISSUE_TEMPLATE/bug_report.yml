@@ -27,7 +27,7 @@ body:
     attributes:
       label: LSW version
       description: Output of `lsw --version`.
-      placeholder: lsw 0.4.0 (lsw --version)
+      placeholder: lsw 0.5.0 (lsw --version)
     validations:
       required: true
   - type: textarea
