@@ -218,9 +218,11 @@ mod tests {
 
     #[test]
     fn rc_contains_version_and_strings() {
-        let mut pkg = PackageSection::default();
-        pkg.version = Some("2.5.1".into());
-        pkg.publisher = Some("Acme".into());
+        let pkg = PackageSection {
+            version: Some("2.5.1".into()),
+            publisher: Some("Acme".into()),
+            ..Default::default()
+        };
         let rc = render_rc("hello", &pkg, Some("app.ico"), true);
         assert!(rc.contains("FILEVERSION 2,5,1,0"));
         assert!(rc.contains("VALUE \"CompanyName\", \"Acme\""));
@@ -230,9 +232,11 @@ mod tests {
 
     #[test]
     fn manifest_reflects_admin_and_dpi() {
-        let mut pkg = PackageSection::default();
-        pkg.requires_admin = Some(true);
-        pkg.dpi_aware = Some(false);
+        let pkg = PackageSection {
+            requires_admin: Some(true),
+            dpi_aware: Some(false),
+            ..Default::default()
+        };
         let xml = app_manifest(&pkg);
         assert!(xml.contains("requireAdministrator"));
         assert!(xml.contains(">false</dpiAware>"));

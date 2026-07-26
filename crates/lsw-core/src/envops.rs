@@ -499,10 +499,13 @@ pub fn mapper(env: &Environment, project: &Project) -> lsw_path::PathMapper {
     )
 }
 
-pub fn lockfile_for(env: &Environment) -> Result<Lockfile> {
+pub fn lockfile_for(env: &Environment, project: Option<&Project>) -> Result<Lockfile> {
     let tc = &env.manifest.toolchain;
     let rt = &env.manifest.runtime;
     let sysroot_fingerprint = fingerprint_sysroot(&tc.sysroot)?;
+    let dependencies = project
+        .map(|p| crate::depsops::locked_deps(p, env.manifest.target_arch))
+        .unwrap_or_default();
     Ok(Lockfile {
         version: 1,
         environment_format: env.manifest.format,
@@ -519,10 +522,11 @@ pub fn lockfile_for(env: &Environment) -> Result<Lockfile> {
                 .map_err(|e| Error::io(rt.executable.clone(), e))?,
         },
         sysroot: LockedComponent {
-            provider: "mingw-w64".into(),
-            version: "host".into(),
+            provider: tc.provider.clone(),
+            version: tc.version.clone(),
             sha256: sysroot_fingerprint,
         },
+        dependencies,
     })
 }
 

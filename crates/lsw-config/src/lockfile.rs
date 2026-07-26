@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,15 @@ pub struct Lockfile {
     pub toolchain: LockedComponent,
     pub runtime: LockedComponent,
     pub sysroot: LockedComponent,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub dependencies: BTreeMap<String, LockedDep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LockedDep {
+    pub version: String,
+    pub sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
