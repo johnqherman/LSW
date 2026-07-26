@@ -380,20 +380,21 @@ fn dos_cwd(env: &Environment, project: Option<&Project>) -> Option<String> {
 
 fn shell_invocation(powershell: bool, dos_cwd: Option<&str>) -> (PathBuf, Vec<String>) {
     if powershell {
-        let mut args = vec!["-NoExit".to_owned()];
-        if let Some(dir) = dos_cwd {
-            args.extend([
-                "-Command".to_owned(),
+        let mut args = vec!["-NoExit".to_owned(), "-Command".to_owned()];
+        match dos_cwd {
+            Some(dir) => args.extend([
                 "Set-Location".to_owned(),
                 "-LiteralPath".to_owned(),
                 dir.to_owned(),
-            ]);
+            ]),
+            None => args.extend(["Set-Location".to_owned(), "$env:USERPROFILE".to_owned()]),
         }
         (PathBuf::from("powershell.exe"), args)
     } else {
-        let mut args = vec!["/k".to_owned()];
-        if let Some(dir) = dos_cwd {
-            args.extend(["cd".to_owned(), "/d".to_owned(), dir.to_owned()]);
+        let mut args = vec!["/k".to_owned(), "cd".to_owned(), "/d".to_owned()];
+        match dos_cwd {
+            Some(dir) => args.push(dir.to_owned()),
+            None => args.push("%USERPROFILE%".to_owned()),
         }
         (PathBuf::from("cmd.exe"), args)
     }
@@ -549,11 +550,14 @@ mod tests {
     fn shell_invocation_carries_no_untrusted_path() {
         let (prog, args) = shell_invocation(true, None);
         assert_eq!(prog, PathBuf::from("powershell.exe"));
-        assert_eq!(args, vec!["-NoExit"]);
+        assert_eq!(
+            args,
+            vec!["-NoExit", "-Command", "Set-Location", "$env:USERPROFILE"]
+        );
 
         let (prog, args) = shell_invocation(false, None);
         assert_eq!(prog, PathBuf::from("cmd.exe"));
-        assert_eq!(args, vec!["/k"]);
+        assert_eq!(args, vec!["/k", "cd", "/d", "%USERPROFILE%"]);
     }
 
     #[test]
