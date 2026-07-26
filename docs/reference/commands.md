@@ -3,11 +3,16 @@
 Most report commands accept `--format json` for machine consumption. Global
 flags: `--verbose`, `--trace`, `--format human|json|csv`.
 
+The `lsw.toml` schema and every `LSW_*` environment variable are in
+[configuration.md](configuration.md). Failure codes are catalogued in
+[../troubleshooting.md](../troubleshooting.md).
+
 ## Getting started
 
 - `lsw setup` detects the project (CMake, Meson, Cargo, Zig, Make, .NET),
-  creates a default `windows-x64` environment if none is active, writes
-  `lsw.toml` if missing, and prints the next command.
+  creates a default environment for the `[target]` arch if none is active
+  (`windows-x64` for the default `x86_64`), writes `lsw.toml` and a
+  `.gitignore` if missing, and prints the next command.
 - `lsw init [name] [--template console|gui|dll]` scaffolds a new project
   (`lsw.toml` + CMake template). The default template is `console`. The `gui`
   template uses WinMain. The `dll` template makes a shared library.
@@ -51,10 +56,12 @@ project's artifact.
 
 ## Dependencies
 
-- `lsw deps add|remove|list <name>` installs prebuilt mingw-w64 libraries
-  (headers, import/static libraries, DLLs) into the project `deps/` sysroot
-  and records them in `[dependencies]`. Builds find the include and library
-  paths automatically.
+- `lsw deps add|remove <name>` installs or removes prebuilt mingw-w64
+  libraries (headers, import/static libraries, DLLs) in the project `deps/`
+  sysroot and records them in `[dependencies]`; `lsw deps list` shows what is
+  installed. Builds find the include and library paths automatically.
+  `lsw deps tree [pe]` (under Binary analysis) is unrelated: it shows a
+  binary's DLL import tree.
 
 ## Compatibility and tracing
 
@@ -98,10 +105,12 @@ project's artifact.
 
 ## Environment state
 
-- `lsw env create|list|clone|restore|remove` manages isolated environments
-  (Wine prefix + toolchain probe). `lsw use <name>` selects the active one.
-- `lsw registry get|set|seed|export|import|reset` manages the environment's
-  isolated registry.
+- `lsw env create <name> [--arch <arch>] [--toolchain <id>] [--sdk <name>]
+  [--force] [--expose-home]` creates an isolated environment (Wine prefix +
+  toolchain probe); `lsw env list|clone|restore|remove` manage them.
+  `lsw use <name>` selects the active one.
+- `lsw registry get|set|seed|export|import|reset` (alias `reg`) manages the
+  environment's isolated registry.
 - `lsw ps [--all]`, `lsw kill <pid>|--all` manage runtime processes.
 - `lsw service create|start|stop|query|delete` manages Windows services.
 - `lsw sdk import|list|remove` manages user-supplied Windows SDK sysroots for
@@ -125,4 +134,6 @@ project's artifact.
 - `lsw config check` lints `lsw.toml`.
 - `lsw explain LSW2004` explains an error code.
 - `lsw completions bash|zsh|fish|powershell|elvish` writes shell completions;
-  `lsw man [--dir <out>]` writes man pages; `lsw install` installs both.
+  `lsw man [--dir <out>]` writes man pages; `lsw install [--prefix <dir>]`
+  installs bash/zsh/fish completions and man pages (default prefix
+  `$PREFIX`, else `~/.local`).

@@ -56,6 +56,37 @@ cargo install lsw && lsw install
 `lsw install` adds shell completions (bash, zsh, fish) and man pages. The shell
 integration is optional. If you do not want it, use only `cargo install lsw`.
 
+## Requirements
+
+LSW drives tools that are already on your machine. It needs Wine, a
+MinGW-w64 (or llvm-mingw) cross toolchain, and your build system. For the
+default C/C++ path that means:
+
+```
+# Ubuntu / Debian
+sudo apt install wine wine64 mingw-w64 cmake ninja-build
+
+# Fedora
+sudo dnf install wine mingw64-gcc mingw64-gcc-c++ cmake ninja-build
+
+# Arch
+sudo pacman -S wine mingw-w64-gcc cmake ninja
+
+# Nix (toolchain via an llvm-mingw tarball + LSW_TOOLCHAIN_DIRS)
+nix-shell -p wineWowPackages.stable cmake ninja
+```
+
+Rust projects need `rustup` with the `x86_64-pc-windows-gnu` target; .NET
+projects need the `dotnet` SDK; Zig projects need `zig`. Optional features
+have their own tools: `xvfb-run` (headless GUI tests), `bubblewrap`
+(`--sandbox strict`), `msitools`/`wixl` (MSI), `zip`, `osslsigncode`,
+`openssl` (MSIX and signing), `curl` + `tar` (`lsw deps add`), and `qemu-user`
+(cross-family emulation). Nothing is downloaded behind your back.
+
+`lsw doctor` checks all of this and names anything missing. If your Wine is
+not on `PATH` (WineHQ `/opt` builds, Proton, Nix profiles), point `LSW_WINE`
+at the binary.
+
 ## Quickstart
 
 In an existing project (CMake, Meson, Cargo, Zig, Make, or .NET):
@@ -105,9 +136,22 @@ Tooling:          ide  plugin  daemon  config  explain  completions  man  instal
 
 The full command reference with flags and semantics is in
 [docs/reference/commands.md](docs/reference/commands.md). Most report commands
-have a `--format json` option for machine consumption. The editor front-ends
-in `editors/` (a VS Code extension, a Neovim plugin, and JetBrains External
-Tools) use `lsw ide env` and `lsw dap`.
+have a `--format json` option for machine consumption. If a command fails with
+an `LSW####` code, `lsw explain <code>` describes it; the same catalogue is in
+[docs/troubleshooting.md](docs/troubleshooting.md).
+
+## Editor integration
+
+- **VS Code**: `code --install-extension lsw.lsw` - build/run/test commands,
+  IntelliSense configuration from `lsw ide env`, and Wine debugging through
+  `lsw dap`.
+- **Neovim**: point your plugin manager at `editors/nvim` and call
+  `require("lsw").setup()`.
+- **JetBrains**: External Tools definitions in `editors/jetbrains`.
+
+Details in [editors/README.md](editors/README.md). Any other editor can use
+`lsw ide env` (compiler, flags, include paths as JSON) and the `lsw dap`
+debug adapter directly.
 
 ## Languages and build systems
 
@@ -274,7 +318,23 @@ memory_mb   = 2048
 transport     = "ssh"
 host          = "user@win-host"
 identity_file = "~/.ssh/lsw_verify"
+
+[build]              # explicit build command (skips auto-detection)
+command = ["make", "-f", "windows.mk"]
+
+[test]               # explicit test command (run under the LSW environment)
+command = ["ctest", "--test-dir", "build"]
+
+[dependencies]       # prebuilt Windows libraries via `lsw deps add`
+zlib = "1.3.1-1"
 ```
+
+A generated `lsw.toml` contains only `[project]`; every other section is
+optional and defaults are omitted. The full schema, including the
+`[environment]`, `[runtime]`, and `[filesystem]` sections and every `LSW_*`
+environment variable, is in
+[docs/reference/configuration.md](docs/reference/configuration.md). Commit
+both `lsw.toml` and `lsw.lock` to version control.
 
 ## Sandboxing and security
 

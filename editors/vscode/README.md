@@ -24,7 +24,7 @@ over stdio). Example `launch.json` entry:
   "type": "lsw",
   "request": "launch",
   "name": "Debug PE",
-  "program": "${workspaceFolder}/build/app.exe"
+  "program": "${workspaceFolder}/build/${workspaceFolderBasename}.exe"
 }
 ```
 
