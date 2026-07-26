@@ -14,6 +14,10 @@ mod install;
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
+    if let Some(name) = &cli.env {
+        let _ = ENV_OVERRIDE.set(name.clone());
+    }
+
     let log_filter = if cli.trace {
         "trace"
     } else if cli.verbose {
@@ -25,6 +29,8 @@ fn main() -> ExitCode {
         .with_env_filter(log_filter)
         .with_writer(std::io::stderr)
         .init();
+
+    note_format_gaps(&cli);
 
     match dispatch(&cli) {
         Ok(code) => code,
@@ -38,6 +44,36 @@ fn main() -> ExitCode {
             }
             ExitCode::FAILURE
         }
+    }
+}
+
+fn note_format_gaps(cli: &Cli) {
+    use cli::Cmd;
+    if cli.format == Format::Human {
+        return;
+    }
+    let json_unsupported = matches!(
+        &cli.command,
+        Cmd::Init { .. }
+            | Cmd::Use { .. }
+            | Cmd::Run { .. }
+            | Cmd::Exec { .. }
+            | Cmd::Shell { .. }
+            | Cmd::Sbom { .. }
+            | Cmd::Ci(_)
+            | Cmd::Sign { .. }
+            | Cmd::Kill { .. }
+            | Cmd::Dap
+            | Cmd::Ide(_)
+            | Cmd::Watch
+            | Cmd::Completions { .. }
+            | Cmd::Man { .. }
+            | Cmd::Install { .. }
+    );
+    if json_unsupported {
+        eprintln!("note: --format has no effect on this command; output stays human-readable");
+    } else if cli.format == Format::Csv && !matches!(&cli.command, Cmd::Trace { .. }) {
+        eprintln!("note: --format csv applies to lsw trace only; falling back to human output");
     }
 }
 
@@ -72,10 +108,26 @@ pub(crate) fn project() -> lsw_core::Result<Project> {
     Project::discover(&cwd()?)
 }
 
+static ENV_OVERRIDE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+pub(crate) fn env_override() -> Option<&'static str> {
+    ENV_OVERRIDE.get().map(String::as_str)
+}
+
 pub(crate) fn active_env(dirs: &Dirs) -> lsw_core::Result<(Project, lsw_core::Environment)> {
     let p = project()?;
-    let env = lsw_core::resolve_active(dirs, &p)?;
+    let env = match env_override() {
+        Some(name) => lsw_core::Environment::open(dirs, name)?,
+        None => lsw_core::resolve_active(dirs, &p)?,
+    };
     Ok((p, env))
+}
+
+pub(crate) fn admin_env(dirs: &Dirs) -> lsw_core::Result<lsw_core::Environment> {
+    match env_override() {
+        Some(name) => lsw_core::Environment::open(dirs, name),
+        None => active_env(dirs).map(|(_, env)| env),
+    }
 }
 
 fn with_pe<F>(file: &Option<PathBuf>, dirs: &Dirs, f: F) -> lsw_core::Result<ExitCode>
@@ -112,10 +164,10 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
         Cmd::Test { headless } => cmd::build::test(headless, &dirs, cli.format),
         Cmd::Check { headless } => cmd::tooling::check(*headless, &dirs, cli.format),
         Cmd::Verify {
-            native_windows,
+            native,
             reproducible,
             artifact,
-        } => cmd::verify::verify(native_windows, reproducible, artifact, &dirs, cli.format),
+        } => cmd::verify::verify(native, reproducible, artifact, &dirs, cli.format),
         Cmd::Shell { windows } => cmd::build::shell(windows, &dirs),
         Cmd::Inspect { file } => {
             with_pe(file, &dirs, |f| cmd::inspect::inspect(f, &dirs, cli.format))
@@ -145,7 +197,10 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             pfx_pass_env,
             timestamp_url,
         } => cmd::package::sign(file, publisher, pfx, pfx_pass_env, timestamp_url),
-        Cmd::Path { windows, linux } => cmd::package::path(windows, linux, &dirs, cli.format),
+        Cmd::Path {
+            to_windows,
+            to_linux,
+        } => cmd::package::path(to_windows, to_linux, &dirs, cli.format),
         Cmd::Registry(op) => cmd::state::registry(op, &dirs, cli.format),
         Cmd::Debug {
             program,

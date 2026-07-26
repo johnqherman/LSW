@@ -11,7 +11,7 @@ Build, run, test, and debug native Windows applications from Linux through the
 ## Commands
 
 - **LSW: Build** / **Run** / **Test** - run `lsw build|run|test` in the integrated terminal.
-- **LSW: Verify on native Windows** - `lsw verify --native-windows` against the `[verify]` host.
+- **LSW: Verify on native Windows** - `lsw verify --native` against the `[verify]` host.
 - **LSW: Configure C/C++ IntelliSense** - writes `.vscode/c_cpp_properties.json` from `lsw ide env` (target, compiler, sysroot, include paths, defines).
 
 ## Debugging

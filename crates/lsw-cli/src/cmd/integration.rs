@@ -76,6 +76,37 @@ pub(crate) fn plugin(op: &PluginCmd, format: Format) -> lsw_core::Result<ExitCod
 pub(crate) fn daemon(op: &DaemonCmd, dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     let json = format == Format::Json;
     match op {
+        DaemonCmd::Start => {
+            if lsw_core::daemonops::DaemonClient::connect(dirs)
+                .and_then(|mut c| c.call("version"))
+                .is_ok()
+            {
+                if json {
+                    crate::cmd::emit_json(&serde_json::json!({ "running": true }));
+                } else {
+                    println!("lswd already running");
+                }
+                return Ok(ExitCode::SUCCESS);
+            }
+            let lswd = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.join("lswd")))
+                .filter(|p| p.is_file())
+                .unwrap_or_else(|| std::path::PathBuf::from("lswd"));
+            std::process::Command::new(&lswd)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .map_err(|e| lsw_core::Error::io(lswd.clone(), e))?;
+            if json {
+                crate::cmd::emit_json(&serde_json::json!({ "started": true }));
+            } else {
+                println!("lswd started (socket in $XDG_RUNTIME_DIR; stop with: lsw daemon stop)");
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
         DaemonCmd::Status => {
             let probe = lsw_core::daemonops::DaemonClient::connect(dirs)
                 .and_then(|mut c| c.call("version"));

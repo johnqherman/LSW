@@ -132,14 +132,20 @@ pub(crate) fn sign(
 }
 
 pub(crate) fn path(
-    windows: &Option<PathBuf>,
-    linux: &Option<String>,
+    to_windows: &Option<PathBuf>,
+    to_linux: &Option<String>,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
+    if to_windows.is_some() == to_linux.is_some() {
+        return Ok(crate::usage_failure(
+            format,
+            "specify exactly one of --to-windows <linux-path> or --to-linux <windows-path>",
+        ));
+    }
     let (p, env) = active_env(dirs)?;
     let mapper = lsw_core::mapper(&env, &p);
-    let (key, value) = match (windows, linux) {
+    let (key, value) = match (to_windows, to_linux) {
         (Some(path), None) => {
             let absolute = if path.is_absolute() {
                 path.clone()
@@ -149,12 +155,7 @@ pub(crate) fn path(
             ("windows", mapper.to_windows(&absolute)?)
         }
         (None, Some(text)) => ("linux", mapper.to_linux(text)?.display().to_string()),
-        _ => {
-            return Ok(crate::usage_failure(
-                format,
-                "specify exactly one of --windows <linux-path> or --linux <windows-path>",
-            ));
-        }
+        _ => unreachable!("validated above"),
     };
     if format == Format::Json {
         crate::cmd::emit_json(&serde_json::json!({ key: value }));

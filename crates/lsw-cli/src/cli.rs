@@ -12,16 +12,54 @@ use lsw_core::{Domain, TargetArch};
 )]
 pub(crate) struct Cli {
     /// Verbose diagnostic logging.
-    #[arg(long, global = true)]
+    #[arg(long, global = true, help_heading = "Global options")]
     pub(crate) verbose: bool,
     /// Maximum-detail trace logging (implies --verbose).
-    #[arg(long, global = true)]
+    #[arg(long, global = true, help_heading = "Global options")]
     pub(crate) trace: bool,
     /// Output format for machine consumption where supported.
-    #[arg(long, global = true, value_enum, default_value_t = Format::Human)]
+    #[arg(long, global = true, value_enum, default_value_t = Format::Human, help_heading = "Global options")]
     pub(crate) format: Format,
+    /// Use this environment instead of the project's active one.
+    /// Environment-admin commands (ps, kill, registry, service) then work
+    /// outside a project directory too.
+    #[arg(
+        long,
+        global = true,
+        value_name = "NAME",
+        help_heading = "Global options"
+    )]
+    pub(crate) env: Option<String>,
     #[command(subcommand)]
     pub(crate) command: Cmd,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum BuildSystemArg {
+    Cmake,
+    Cargo,
+    Make,
+    Ninja,
+    Meson,
+    Zig,
+    Dotnet,
+    /// Use the [build] command from lsw.toml.
+    Explicit,
+}
+
+impl BuildSystemArg {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            BuildSystemArg::Cmake => "cmake",
+            BuildSystemArg::Cargo => "cargo",
+            BuildSystemArg::Make => "make",
+            BuildSystemArg::Ninja => "ninja",
+            BuildSystemArg::Meson => "meson",
+            BuildSystemArg::Zig => "zig",
+            BuildSystemArg::Dotnet => "dotnet",
+            BuildSystemArg::Explicit => "explicit",
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -51,9 +89,9 @@ pub(crate) enum Cmd {
     Use { name: String },
     /// Build Windows artifacts using native Linux tools.
     Build {
-        /// Force a build system (cmake, cargo, make, ninja, meson, zig, dotnet).
-        #[arg(long)]
-        system: Option<String>,
+        /// Force a build system instead of auto-detection.
+        #[arg(long, value_enum)]
+        system: Option<BuildSystemArg>,
         /// Refresh lsw.lock instead of failing on drift.
         #[arg(long)]
         update_lock: bool,
@@ -97,11 +135,11 @@ pub(crate) enum Cmd {
     },
     /// Build, then verify artifacts on a real Windows host.
     Verify {
-        /// Run on native Windows.
-        #[arg(long)]
-        native_windows: bool,
+        /// Run on native Windows (the default; kept for explicitness).
+        #[arg(long, alias = "native-windows")]
+        native: bool,
         /// Build twice and prove the artifacts are byte-identical.
-        #[arg(long, conflicts_with = "native_windows")]
+        #[arg(long, conflicts_with = "native")]
         reproducible: bool,
         /// With --reproducible: limit the check to one artifact (name or path).
         #[arg(requires = "reproducible")]
@@ -189,11 +227,11 @@ pub(crate) enum Cmd {
     /// Translate paths between Linux and Windows views.
     Path {
         /// Print the Windows form of a Linux path.
-        #[arg(long, conflicts_with = "linux")]
-        windows: Option<PathBuf>,
+        #[arg(long, alias = "windows", conflicts_with = "to_linux")]
+        to_windows: Option<PathBuf>,
         /// Print the Linux form of a Windows path.
-        #[arg(long)]
-        linux: Option<String>,
+        #[arg(long, alias = "linux")]
+        to_linux: Option<String>,
     },
     /// Read and write the environment's isolated registry.
     #[command(subcommand, alias = "reg")]
@@ -369,6 +407,8 @@ pub(crate) enum PluginCmd {
 
 #[derive(Subcommand)]
 pub(crate) enum DaemonCmd {
+    /// Start the daemon in the background (spawns lswd).
+    Start,
     /// Show whether the daemon is running and its version.
     Status,
     /// Ask a running daemon to stop.

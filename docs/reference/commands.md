@@ -1,7 +1,11 @@
 # Command reference
 
 Most report commands accept `--format json` for machine consumption. Global
-flags: `--verbose`, `--trace`, `--format human|json|csv`.
+flags: `--verbose`, `--trace`, `--format human|json|csv`, and
+`--env <name>` (use a named environment instead of the project's active one;
+lets `ps`, `kill`, `registry`, and `service` run outside a project
+directory). Commands with no machine format print a note to stderr when
+`--format json|csv` is requested.
 
 The `lsw.toml` schema and every `LSW_*` environment variable are in
 [configuration.md](configuration.md). Failure codes are catalogued in
@@ -24,8 +28,10 @@ The `lsw.toml` schema and every `LSW_*` environment variable are in
 
 ## Build / run
 
-- `lsw build [--system cmake|cargo|make|ninja|meson|zig|dotnet]
-  [--reproducible] [--update-lock] [--aot]` builds the project.
+- `lsw build [--system cmake|cargo|make|ninja|meson|zig|dotnet|explicit]
+  [--reproducible] [--update-lock] [--aot]` builds the project; `explicit`
+  forces the `[build]` command from `lsw.toml`. An unknown `--system` value
+  is an error (LSW2046), never silently ignored.
 - `lsw run [--host|--windows] [--sandbox strict] [--headless]
   [--dump-on-crash] [program]` starts a program; omit the program to build and
   run the project's single executable.
@@ -96,10 +102,12 @@ project's artifact.
 
 ## Native verification
 
-- `lsw verify --native-windows` builds, then runs the artifacts on a real
+- `lsw verify [--native]` builds, then runs the artifacts on a real
   Windows host configured in `[verify]` (SSH, WinRM, or WinRM-over-TLS;
-  WS-Man transports read `LSW_WINRM_PASSWORD`). Result is `WINDOWS_VERIFIED`
-  or `WINDOWS_UNAVAILABLE` - deliberately distinct from local Wine results.
+  WS-Man transports read `LSW_WINRM_PASSWORD`). Native verification is the
+  default; `--native` (alias `--native-windows`) is accepted for
+  explicitness. Result is `WINDOWS_VERIFIED` or `WINDOWS_UNAVAILABLE` -
+  deliberately distinct from local Wine results.
 - `lsw verify --reproducible [artifact]` builds twice and proves the artifacts
   are byte-identical, reporting diverging sections on mismatch.
 
@@ -115,7 +123,7 @@ project's artifact.
 - `lsw service create|start|stop|query|delete` manages Windows services.
 - `lsw sdk import|list|remove` manages user-supplied Windows SDK sysroots for
   MSVC-ABI builds.
-- `lsw path --windows|--linux <path>` converts a path between views.
+- `lsw path --to-windows <linux-path>|--to-linux <windows-path>` converts a path between views (old `--windows`/`--linux` spellings remain as aliases).
 
 ## Languages
 
@@ -126,10 +134,14 @@ project's artifact.
 
 - `lsw ide env` prints the environment description IDE plugins consume. The
   VS Code, Neovim, and JetBrains front-ends are in `editors/`.
-- `lsw plugin list` shows out-of-process `lsw-provider-*` JSON-RPC providers
-  (reference implementation in `crates/lsw-provider-example`).
-- `lswd` is an optional daemon with `lsw daemon status|stop`; normal use does
-  not need it.
+- `lsw plugin list` discovers out-of-process `lsw-provider-*` JSON-RPC
+  providers on `PATH` (reference implementation in
+  `crates/lsw-provider-example`). The plugin surface is experimental:
+  providers are discovered and handshaked but not yet consulted by build or
+  runtime resolution.
+- `lswd` is an optional background daemon managed with
+  `lsw daemon start|status|stop`. It currently only answers version/ping
+  probes; normal use does not need it.
 - `lsw ci init github` writes a GitHub Actions workflow.
 - `lsw config check` lints `lsw.toml`.
 - `lsw explain LSW2004` explains an error code.
