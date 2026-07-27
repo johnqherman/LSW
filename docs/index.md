@@ -18,31 +18,36 @@ $ lsw check
 all checks passed
 ```
 
-`lsw build` produces a genuine Windows PE from your existing CMake, Meson,
-Cargo, Zig, Make, or .NET project. `lsw run` executes it through Wine.
-`lsw test`, `lsw debug`, and `lsw package` cover the rest of the loop.
-Running under LSW means running under Wine, and LSW never reports a Wine
-pass as a Windows pass - that is what `lsw verify --native` is for: it runs
-your artifacts on a real Windows host and says so.
+## What LSW is
 
-LSW is one CLI over tools you already have - MinGW-w64 or Clang for the
-cross-compile, Wine for execution - plus the glue those tools never grew:
-isolated per-environment Wine prefixes, a declarative `lsw.toml`, `lsw.lock`
-pinning for reproducible builds, and deterministic path mapping between the
-Linux and Windows views of your project. Where WSL puts a Linux userland on
-Windows, LSW points the other way: the Windows target, developed entirely
-from Linux.
+LSW is one command-line tool for Windows development on Linux. It controls
+the tools that you already have. MinGW-w64 or Clang does the compilation.
+Wine runs the result. LSW adds the parts that these tools do not have:
+
+- Isolated Wine environments, one for each target.
+- A declarative project file, `lsw.toml`.
+- A lock file, `lsw.lock`, for reproducible builds.
+- Deterministic path mapping between the Linux view and the Windows view of
+  your project.
+
+`lsw build` makes a genuine Windows PE binary from your CMake, Meson,
+Cargo, Zig, Make, or .NET project. `lsw run` starts the binary through
+Wine. `lsw test`, `lsw debug`, and `lsw package` complete the loop.
+
+A test that passes under Wine is not a test that passes on Windows. LSW
+keeps these two results separate at all times. Use `lsw verify --native` to
+run your binaries on a real Windows host and to get the real result.
+
+WSL puts a Linux userland on Windows. LSW points the other way: you develop
+for the Windows target, and you do not leave Linux.
 
 ## Where to go
 
-- **[Install](guide/install.md)** - `cargo install lsw`, host requirements
-  per distro, and what LSW will never download behind your back.
-- **[Quickstart](guide/quickstart.md)** - from an existing project or from
-  nothing to a passing `lsw check` in five commands.
-- **[Command reference](reference/commands.md)** - every command, flag, and
-  its semantics.
+- **[Install](guide/install.md)** - install LSW and the host tools.
+- **[Quickstart](guide/quickstart.md)** - from zero to a passed
+  `lsw check` in five commands.
+- **[Command reference](reference/commands.md)** - all commands and flags.
 - **[Configuration](reference/configuration.md)** - the full `lsw.toml`
-  schema and every `LSW_*` environment variable.
-- **[Troubleshooting](troubleshooting.md)** - the complete `LSW####` error
-  catalogue, common first-run failures, and how LSW compares to
-  cargo-xwin and Docker+Wine.
+  schema and all `LSW_*` environment variables.
+- **[Troubleshooting](troubleshooting.md)** - the full `LSW####` error
+  catalogue and the usual first-run failures.

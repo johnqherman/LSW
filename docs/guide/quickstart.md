@@ -1,36 +1,64 @@
 # Quickstart
 
-In an existing project (CMake, Meson, Cargo, Zig, Make, or .NET):
+## Start in an existing project
+
+LSW detects CMake, Meson, Cargo, Zig, Make, and .NET projects.
+
+1. Go to the project directory.
+2. Run `lsw setup`. It detects the project, creates a default environment,
+   and writes `lsw.toml`.
+3. Run `lsw build`. It cross-compiles to `build/<name>.exe`, a real PE
+   binary.
+4. Run `lsw run`. It builds and runs the binary through Wine.
+5. Run `lsw check`. It validates the full pipeline: configuration,
+   environment, build, Wine execution, DLL resolution, and PE hardening.
 
 ```
-lsw setup                     # detect project, create env, write lsw.toml
-lsw build                     # cross-compile to build/<name>.exe (real PE)
-lsw run                       # build + run the executable through Wine
-lsw check                     # build, wine execution, deps, hardening
-lsw package                   # assemble dist/<name>-<arch>[.zip]
+lsw setup
+lsw build
+lsw run
+lsw check
+lsw package
 ```
 
-Starting from nothing:
+## Start from nothing
+
+1. Run `lsw init hello`. It scaffolds `lsw.toml` and a CMake hello
+   project.
+2. Go into the new directory.
+3. Run `lsw setup`, then `lsw check`.
 
 ```
-lsw init hello && cd hello    # scaffold lsw.toml + CMake hello project
-lsw setup                     # create + wire the default environment
-lsw check                     # validate the whole pipeline
+lsw init hello && cd hello
+lsw setup
+lsw check
 ```
 
-`lsw init --template console|cpp|gui|dll|service` picks the scaffold.
+`lsw init --template <name>` selects the scaffold:
 
-Useful next commands: `lsw test` (test suite under Wine), `lsw inspect` /
-`lsw audit` (PE analysis), `lsw doctor` (host diagnosis), `lsw watch`
-(rebuild on change), `lsw verify --native` (real Windows verdict).
+| Template | Result |
+|----------|--------|
+| `console` | C console program (default) |
+| `cpp` | C++ console program |
+| `gui` | WinMain window program |
+| `dll` | Shared library |
+| `service` | Windows service skeleton |
 
-Multiple environments, other architectures, and the MSVC ABI use
-`lsw env create` and `lsw use` directly; `lsw setup` is a convenience over
-the same machinery.
+Complete example projects are in
+[`examples/`](https://github.com/johnqherman/LSW/tree/main/examples). Copy
+one, or run it in place.
 
-Complete example projects live in
-[`examples/`](https://github.com/johnqherman/LSW/tree/main/examples) - copy
-one or run it in place.
+## The next commands
+
+- `lsw test` - run the test suite under Wine.
+- `lsw inspect` and `lsw audit` - examine the built PE binary.
+- `lsw doctor` - examine the host setup.
+- `lsw watch` - build again on each source change.
+- `lsw verify --native` - run the binaries on a real Windows host.
+
+For more environments, other architectures, and the MSVC ABI, use
+`lsw env create` and `lsw use` directly. `lsw setup` is a shortcut over the
+same machinery.
 
 ## The command map
 
@@ -46,7 +74,7 @@ Languages:        rust  dotnet
 Tooling:          ide  plugin  daemon  config  explain  completions  man  install
 ```
 
-Full flags and semantics: [command reference](../reference/commands.md).
-Most report commands take `--format json`. If a command fails with an
-`LSW####` code, `lsw explain <code>` describes it; the same catalogue is in
+See the [command reference](../reference/commands.md) for all flags. Most
+report commands accept `--format json`. When a command fails with an
+`LSW####` code, run `lsw explain <code>`, or see
 [troubleshooting](../troubleshooting.md).
