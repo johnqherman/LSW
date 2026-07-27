@@ -7,46 +7,38 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](#license)
 [![msrv](https://img.shields.io/badge/rustc-1.85+-blue.svg)](Cargo.toml)
 
-**Build, test, and package Windows applications from Linux - with one
-workflow.**
+**Build, run, debug, and ship Windows software without leaving Linux.**
 
-```
-$ cd existing-project
+```console
 $ lsw setup
 Detected CMake project 'hello'
-Created lsw.toml
-Created environment 'windows-x64'
-  toolchain llvm-mingw clang version 22.1.8
-  runtime   wine 11.13
+Created environment 'windows-x64' (llvm-mingw 22.1.8, wine 11.13)
 
-Ready:
-  lsw build
+$ lsw run
+Hello from LSW
 
 $ lsw check
-  + configuration    lsw.toml valid
-  + environment      windows-x64 (llvm-mingw clang version 22.1.8, wine 11.13)
   + build            1 artifact(s) via CMake
   + wine execution   1 test(s) passed under wine
-  + dependencies     all DLL imports resolved (1 artifact(s))
-  + hardening        ASLR + DEP enabled (1 artifact(s))
-
+  + dependencies     all DLL imports resolved
+  + hardening        ASLR + DEP enabled
 all checks passed
-
-$ lsw package
-Packaged: dist/hello-x86_64
-  hello.exe
-Archive:  dist/hello-x86_64.zip
 ```
 
-LSW configures the tools you already use - CMake, Meson, Cargo, Zig, .NET,
-Clang/MinGW-w64, and Wine - it does not replace them. It puts them behind one
-coherent CLI with isolated per-environment Wine prefixes, declarative
-`lsw.toml` project configuration, `lsw.lock` reproducibility pinning, and
-deterministic Linux<->Windows path mapping. C, C++, and Rust are first-class
-languages; MSVC-ABI builds work with a user-supplied Windows SDK.
+`lsw build` produces a genuine Windows PE from your existing CMake, Meson,
+Cargo, Zig, Make, or .NET project. `lsw run` executes it through Wine.
+`lsw test`, `lsw debug`, and `lsw package` cover the rest of the loop.
+Running under LSW means running under Wine, and LSW never reports a Wine
+pass as a Windows pass - that is what `lsw verify --native` is for: it runs
+your artifacts on a real Windows host and says so.
 
-Conceptually LSW is the inverse of WSL: where WSL runs a Linux environment on
-Windows, LSW builds, runs, and ships Windows software on Linux.
+LSW is one CLI over tools you already have - MinGW-w64 or Clang for the
+cross-compile, Wine for execution - plus the glue those tools never grew:
+isolated per-environment Wine prefixes, a declarative `lsw.toml`, `lsw.lock`
+pinning for reproducible builds, and deterministic path mapping between the
+Linux and Windows views of your project. Where WSL puts a Linux userland on
+Windows, LSW points the other way: the Windows target, developed entirely
+from Linux.
 
 ## Install
 
@@ -55,14 +47,14 @@ cargo install lsw && lsw install
 ```
 
 `cargo install lsw` puts the `lsw` and `lswd` binaries on your `PATH`.
-`lsw install` adds shell completions (bash, zsh, fish) and man pages. The shell
-integration is optional. If you do not want it, use only `cargo install lsw`.
+`lsw install` adds shell completions (bash, zsh, fish) and man pages. The
+shell integration is optional; skip it with plain `cargo install lsw`.
 
 ## Requirements
 
-LSW drives tools that are already on your machine. It needs Wine, a
-MinGW-w64 (or llvm-mingw) cross toolchain, and your build system. For the
-default C/C++ path that means:
+LSW drives tools that are already on your machine: Wine (9+ recommended,
+`lsw doctor` warns on older), a MinGW-w64 or llvm-mingw cross toolchain, and
+your build system. For the default C/C++ path that means:
 
 ```
 # Ubuntu / Debian
@@ -74,20 +66,23 @@ sudo dnf install wine mingw64-gcc mingw64-gcc-c++ cmake ninja-build
 # Arch
 sudo pacman -S wine mingw-w64-gcc cmake ninja
 
-# Nix (toolchain via an llvm-mingw tarball + LSW_TOOLCHAIN_DIRS)
+# Nix (toolchain via lsw toolchain install or LSW_TOOLCHAIN_DIRS)
 nix-shell -p wineWowPackages.stable cmake ninja
 ```
 
 Rust projects need `rustup` with the `x86_64-pc-windows-gnu` target; .NET
 projects need the `dotnet` SDK; Zig projects need `zig`. Optional features
 have their own tools: `xvfb-run` (headless GUI tests), `bubblewrap`
-(`--sandbox strict`), `msitools`/`wixl` (MSI), `zip`, `osslsigncode`,
-`openssl` (MSIX and signing), `curl` + `tar` (`lsw deps add`), and `qemu-user`
-(cross-family emulation). Nothing is downloaded behind your back.
+(`--sandbox strict`), `msitools`/`wixl` (MSI), `makensis` (NSIS), `zip`,
+`osslsigncode`, `openssl` (MSIX and signing), `curl` + `tar`
+(`lsw deps add`), and `qemu-user` (cross-family emulation).
 
-`lsw doctor` checks all of this and names anything missing. If your Wine is
-not on `PATH` (WineHQ `/opt` builds, Proton, Nix profiles), point `LSW_WINE`
-at the binary.
+LSW ships only its own source and binaries - no Wine, no MinGW, no Microsoft
+SDK or redistributable content. You supply those; nothing is downloaded
+behind your back, and every download LSW can make on request is documented
+in [SECURITY.md](SECURITY.md). `lsw doctor` checks the whole setup and names
+anything missing. If your Wine is not on `PATH` (WineHQ `/opt` builds,
+Proton, Nix profiles), point `LSW_WINE` at the binary.
 
 ## Quickstart
 
@@ -109,123 +104,86 @@ lsw setup                     # create + wire the default environment
 lsw check                     # validate the whole pipeline
 ```
 
-`lsw init --template console|cpp|gui|dll|service` selects the scaffold. The
-default is `console` (C). `cpp` is a C++ console app, `gui` uses WinMain,
-`dll` makes a shared library, and `service` is a Windows service skeleton.
-
-Useful next commands: `lsw test` (test suite under Wine with honest
-compatibility status), `lsw inspect` / `lsw audit` (PE analysis of the built
-artifact), `lsw doctor` (host diagnosis), `lsw watch` (rebuild on change),
-`lsw verify --native` (run artifacts on a real Windows host).
-
-Advanced workflows (multiple environments, other architectures, MSVC ABI) use
-`lsw env create <name> [--arch <arch>] [--sdk <name>]` and `lsw use <name>`
-directly; `lsw setup` is a convenience over the same machinery.
+`lsw init --template console|cpp|gui|dll|service` picks the scaffold.
+Useful next commands: `lsw test` (test suite under Wine), `lsw inspect` /
+`lsw audit` (PE analysis), `lsw doctor` (host diagnosis), `lsw watch`
+(rebuild on change), `lsw verify --native` (real Windows verdict).
+Multiple environments, other architectures, and the MSVC ABI use
+`lsw env create` and `lsw use` directly; `lsw setup` is a convenience over
+the same machinery.
 
 ## Commands
 
 ```
 Getting started:  setup  init  doctor  check
-Build / run:      build  run  exec  test  shell  watch
+Build / run:      build  run  exec  test  shell  watch  clean
 Analysis:         inspect  audit  exports  deps  diff  size  strings  sbom  crash
 Compatibility:    compat  compat-query  trace
 Debugging:        debug  dap
 Ship:             package  sign  verify  ci
-Environments:     env  use  registry  ps  kill  service  sdk  path
+Environments:     env  use  registry  ps  kill  service  sdk  toolchain  path
 Languages:        rust  dotnet
 Tooling:          ide  plugin  daemon  config  explain  completions  man  install
 ```
 
 The full command reference with flags and semantics is in
-[docs/reference/commands.md](docs/reference/commands.md). Most report commands
-have a `--format json` option for machine consumption. If a command fails with
-an `LSW####` code, `lsw explain <code>` describes it; the same catalogue is in
+[docs/reference/commands.md](docs/reference/commands.md). Most report
+commands take `--format json`. If a command fails with an `LSW####` code,
+`lsw explain <code>` describes it; the same catalogue is in
 [docs/troubleshooting.md](docs/troubleshooting.md).
-
-## Editor integration
-
-- **VS Code**: `code --install-extension lsw.lsw` - build/run/test commands,
-  IntelliSense configuration from `lsw ide env`, and Wine debugging through
-  `lsw dap`.
-- **Neovim**: point your plugin manager at `editors/nvim` and call
-  `require("lsw").setup()`.
-- **JetBrains**: External Tools definitions in `editors/jetbrains`.
-
-Details in [editors/README.md](editors/README.md). Any other editor can use
-`lsw ide env` (compiler, flags, include paths as JSON) and the `lsw dap`
-debug adapter directly.
 
 ## Languages and build systems
 
-**C / C++** projects build with CMake, Meson, Ninja, or Make. LSW finds the
-build system automatically. You can also set an explicit `[build]` command in
-`lsw.toml`. LSW gives generated cross-toolchain files to CMake and Meson. LSW
-gives the cross `CC`, `CXX`, `CFLAGS`, and `LDFLAGS` to all build systems.
+**C / C++** projects build with CMake, Meson, Ninja, or Make - detected
+automatically, or forced with an explicit `[build]` command in `lsw.toml`.
+LSW generates cross-toolchain files for CMake and Meson, and exports the
+cross `CC`, `CXX`, `CFLAGS`, and `LDFLAGS` to every build system.
 
-LSW also finds **Zig** (`build.zig`) and **.NET** (`.csproj`/`.sln`/`.fsproj`)
-projects automatically. `lsw build` runs `zig build` and `dotnet publish -r
-<rid> --self-contained` for the Windows target of the environment.
-
-LSW supports **C#** (`.csproj` found automatically). The scope is console apps
-and self-contained apps:
-
-```
-lsw dotnet init hello-cs && cd hello-cs # scaffold a C# console project
-lsw setup && lsw build                  # dotnet publish -r <rid> --self-contained
-lsw run                                 # runs under Wine
-lsw dotnet doctor                       # report C#->Windows toolchain readiness
-```
-
-Builds are self-contained by default. Thus the artifact runs under Wine
-without a .NET runtime in the prefix (LSW ships no runtime). Wine gives bad
-support to the GUI stacks (WPF and WinForms). The supported path is console
-and service apps. Use `lsw verify --native` to get a real Windows
-verdict.
-
-`lsw build --aot` (or `aot = true` in `[toolchain]`) compiles C# with
-NativeAOT. The output is a native PE, not a managed app. The file is smaller.
-The start is faster. The artifact contains no CLR. The full `inspect`,
-`audit`, and `compat` tooling applies. The .NET SDK does not permit cross-OS
-NativeAOT. LSW makes it possible from Linux without a Microsoft SDK: LSW
-writes the MSVC CRT glue (chkstk, security cookie, TLS directory, CRT
-startup), compiles the glue with the MSVC-ABI codegen of clang, maps the
-mingw-w64 import libraries to their MSVC names, and links with `lld-link`. The
-current scope is x86_64 console apps. The host needs `clang` and `lld-link`.
-`lsw dotnet doctor` shows the NativeAOT row.
-
-**Rust** is a first-class language (`Cargo.toml` found automatically):
+**Rust** is first-class (`Cargo.toml` detected automatically):
 
 ```
 lsw rust init hello-rs && cd hello-rs   # scaffold a cargo project for Windows
 lsw setup && lsw build                  # cargo build --target <arch>-pc-windows-gnu
-lsw run                                 # runs under Wine
-lsw rust doctor                         # report Rust->Windows toolchain readiness
+lsw test                                # cargo test, run under Wine
+lsw rust doctor                         # report Rust->Windows readiness
 ```
+
+**C# / .NET** (`.csproj`/`.sln`/`.fsproj` detected automatically) builds
+with `dotnet publish -r <rid> --self-contained`, so the artifact runs under
+Wine with no .NET runtime in the prefix (LSW ships none). WPF and WinForms
+run poorly under Wine; the supported path is console and service apps, with
+`lsw verify --native` for the real Windows verdict. `lsw build --aot`
+compiles C# with NativeAOT to a native PE: smaller, faster to start, no
+CLR, and the full `inspect`/`audit`/`compat` tooling applies. The .NET SDK
+does not permit cross-OS NativeAOT; LSW supplies the MSVC CRT glue itself
+and links with `lld-link`, so it works from Linux without a Microsoft SDK
+(needs `clang` and `lld-link`; x86_64 console apps only - `lsw dotnet
+doctor` shows the row).
+
+**Zig** (`build.zig`) builds via `zig build` for the environment's Windows
+target.
 
 ## Target ABIs
 
-LSW builds **GNU-ABI** binaries with MinGW-w64 by default. LSW can also build
+LSW builds **GNU-ABI** binaries with MinGW-w64 by default. It can also build
 **MSVC-ABI** binaries with clang-cl and a Windows SDK that you supply (LSW
 does not redistribute SDK content):
 
 ```
-lsw sdk import winsdk --from ~/splat    # import an SDK (e.g. an `xwin splat`)
+lsw sdk acquire winsdk --accept-license # download via xwin, or: lsw sdk import
 lsw env create msvc --sdk winsdk        # clang-cl + lld-link, MSVC ABI
 lsw build                               # produces an MSVC-ABI PE
 ```
 
-`lsw sdk list` and `lsw sdk remove` manage the imported SDKs.
-
 ## Target architectures
 
-An environment targets `x86_64` (the default), `x86`, `aarch64`, `armv7`, or
-`arm64ec`. Select the architecture with `lsw env create --arch <arch>`. LSW
-finds the toolchain in `$LSW_TOOLCHAIN_DIRS` (colon-separated), in managed
-toolchains under `~/.local/share/lsw/toolchains`, and on `$PATH`. Thus you
-can use a self-contained cross toolchain, for example
-[llvm-mingw](https://github.com/mstorsjo/llvm-mingw), without changes to the
-system mingw-w64 - `lsw toolchain install llvm-mingw` downloads and manages
-one for you:
+An environment targets `x86_64` (the default), `x86`, `aarch64`, `armv7`,
+or `arm64ec`; pick with `lsw env create --arch <arch>`. Toolchains are found
+in `$LSW_TOOLCHAIN_DIRS`, in managed installs under
+`~/.local/share/lsw/toolchains`, then on `$PATH` - so a self-contained
+[llvm-mingw](https://github.com/mstorsjo/llvm-mingw) works without touching
+the system mingw-w64, and `lsw toolchain install llvm-mingw` manages one
+for you:
 
 ```
 lsw toolchain install llvm-mingw    # latest release, all five architectures
@@ -233,64 +191,53 @@ lsw env create arm64 --arch aarch64
 lsw build                           # -> build/<name>.exe (ARM64 PE)
 ```
 
-You can build an `aarch64` PE on an `x86_64` host. To run it locally, CPU
-translation is necessary. When the target CPU family is not the host CPU
-family, `lsw run` starts the program in qemu user-mode emulation with an
-architecture-specific Wine. Supply the emulator (`qemu-aarch64`, `qemu-arm`).
-Point `LSW_WINE_AARCH64` (or `LSW_WINE_ARM`) to the applicable Wine. If
-necessary, set `QEMU_LD_PREFIX` to the sysroot of that Wine. Without these
-tools, `lsw run` fails with an error that names the missing tools. Same-family
-targets (an `x86` PE on `x86_64`) run directly without an emulator. You can
-also verify ARM64 output on real hardware with `lsw verify --native`.
-
-A binary from `lsw build` is a genuine Windows PE executable. When you run it
-under LSW, you use the local compatibility runtime (Wine). LSW does not tell
-you that local runtime success is native Windows success.
+Cross-family targets (an `aarch64` PE on an `x86_64` host) run through qemu
+user-mode emulation: supply the emulator (`qemu-aarch64`, `qemu-arm`), point
+`LSW_WINE_AARCH64` or `LSW_WINE_ARM` at an architecture-specific Wine, and
+set `QEMU_LD_PREFIX` if that Wine needs its sysroot. Missing pieces produce
+an error that names them. Same-family targets (an `x86` PE on `x86_64`) run
+directly, and `lsw verify --native` covers real ARM64 hardware.
 
 ## Linking: static (default) or dynamic
 
-LSW links the C/C++ runtime statically by default. Thus the artifacts are
-self-contained. They need only the DLLs of Windows 10 and later (KERNEL32 and
-the UCRT api-sets). To link the shared mingw runtime, set `link = "dynamic"`
-in `[toolchain]` in `lsw.toml`. LSW then puts the runtime DLLs that the binary
-imports (for example `libstdc++-6.dll`, `libgcc_s_seh-1.dll`,
-`libwinpthread-1.dll`, transitively) adjacent to the artifact.
+LSW links the C/C++ runtime statically by default, so artifacts are
+self-contained and need only DLLs every Windows 10+ install has (KERNEL32,
+the UCRT api-sets). Set `link = "dynamic"` in `[toolchain]` to link the
+shared mingw runtime instead; LSW then places the runtime DLLs the binary
+imports (`libstdc++-6.dll`, `libgcc_s_seh-1.dll`, `libwinpthread-1.dll`,
+transitively) next to the artifact.
 
 ## Reproducible builds
 
-`lsw build --reproducible` makes byte-identical artifacts on each build. It
-gives `-Wl,--no-insert-timestamp` to the linker. It sets the PE
-`TimeDateStamp` to zero in each output binary.
+`lsw build --reproducible` makes byte-identical artifacts: it passes
+`-Wl,--no-insert-timestamp` to the linker and zeroes the PE `TimeDateStamp`
+in every output. `lsw verify --reproducible` proves it by building twice.
 
 ## Packaging and signing
 
-`lsw package` makes a distributable package from the build output:
+`lsw package` turns the build output into a distributable:
 
 ```
 lsw package --target portable-directory   # dist/<name>-<arch>/
-lsw package --target zip                   # + .zip
-lsw package --target msi                   # Windows Installer (needs wixl/msitools)
-lsw package --target msix                  # signed MSIX (needs zip, osslsigncode, openssl)
+lsw package --target zip                  # + .zip
+lsw package --target msi                  # Windows Installer (needs wixl/msitools)
+lsw package --target msix                 # signed MSIX (needs zip, osslsigncode, openssl)
+lsw package --target nsis                 # NSIS setup.exe (needs makensis)
+lsw package --target winget               # MSI + winget manifests
 ```
 
-`lsw package --target msi --verify` does an install test of the MSI before it
-reports success. It clones the active environment to a scratch prefix. It runs
-`msiexec /i` quietly. It makes sure that each packaged file is under Program
-Files. It uninstalls with `msiexec /x`. It makes sure that no files remain. It
-removes the scratch environment. Failures show as `LSW2040` with the msiexec
-output.
+A `[package]` section in `lsw.toml` (version, publisher, description, icon,
+shortcuts) feeds the installer metadata and is embedded into the built PE
+as an icon, VERSIONINFO resource, and application manifest.
+`lsw package --target msi --verify` installs the MSI quietly into a scratch
+clone of the environment, checks every file landed under Program Files,
+uninstalls, and verifies nothing was left behind (failures show as
+`LSW2040`).
 
-A `[package]` section in `lsw.toml` (version, publisher, description, icon)
-feeds the MSI and MSIX metadata and is embedded into the built PE as an icon,
-VERSIONINFO resource, and application manifest. See
-[docs/reference/configuration.md](docs/reference/configuration.md).
-
-LSW builds MSIX packages natively (manifest, block map, OPC zip). LSW signs
-them with a cached self-signed identity (`~/.local/share/lsw/msix/`).
-`lsw sign <pe> [--publisher <subject>]` does the same for one binary.
-Self-signed artifacts install only where the certificate is trusted, or in
-Windows developer mode. As with `lsw verify`, LSW does not tell you that a
-Windows installation is successful.
+MSIX packages are built natively (manifest, block map, OPC zip) and signed
+with a cached self-signed identity; `lsw sign <pe>` does the same for one
+binary, or signs with a real PFX certificate. Self-signed artifacts install
+only where the certificate is trusted, or in Windows developer mode.
 
 ## Project configuration (`lsw.toml`)
 
@@ -300,79 +247,53 @@ name = "hello"
 
 [target]
 arch = "x86_64"      # x86_64 | x86 | aarch64 | armv7 | arm64ec
-api  = "win10"       # -> _WIN32_WINNT/WINVER/NTDDI defines (win7/win8/win10/win11/...)
+api  = "win10"       # -> _WIN32_WINNT/WINVER/NTDDI defines
 
 [toolchain]
 link = "dynamic"     # static (default) | dynamic
-aot  = false         # C# NativeAOT (see Languages)
-
-[env.vars]           # extra Windows env vars for run/exec
-RUST_LOG = "debug"
-[env.secret]         # inject a host env var by name (kept out of the manifest)
-API_TOKEN = "HOST_API_TOKEN"
-
-[[registry.seed]]    # applied by `lsw registry seed`
-key   = "HKCU\\Software\\Hello"
-name  = "FirstRun"
-value = "1"
-type  = "dword"      # string (default) | dword | expand
-
-[sandbox]            # for `lsw run --sandbox strict`
-network     = "host" # host | isolated (NAT via pasta/slirp4netns) | none
-cpu_seconds = 30
-memory_mb   = 2048
-
-[verify]             # native Windows verification host
-transport     = "ssh"
-host          = "user@win-host"
-identity_file = "~/.ssh/lsw_verify"
 
 [build]              # explicit build command (skips auto-detection)
 command = ["make", "-f", "windows.mk"]
-
-[test]               # explicit test command (run under the LSW environment)
-command = ["ctest", "--test-dir", "build"]
-
-[dependencies]       # prebuilt Windows libraries via `lsw deps add`
-zlib = "1.3.1-1"
 ```
 
-A generated `lsw.toml` contains only `[project]`; every other section is
-optional and defaults are omitted. The full schema, including the
-`[environment]`, `[runtime]`, and `[filesystem]` sections and every `LSW_*`
-environment variable, is in
+A generated `lsw.toml` contains only `[project]`; everything else is
+optional. The full schema - `[package]`, `[env]`, `[registry]`, `[sandbox]`,
+`[verify]`, `[dependencies]`, and every `LSW_*` environment variable - is in
 [docs/reference/configuration.md](docs/reference/configuration.md). Commit
 both `lsw.toml` and `lsw.lock` to version control.
 
 ## Sandboxing and security
 
 The Wine prefix is a **compatibility boundary, not a security boundary**. By
-default, `lsw run` runs a program with your Linux privileges. The program can
-get access to the host filesystem through the `Z:` drive of Wine. The Windows
-user profile does not show the host home directory, unless you made the
-environment with `--expose-home`. For real isolation, use `lsw run --sandbox
-strict` (bubblewrap). The sandbox has read-only system directories and a
-masked home directory. Only the environment and the project are writable.
-Optional CPU/memory rlimits and network modes are available. See
-`SECURITY.md`.
+default `lsw run` executes a program with your Linux privileges, and
+programs can reach the host filesystem through Wine's `Z:` drive. The
+Windows user profile hides your host home directory unless the environment
+was created with `--expose-home`. For real isolation, `lsw run --sandbox
+strict` runs the program under bubblewrap: read-only system directories,
+masked home, only the environment and project writable, with optional
+CPU/memory rlimits and network modes. Details in
+[SECURITY.md](SECURITY.md).
 
 ## Environments
 
-Environments are in `~/.local/share/lsw/environments/<name>/`.
-`lsw env clone <src> <dst>` makes a fast reflink copy. `lsw env restore
-<name>` builds an environment again from `lsw.lock` and makes sure that it
-agrees with the pins. This makes CI reproducible.
+Environments live in `~/.local/share/lsw/environments/<name>/`.
+`lsw env clone` makes a fast reflink copy, `lsw env restore <name>` rebuilds
+an environment from `lsw.lock` and verifies it matches the pins - the basis
+of reproducible CI - and `lsw env export` / `lsw env import-archive` move
+whole environments between machines (CI cache handoff).
 
-## Notes
+## Editor integration
 
-- `lsw shell --windows` opens `cmd` (or `powershell.exe` when the prefix has
-  it) in the project directory `C:\src\<name>`. Non-interactive `lsw run`
-  keeps the host working directory. Wine shows that directory under `Z:\`.
-- LSW ships only its own source and the `lsw`/`lswd` binaries. LSW does not
-  ship Wine, MinGW, or Microsoft SDK/CRT/redistributable content. You supply
-  those, and LSW refers to them by path. The dependency licenses are
-  permissive. `cargo deny` (`deny.toml`) makes sure of this. Run it before
-  each release.
+- **VS Code**: `code --install-extension lsw.lsw` - build/test tasks with
+  clickable errors, IntelliSense configuration from `lsw ide env`, and Wine
+  debugging through `lsw dap`.
+- **Neovim**: point your plugin manager at `editors/nvim` and call
+  `require("lsw").setup()`.
+- **JetBrains**: External Tools definitions in `editors/jetbrains`.
+
+Details in [editors/README.md](editors/README.md). Any other editor can use
+`lsw ide env` (compiler, flags, include paths as JSON) and the `lsw dap`
+debug adapter directly.
 
 ## License
 

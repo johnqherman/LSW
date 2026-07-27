@@ -253,7 +253,7 @@ No build system was detected.
 
 The target os in lsw.toml is not supported.
 
-**Fix:** set os = \"windows\"; LSW only targets Windows
+**Fix:** set os = "windows"; LSW only targets Windows
 
 ### LSW2009
 
@@ -331,7 +331,7 @@ The named SDK is not imported.
 
 An unsupported verification transport was configured.
 
-**Fix:** set transport to \"ssh\", \"winrm\", or \"https\" in [verify]
+**Fix:** set transport to "ssh", "winrm", or "https" in [verify]
 
 ### LSW2022
 
@@ -385,7 +385,7 @@ MSIX signing failed.
 
 An invalid [sandbox] network value was set.
 
-**Fix:** use network = \"host\", \"isolated\", or \"none\
+**Fix:** use network = "host", "isolated", or "none"
 
 ### LSW2031
 
@@ -437,9 +437,9 @@ Cross-architecture execution needs a Wine build for the target arch.
 
 ### LSW2039
 
-Case = \"strict\" found case-insensitive file name collisions.
+Case = "strict" found case-insensitive file name collisions.
 
-**Fix:** rename the colliding files, or set [filesystem] case = \"native\
+**Fix:** rename the colliding files, or set [filesystem] case = "native"
 
 ### LSW2040
 
@@ -457,13 +457,13 @@ C# NativeAOT cross-compilation prerequisites are missing.
 
 The SDK import failed.
 
-**Fix:** pass --from <dir> pointing at an SDK directory; see the error detail
+**Fix:** pass --from \<dir> pointing at an SDK directory; see the error detail
 
 ### LSW2043
 
 A custom [filesystem] project_drive/mount_project was set but is not supported.
 
-**Fix:** use project_drive = \"C:\" and mount_project = \"/src\" (the project mounts at C:\\src\\<name>)
+**Fix:** use project_drive = "C:" and mount_project = "/src" (the project mounts at C:\\src\\<name>)
 
 ### LSW2044
 
