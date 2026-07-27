@@ -1,0 +1,64 @@
+site_name: LSW
+site_description: Build, run, debug, and ship Windows software without leaving Linux.
+site_url: https://johnqherman.github.io/LSW/
+repo_url: https://github.com/johnqherman/LSW
+repo_name: johnqherman/LSW
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+  features:
+    - navigation.sections
+    - navigation.instant
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - content.code.copy
+    - content.action.edit
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install: guide/install.md
+      - Quickstart: guide/quickstart.md
+  - Guides:
+      - Languages and build systems: guide/languages.md
+      - Target ABIs and architectures: guide/targets.md
+      - Testing and debugging: guide/testing.md
+      - Packaging and signing: guide/packaging.md
+      - Environments and reproducibility: guide/environments.md
+      - Sandboxing and security: guide/security.md
+      - CI: guide/ci.md
+      - Editor integration: guide/editors.md
+  - Reference:
+      - Commands: reference/commands.md
+      - Configuration: reference/configuration.md
+      - Troubleshooting and error codes: troubleshooting.md
+
+exclude_docs: |
+  reference/README.md
