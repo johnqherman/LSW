@@ -50,6 +50,10 @@ nav:
       - Languages and build systems: guide/languages.md
       - Target ABIs and architectures: guide/targets.md
       - Testing and debugging: guide/testing.md
+      - Binary analysis: guide/analysis.md
+      - Compatibility and tracing: guide/compat.md
+      - Native Windows verification: guide/verify.md
+      - Shell, paths, and Windows state: guide/windows-state.md
       - Packaging and signing: guide/packaging.md
       - Environments and reproducibility: guide/environments.md
       - Sandboxing and security: guide/security.md
