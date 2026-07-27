@@ -2,4 +2,3 @@ target/
 build/
 *.exe
 .claude/
-site/
