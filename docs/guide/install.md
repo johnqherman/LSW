@@ -1,18 +1,27 @@
 # Install
 
+## Install LSW
+
 ```
 cargo install lsw && lsw install
 ```
 
 `cargo install lsw` puts the `lsw` and `lswd` binaries on your `PATH`.
 `lsw install` adds shell completions (bash, zsh, fish) and man pages. The
-shell integration is optional; skip it with plain `cargo install lsw`.
+shell integration is optional. To install only the binaries, run
+`cargo install lsw` alone.
 
-## Host requirements
+## Install the host tools
 
-LSW drives tools that are already on your machine: Wine (9+ recommended,
-`lsw doctor` warns on older), a MinGW-w64 or llvm-mingw cross toolchain, and
-your build system. For the default C/C++ path that means:
+LSW controls tools that are on your machine. It does not replace them. You
+need:
+
+- Wine, version 9 or later. `lsw doctor` shows a warning for older
+  versions.
+- A MinGW-w64 or llvm-mingw cross toolchain.
+- Your build system.
+
+For the default C/C++ path, install these packages:
 
 ```
 # Ubuntu / Debian
@@ -24,21 +33,47 @@ sudo dnf install wine mingw64-gcc mingw64-gcc-c++ cmake ninja-build
 # Arch
 sudo pacman -S wine mingw-w64-gcc cmake ninja
 
-# Nix (toolchain via lsw toolchain install or LSW_TOOLCHAIN_DIRS)
+# Nix (get the toolchain with: lsw toolchain install)
 nix-shell -p wineWowPackages.stable cmake ninja
 ```
 
-Rust projects need `rustup` with the `x86_64-pc-windows-gnu` target; .NET
-projects need the `dotnet` SDK; Zig projects need `zig`. Optional features
-have their own tools: `xvfb-run` (headless GUI tests), `bubblewrap`
-(`--sandbox strict`), `msitools`/`wixl` (MSI), `makensis` (NSIS), `zip`,
-`osslsigncode`, `openssl` (MSIX and signing), `curl` + `tar`
-(`lsw deps add`), and `qemu-user` (cross-family emulation).
+For other languages:
 
-LSW ships only its own source and binaries - no Wine, no MinGW, no Microsoft
-SDK or redistributable content. You supply those; nothing is downloaded
-behind your back, and every download LSW can make on request is documented
-in [SECURITY.md](https://github.com/johnqherman/LSW/blob/main/SECURITY.md).
-`lsw doctor` checks the whole setup and names anything missing. If your
-Wine is not on `PATH` (WineHQ `/opt` builds, Proton, Nix profiles), point
-`LSW_WINE` at the binary.
+- Rust projects need `rustup` with the `x86_64-pc-windows-gnu` target.
+- .NET projects need the `dotnet` SDK.
+- Zig projects need `zig`.
+
+Some features need more tools. Install them only when you use the feature:
+
+| Feature | Tools |
+|---------|-------|
+| Headless GUI tests | `xvfb-run` |
+| `lsw run --sandbox strict` | `bubblewrap` |
+| `lsw package --target msi` | `msitools` (`wixl`) |
+| `lsw package --target msix`, `lsw sign` | `zip`, `osslsigncode`, `openssl` |
+| `lsw package --target nsis` | `makensis` |
+| `lsw deps add` | `curl`, `tar` |
+| Cross-family emulation | `qemu-user` |
+
+## What LSW downloads
+
+LSW ships only its own source and binaries. It does not ship Wine, MinGW,
+or Microsoft SDK content. You supply those tools. LSW does not download
+files without your command. Three commands download content, and only when
+you run them:
+
+- `lsw deps add` (MSYS2 package repositories)
+- `lsw toolchain install` (llvm-mingw releases from GitHub)
+- `lsw sdk acquire` (Microsoft SDK content through xwin)
+
+See
+[SECURITY.md](https://github.com/johnqherman/LSW/blob/main/SECURITY.md)
+for the full list and the trust model.
+
+## Check the setup
+
+Run `lsw doctor`. It examines the host, Wine, the toolchain, your build
+tools, and the active environment. It names each missing item.
+
+If your Wine binary is not on `PATH`, set `LSW_WINE` to its location.
+Examples: WineHQ builds in `/opt`, Proton, and Nix profiles.
