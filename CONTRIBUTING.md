@@ -69,6 +69,20 @@ Use the style of the module that you change.
   `fix:`, `docs:`, `chore:`, or `refactor:` prefix, and a subject that gives
   the why when the why is not obvious.
 
+## The VS Code extension
+
+The extension source is `editors/vscode/src/extension.ts`. To develop it:
+
+```
+cd editors/vscode
+npm install
+npm run build            # npm run typecheck for the type checks
+code --extensionDevelopmentPath=$PWD
+```
+
+`vsce package` makes a `.vsix`; `vsce publish` releases it (bump the
+version in `package.json` first).
+
 ## Tests against real Windows
 
 The native-verification paths (`lsw verify --native`,
