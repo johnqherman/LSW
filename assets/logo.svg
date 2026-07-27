@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#242438"/>
+      <stop offset="1" stop-color="#191924"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.55">
+      <stop offset="0" stop-color="#35354e" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#35354e" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="tile">
+      <rect x="0" y="0" width="256" height="256" rx="44"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="256" height="256" fill="url(#bg)"/>
+    <rect width="256" height="256" fill="url(#glow)"/>
+    <ellipse cx="128" cy="234" rx="80" ry="12" fill="#000" opacity="0.3"/>
+    <ellipse cx="102" cy="228" rx="26" ry="12" fill="#e08a4e" transform="rotate(-8 102 228)"/>
+    <ellipse cx="154" cy="228" rx="26" ry="12" fill="#e08a4e" transform="rotate(8 154 228)"/>
+    <path d="M128 26 C 88 26, 66 62, 64 118 C 62 176, 88 228, 128 228 C 168 228, 194 176, 192 118 C 190 62, 168 26, 128 26 Z" fill="#171720"/>
+    <ellipse cx="110" cy="86" rx="24" ry="22" fill="#f2f0ea"/>
+    <ellipse cx="146" cy="86" rx="24" ry="22" fill="#f2f0ea"/>
+    <ellipse cx="128" cy="96" rx="30" ry="18" fill="#f2f0ea"/>
+    <circle cx="113" cy="80" r="8" fill="#171720"/>
+    <circle cx="143" cy="80" r="8" fill="#171720"/>
+    <circle cx="115.5" cy="77" r="2.6" fill="#f2f0ea"/>
+    <circle cx="145.5" cy="77" r="2.6" fill="#f2f0ea"/>
+    <path d="M112 98 Q 128 92, 144 98 Q 140 114, 128 118 Q 116 114, 112 98 Z" fill="#ea9a62"/>
+    <rect x="80" y="118" width="96" height="94" rx="18" fill="#f2f0ea"/>
+    <rect x="88" y="126" width="38" height="37" rx="8" fill="#ed8796"/>
+    <rect x="130" y="126" width="38" height="37" rx="8" fill="#a6da95"/>
+    <rect x="88" y="167" width="38" height="37" rx="8" fill="#7dc4e4"/>
+    <rect x="130" y="167" width="38" height="37" rx="8" fill="#eed49f"/>
+    <path d="M74 100 C 50 122, 44 168, 62 196 C 72 208, 88 204, 90 190 C 80 172, 78 140, 84 116 Z" fill="#131320"/>
+    <path d="M182 100 C 206 122, 212 168, 194 196 C 184 208, 168 204, 166 190 C 176 172, 178 140, 172 116 Z" fill="#131320"/>
+  </g>
+</svg>
