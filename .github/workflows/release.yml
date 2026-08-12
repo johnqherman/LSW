@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  crates:
+    needs: ci
+    uses: ./.github/workflows/release-crates.yml
+    secrets: inherit
+
+  vscode:
+    needs: ci
+    uses: ./.github/workflows/release-vscode.yml
+    secrets: inherit
+
+  github-release:
+    needs: [crates, vscode]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" --generate-notes
