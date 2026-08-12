@@ -57,13 +57,6 @@ impl Project {
                 os: manifest.target.os,
             });
         }
-        if manifest.filesystem.project_drive != "C:" || manifest.filesystem.mount_project != "/src"
-        {
-            return Err(Error::UnsupportedFilesystem {
-                drive: manifest.filesystem.project_drive.clone(),
-                mount: manifest.filesystem.mount_project,
-            });
-        }
         Ok(Self { root, manifest })
     }
 

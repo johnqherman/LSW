@@ -241,12 +241,6 @@ pub enum Error {
     SdkImportFailed { path: PathBuf, detail: String },
 
     #[error(
-        "LSW2043: [filesystem] project_drive = \"{drive}\" mount_project = \"{mount}\" is not supported\n\
-         Only project_drive = \"C:\" and mount_project = \"/src\" work today; the project mounts at C:\\src\\<name>"
-    )]
-    UnsupportedFilesystem { drive: String, mount: String },
-
-    #[error(
         "LSW2044: cannot restore the SDK/MSVC toolchain '{provider}' from lsw.lock (the lockfile records no SDK identity)\n\
          Recreate it with: lsw sdk import <name> --from <path>  then  lsw env create {name} --sdk <name>"
     )]
