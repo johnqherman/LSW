@@ -33,14 +33,24 @@ pub(crate) fn config(op: &ConfigCmd, format: Format) -> lsw_core::Result<ExitCod
     }
 }
 
-pub(crate) fn ci(op: &CiCmd) -> lsw_core::Result<ExitCode> {
+pub(crate) fn ci(op: &CiCmd, format: Format) -> lsw_core::Result<ExitCode> {
     match op {
         CiCmd::Init { provider } => {
             let path = match provider {
                 CiProvider::Github => lsw_core::ciops::init_github(&cwd()?)?,
                 CiProvider::Gitlab => lsw_core::ciops::init_gitlab(&cwd()?)?,
             };
-            println!("wrote {}", path.display());
+            if format == Format::Json {
+                let name = match provider {
+                    CiProvider::Github => "github",
+                    CiProvider::Gitlab => "gitlab",
+                };
+                crate::cmd::emit_json(
+                    &serde_json::json!({"action": "init", "provider": name, "path": path.display().to_string()}),
+                );
+            } else {
+                println!("wrote {}", path.display());
+            }
             Ok(ExitCode::SUCCESS)
         }
     }
