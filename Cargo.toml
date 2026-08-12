@@ -30,21 +30,21 @@ lsw-runtime = { path = "crates/lsw-runtime", version = "0.5.0" }
 lsw-path = { path = "crates/lsw-path", version = "0.5.0" }
 lsw-pe = { path = "crates/lsw-pe", version = "0.5.0" }
 
-base64 = "0.22"
+base64 = "0.23"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
-clap_mangen = "0.2"
+clap_mangen = "0.3"
 dirs = "6"
 libc = "0.2"
 minidump = "0.26"
-notify = "6"
-object = { version = "0.37", default-features = false, features = ["read", "std"] }
-gimli = { version = "0.31", default-features = false, features = ["read", "std"] }
+notify = "8"
+object = { version = "0.40", default-features = false, features = ["read", "std"] }
+gimli = { version = "0.34", default-features = false, features = ["read", "std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
+sha2 = "0.11"
 thiserror = "2"
-toml = "0.9"
+toml = "1.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tempfile = "3"
