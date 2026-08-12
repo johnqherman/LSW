@@ -2,7 +2,7 @@
   "name": "lsw",
   "displayName": "LSW - Linux Subsystem for Windows Development",
   "description": "Build, run, test, and debug Windows applications from Linux through the lsw CLI.",
-  "version": "0.2.0",
+  "version": "0.5.0",
   "publisher": "lsw",
   "icon": "images/icon.png",
   "galleryBanner": { "color": "#1e1e2e", "theme": "dark" },
