@@ -255,37 +255,14 @@ impl EnvironmentSection {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct FilesystemSection {
-    #[serde(default = "default_project_drive")]
-    pub project_drive: String,
-    #[serde(default = "default_mount_project")]
-    pub mount_project: String,
     #[serde(
         default,
         rename = "case",
         skip_serializing_if = "CaseSensitivity::is_default"
     )]
     pub case: CaseSensitivity,
-}
-
-fn default_project_drive() -> String {
-    "C:".to_owned()
-}
-
-fn default_mount_project() -> String {
-    "/src".to_owned()
-}
-
-impl Default for FilesystemSection {
-    fn default() -> Self {
-        Self {
-            project_drive: default_project_drive(),
-            mount_project: default_mount_project(),
-            case: CaseSensitivity::Native,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

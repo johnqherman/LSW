@@ -81,8 +81,6 @@ mod tests {
         assert_eq!(m.target.os, "windows");
         assert_eq!(m.target.arch, TargetArch::X86_64);
         assert_eq!(m.runtime.provider, "wine");
-        assert_eq!(m.filesystem.project_drive, "C:");
-        assert_eq!(m.filesystem.mount_project, "/src");
         assert_eq!(m.toolchain.link, LinkMode::Static);
         assert!(m.build.is_none());
     }
