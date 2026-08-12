@@ -335,14 +335,21 @@ fn windows_env(env: &Environment, project: Option<&Project>) -> Vec<(String, Str
 
 fn windows_cwd(env: &Environment, project: Option<&Project>) -> Option<PathBuf> {
     let project = project?;
+    let project_link = env.layout.src().join(&project.manifest.project.name);
     let cwd = std::env::current_dir().ok()?;
     let mapper = crate::envops::mapper(env, project);
-    let windows = mapper.to_windows(&cwd).ok()?;
-    let rest = windows.strip_prefix("C:\\")?;
-    if rest.is_empty() {
-        return Some(env.layout.drive_c());
+    if let Ok(windows) = mapper.to_windows(&cwd) {
+        if let Some(rest) = windows.strip_prefix("C:\\") {
+            if rest.is_empty() {
+                return Some(env.layout.drive_c());
+            }
+            let candidate = env.layout.drive_c().join(rest.replace('\\', "/"));
+            if candidate.is_dir() {
+                return Some(candidate);
+            }
+        }
     }
-    Some(env.layout.drive_c().join(rest.replace('\\', "/"))).filter(|p| p.is_dir())
+    Some(project_link).filter(|p| p.is_dir())
 }
 
 fn resolve_program(program: &Path, domain: Domain) -> Result<ResolvedProgram> {
@@ -398,9 +405,16 @@ fn safe_dos_path(path: &str) -> bool {
 
 fn dos_cwd(env: &Environment, project: Option<&Project>) -> Option<String> {
     let project = project?;
+    let fallback = format!("C:\\src\\{}", project.manifest.project.name);
     let cwd = std::env::current_dir().ok()?;
-    let windows = crate::envops::mapper(env, project).to_windows(&cwd).ok()?;
-    (windows.starts_with("C:\\") && safe_dos_path(&windows)).then_some(windows)
+    let windows = crate::envops::mapper(env, project)
+        .to_windows(&cwd)
+        .unwrap_or(fallback.clone());
+    if windows.starts_with("C:\\") && safe_dos_path(&windows) {
+        Some(windows)
+    } else {
+        Some(fallback)
+    }
 }
 
 fn shell_invocation(powershell: bool, dos_cwd: Option<&str>) -> (PathBuf, Vec<String>) {
