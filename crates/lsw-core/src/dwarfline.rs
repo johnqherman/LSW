@@ -149,12 +149,9 @@ impl DebugInfo {
                     }
                 };
                 let addr = row.address();
-                if !lines.contains_key(&*norm_key) {
-                    lines.insert(norm_key.to_string(), BTreeMap::new());
-                }
                 lines
-                    .get_mut(&*norm_key)
-                    .expect("inserted above")
+                    .entry(norm_key.to_string())
+                    .or_default()
                     .entry(line)
                     .or_default()
                     .push((file.clone(), addr));

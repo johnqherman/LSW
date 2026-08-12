@@ -99,7 +99,10 @@ pub(crate) fn find_wine() -> Option<PathBuf> {
 }
 
 fn wine_override() -> Result<PathBuf, RuntimeError> {
-    let path = PathBuf::from(std::env::var_os("LSW_WINE").expect("checked by caller"));
+    let Some(raw) = std::env::var_os("LSW_WINE") else {
+        return Err(RuntimeError::WineNotFound);
+    };
+    let path = PathBuf::from(raw);
     if is_executable_file(&path) {
         std::path::absolute(&path).map_err(|_| RuntimeError::WineOverrideInvalid { path })
     } else {
