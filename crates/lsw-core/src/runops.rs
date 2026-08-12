@@ -338,15 +338,15 @@ fn windows_cwd(env: &Environment, project: Option<&Project>) -> Option<PathBuf> 
     let project_link = env.layout.src().join(&project.manifest.project.name);
     let cwd = std::env::current_dir().ok()?;
     let mapper = crate::envops::mapper(env, project);
-    if let Ok(windows) = mapper.to_windows(&cwd) {
-        if let Some(rest) = windows.strip_prefix("C:\\") {
-            if rest.is_empty() {
-                return Some(env.layout.drive_c());
-            }
-            let candidate = env.layout.drive_c().join(rest.replace('\\', "/"));
-            if candidate.is_dir() {
-                return Some(candidate);
-            }
+    if let Ok(windows) = mapper.to_windows(&cwd)
+        && let Some(rest) = windows.strip_prefix("C:\\")
+    {
+        if rest.is_empty() {
+            return Some(env.layout.drive_c());
+        }
+        let candidate = env.layout.drive_c().join(rest.replace('\\', "/"));
+        if candidate.is_dir() {
+            return Some(candidate);
         }
     }
     Some(project_link).filter(|p| p.is_dir())
