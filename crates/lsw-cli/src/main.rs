@@ -64,8 +64,6 @@ fn note_format_gaps(cli: &Cli) {
             | Cmd::Run { .. }
             | Cmd::Exec { .. }
             | Cmd::Shell { .. }
-            | Cmd::Sbom { .. }
-            | Cmd::Ci(_)
             | Cmd::Sign { .. }
             | Cmd::Kill { .. }
             | Cmd::Dap
@@ -214,7 +212,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             cmd::inspect::strings(f, min, cli.format)
         }),
         Cmd::Deps(op) => cmd::inspect::deps(op, &dirs, cli.format),
-        Cmd::Ci(op) => cmd::config::ci(op),
+        Cmd::Ci(op) => cmd::config::ci(op, cli.format),
         Cmd::Config(op) => cmd::config::config(op, cli.format),
         Cmd::Sign {
             file,
