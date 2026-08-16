@@ -347,9 +347,6 @@ pub(crate) enum Cmd {
     /// C#/.NET support (console, self-contained; managed, not native).
     #[command(subcommand)]
     Dotnet(DotnetCmd),
-    /// Talk to the optional lswd daemon.
-    #[command(subcommand)]
-    Daemon(DaemonCmd),
     /// Discover and inspect out-of-process provider plugins.
     #[command(subcommand)]
     Plugin(PluginCmd),
@@ -466,16 +463,6 @@ pub(crate) enum IdeCmd {
 pub(crate) enum PluginCmd {
     /// List discovered `lsw-provider-*` plugins and their handshake info.
     List,
-}
-
-#[derive(Subcommand)]
-pub(crate) enum DaemonCmd {
-    /// Start the daemon in the background (spawns lswd).
-    Start,
-    /// Show whether the daemon is running and its version.
-    Status,
-    /// Ask a running daemon to stop.
-    Stop,
 }
 
 #[derive(Subcommand)]

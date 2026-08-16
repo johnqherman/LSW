@@ -267,11 +267,6 @@ const TABLE: &[Explanation] = &[
         hint: "update or fix the plugin named in the error",
     },
     Explanation {
-        code: "LSW2023",
-        summary: "the optional lsw daemon is not running",
-        hint: "start it with `lswd`; most commands work without the daemon",
-    },
-    Explanation {
         code: "LSW2024",
         summary: "an unsafe path or name was passed to native verification",
         hint: "use a drive-letter path with segments of [A-Za-z0-9._+-] only",

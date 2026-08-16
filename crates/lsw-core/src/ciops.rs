@@ -156,7 +156,7 @@ build-windows:
     - dpkg --add-architecture i386
     - apt-get update
     - apt-get install -y wine wine64 wine32 mingw-w64 cmake ninja-build xvfb curl build-essential
-    - test -x .cargo-bin/lsw || (curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal && . "$HOME/.cargo/env" && cargo install lsw@{lsw_version} && mkdir -p .cargo-bin && cp "$HOME/.cargo/bin/lsw" "$HOME/.cargo/bin/lswd" .cargo-bin/)
+    - test -x .cargo-bin/lsw || (curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal && . "$HOME/.cargo/env" && cargo install lsw@{lsw_version} && mkdir -p .cargo-bin && cp "$HOME/.cargo/bin/lsw" .cargo-bin/)
     - export PATH="$CI_PROJECT_DIR/.cargo-bin:$PATH"
   script:
     - lsw setup

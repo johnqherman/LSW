@@ -124,13 +124,6 @@ pub enum Error {
     RustTargetUnavailable { arch: String },
 
     #[error(
-        "LSW2023: lsw daemon not available at {}: {detail}\n\
-         Start it with: lswd  (the daemon is optional; most commands work without it)",
-        path.display()
-    )]
-    DaemonUnavailable { path: PathBuf, detail: String },
-
-    #[error(
         "LSW2024: unsafe value '{value}' for native verification\n\
          Remote paths and artifact names must be a drive-letter path with segments of [A-Za-z0-9._+-] only.\n\
          This prevents command injection on the Windows host."

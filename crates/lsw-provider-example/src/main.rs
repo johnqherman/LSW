@@ -1,3 +1,12 @@
+//! Reference implementation of the LSW provider plugin protocol.
+//!
+//! This binary demonstrates the minimal contract: read newline-delimited
+//! JSON-RPC requests from stdin, respond on stdout. It handles `handshake`,
+//! `version`, `resolve`, and `shutdown`.
+//!
+//! Name the binary `lsw-provider-<name>` and place it on `$PATH` for
+//! automatic discovery by `lsw plugin list`.
+
 use std::io::{BufRead, Read, Write};
 
 const PROTOCOL: u32 = 1;

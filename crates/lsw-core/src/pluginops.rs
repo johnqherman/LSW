@@ -1,3 +1,19 @@
+//! Provider plugin protocol: JSON-RPC 2.0 over stdin/stdout.
+//!
+//! Plugins are external executables named `lsw-provider-*` discovered on `$PATH`.
+//! Each plugin is a long-running subprocess that speaks newline-delimited JSON-RPC.
+//!
+//! **Lifecycle:** `connect()` spawns the process and performs a `handshake` call to
+//! negotiate [`PROTOCOL_VERSION`]. Subsequent calls use `call()`. The `Drop` impl
+//! sends `shutdown` and waits for exit.
+//!
+//! **Methods:** `handshake`, `version`, `resolve`, `shutdown`.
+//!
+//! **Limits:** 30-second call timeout, 1 MB max frame size, non-blocking writes
+//! with fallback kill on stuck processes.
+//!
+//! See the `lsw-provider-example` crate for a reference implementation.
+
 use std::io::{BufRead, BufReader, Read};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
