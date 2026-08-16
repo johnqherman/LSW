@@ -31,6 +31,11 @@ tracing.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "deps_tree"
+harness = false
 
 [lints]
 workspace = true

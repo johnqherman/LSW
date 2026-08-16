@@ -16,6 +16,11 @@ thiserror.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "pe_parse"
+harness = false
 
 [lints]
 workspace = true
