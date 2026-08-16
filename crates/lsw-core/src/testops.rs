@@ -77,6 +77,7 @@ enum TestKind {
     Ctest,
     Cargo,
     Meson,
+    Dotnet,
 }
 
 /// Test.
@@ -115,7 +116,7 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
                 argv.push(abs.display().to_string());
             }
             TestKind::Meson => {}
-            TestKind::Explicit | TestKind::Cargo => {
+            TestKind::Explicit | TestKind::Cargo | TestKind::Dotnet => {
                 tracing::warn!(
                     "--junit is supported for ctest and meson test runs only; no report will be written"
                 );
@@ -193,6 +194,7 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
     let (tests_passed, tests_failed) = match kind {
         TestKind::Cargo => parse_cargo_summary(&stdout_text),
         TestKind::Meson => parse_meson_summary(&stdout_text),
+        TestKind::Dotnet => parse_dotnet_summary(&stdout_text),
         TestKind::Ctest | TestKind::Explicit => parse_ctest_summary(&stdout_text),
     };
 
@@ -377,6 +379,9 @@ fn test_command(project: &Project, env: &Environment) -> Result<TestPlan> {
             TestKind::Cargo,
         ));
     }
+    if crate::dotnetops::has_dotnet_project(&project.root) {
+        return dotnet_test_plan(project, env);
+    }
     Err(Error::NoTests)
 }
 
@@ -513,6 +518,65 @@ fn parse_ctest_summary(stdout: &str) -> (Option<u32>, Option<u32>) {
     result
 }
 
+fn dotnet_test_plan(project: &Project, env: &Environment) -> Result<TestPlan> {
+    let publish_dir = project.root.join("bin/lsw-publish");
+    let test_exe = find_dotnet_test_exe(&publish_dir, &project.manifest.project.name)?;
+    let wine = env.manifest.runtime.executable.display().to_string();
+    let exe = test_exe.display().to_string();
+    let env_vars: Vec<(String, String)> = Vec::new();
+    Ok((vec![wine, exe], env_vars, TestKind::Dotnet))
+}
+
+fn find_dotnet_test_exe(publish_dir: &Path, project_name: &str) -> Result<std::path::PathBuf> {
+    if !publish_dir.is_dir() {
+        return Err(Error::NoTests);
+    }
+    let expected = format!("{project_name}.exe");
+    let path = publish_dir.join(&expected);
+    if path.is_file() {
+        return Ok(path);
+    }
+    let hit = std::fs::read_dir(publish_dir)
+        .ok()
+        .and_then(|entries| {
+            entries
+                .flatten()
+                .take(10_000)
+                .find(|e| {
+                    e.file_name()
+                        .to_string_lossy()
+                        .ends_with(".exe")
+                })
+                .map(|e| e.path())
+        });
+    hit.ok_or(Error::NoTests)
+}
+
+fn parse_dotnet_summary(stdout: &str) -> (Option<u32>, Option<u32>) {
+    let mut passed: Option<u32> = None;
+    let mut failed: Option<u32> = None;
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.starts_with("Passed!") || line.starts_with("Failed!") || line.starts_with("Total:") {
+            for segment in line.split([',', '-']) {
+                let part = segment.trim();
+                if let Some(n) = part
+                    .strip_prefix("Passed:")
+                    .and_then(|s| s.trim().parse::<u32>().ok())
+                {
+                    passed = Some(passed.unwrap_or(0) + n);
+                } else if let Some(n) = part
+                    .strip_prefix("Failed:")
+                    .and_then(|s| s.trim().parse::<u32>().ok())
+                {
+                    failed = Some(failed.unwrap_or(0) + n);
+                }
+            }
+        }
+    }
+    (passed, failed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -552,5 +616,28 @@ mod tests {
                       ...\n\
                       50% tests passed, 1 tests failed out of 2";
         assert_eq!(parse_ctest_summary(stdout), (Some(1), Some(1)));
+    }
+
+    #[test]
+    fn dotnet_summary_parses_passed() {
+        let out = "Passed!  - Failed:     0, Passed:     5, Skipped:     0, Total:     5";
+        assert_eq!(parse_dotnet_summary(out), (Some(5), Some(0)));
+    }
+
+    #[test]
+    fn dotnet_summary_parses_failures() {
+        let out = "Failed!  - Failed:     2, Passed:     3, Skipped:     1, Total:     6";
+        assert_eq!(parse_dotnet_summary(out), (Some(3), Some(2)));
+    }
+
+    #[test]
+    fn dotnet_summary_no_match() {
+        assert_eq!(parse_dotnet_summary("no summary"), (None, None));
+    }
+
+    #[test]
+    fn find_dotnet_test_exe_missing_dir() {
+        let result = find_dotnet_test_exe(std::path::Path::new("/nonexistent"), "app");
+        assert!(result.is_err());
     }
 }
