@@ -256,4 +256,44 @@ mod tests {
         assert_eq!(TargetArch::X86_64.mingw_triple(), "x86_64-w64-mingw32");
         assert_eq!(TargetArch::X86.mingw_triple(), "i686-w64-mingw32");
     }
+
+    #[test]
+    fn artifact_config_roundtrip() {
+        let src = "[project]\nname = \"demo\"\n\n\
+                   [[artifact]]\nname = \"app.exe\"\nsign = true\nicon = \"app.ico\"\n\n\
+                   [[artifact]]\nname = \"helper.dll\"\nsign = false\n";
+        let m: ProjectManifest = toml::from_str(src).unwrap();
+        assert_eq!(m.artifact.len(), 2);
+        assert_eq!(m.artifact[0].name, "app.exe");
+        assert_eq!(m.artifact[0].sign, Some(true));
+        assert_eq!(m.artifact[0].icon.as_deref(), Some("app.ico"));
+        assert_eq!(m.artifact[1].sign, Some(false));
+        assert!(m.artifact[1].icon.is_none());
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(PROJECT_MANIFEST);
+        m.save(&path).unwrap();
+        let loaded = ProjectManifest::load(&path).unwrap();
+        assert_eq!(m, loaded);
+    }
+
+    #[test]
+    fn artifact_config_lookup() {
+        let mut m = ProjectManifest::new("demo");
+        m.artifact.push(ArtifactConfig {
+            name: "app.exe".into(),
+            sign: Some(true),
+            icon: None,
+        });
+        assert!(m.artifact_config("app.exe").is_some());
+        assert!(m.artifact_config("APP.EXE").is_some());
+        assert!(m.artifact_config("other.dll").is_none());
+    }
+
+    #[test]
+    fn manifest_without_artifacts_omits_section() {
+        let m = ProjectManifest::new("x");
+        let text = toml::to_string_pretty(&m).unwrap();
+        assert!(!text.contains("[[artifact]]"));
+    }
 }

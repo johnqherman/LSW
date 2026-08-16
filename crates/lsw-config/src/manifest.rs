@@ -51,9 +51,26 @@ pub struct ProjectManifest {
     /// Installer packaging settings.
     #[serde(default, skip_serializing_if = "PackageSection::is_empty")]
     pub package: PackageSection,
+    /// Per-artifact overrides for signing, icons, and packaging.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifact: Vec<ArtifactConfig>,
     /// Third-party dependency version pins.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub dependencies: BTreeMap<String, String>,
+}
+
+/// Per-artifact configuration overrides.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ArtifactConfig {
+    /// Artifact filename to match (e.g. `"app.exe"` or `"helper.dll"`).
+    pub name: String,
+    /// Whether to Authenticode-sign this artifact (overrides project default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sign: Option<bool>,
+    /// Path to an icon file for this artifact (overrides `[package].icon`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 /// Installer packaging metadata.
@@ -349,6 +366,13 @@ impl ProjectManifest {
             },
             ..Self::default()
         }
+    }
+
+    /// Finds the per-artifact config for the given filename, if any.
+    pub fn artifact_config(&self, name: &str) -> Option<&ArtifactConfig> {
+        self.artifact
+            .iter()
+            .find(|a| a.name.eq_ignore_ascii_case(name))
     }
 
     /// Loads a project manifest from a TOML file.
