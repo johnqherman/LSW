@@ -1,0 +1,21 @@
+---
+source: crates/lsw-cli/src/cli.rs
+expression: "render_help(&[\"env\"])"
+---
+Manage isolated Windows-target environments
+
+Usage: env <COMMAND>
+
+Commands:
+  create          Create an isolated environment (Wine prefix + toolchain probe)
+  list            List environments
+  restore         Recreate an environment from lsw.lock and verify it matches the pins
+  clone           Clone an environment (reflink copy where the filesystem supports it)
+  remove          Delete an environment and its Wine prefix
+  provision       Provision the environment's prefix with extra components
+  export          Pack an environment into a portable .tar.zst (CI cache handoff)
+  import-archive  Restore an environment from an exported archive
+  help            Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help

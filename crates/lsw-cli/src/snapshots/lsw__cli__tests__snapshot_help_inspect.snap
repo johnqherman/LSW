@@ -1,0 +1,13 @@
+---
+source: crates/lsw-cli/src/cli.rs
+expression: "render_help(&[\"inspect\"])"
+---
+Inspect a PE binary: format, architecture, subsystem, imports
+
+Usage: inspect [FILE]
+
+Arguments:
+  [FILE]  PE file; omit to build and use the project's artifact
+
+Options:
+  -h, --help  Print help

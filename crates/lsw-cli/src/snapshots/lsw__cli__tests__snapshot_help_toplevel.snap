@@ -1,0 +1,69 @@
+---
+source: crates/lsw-cli/src/cli.rs
+expression: "Cli::command().render_help().to_string()"
+---
+Linux Subsystem for Windows Development
+
+Usage: lsw [OPTIONS] <COMMAND>
+
+Commands:
+  setup         Detect the project, create a default environment, and wire lsw.toml
+  init          Scaffold a new project (lsw.toml + `CMake` template)
+  env           Manage isolated Windows-target environments
+  use           Select the active environment for this project
+  build         Build Windows artifacts using native Linux tools
+  run           Run an executable (PE via the Windows runtime, ELF natively)
+  exec          Run a command in an explicit execution domain
+  test          Build, then run tests under the local compatibility runtime
+  check         Validate the project: build, wine execution, deps, hardening
+  verify        Build, then verify artifacts on a real Windows host
+  shell         Interactive shell: Linux with Windows-target env, or cmd.exe
+  inspect       Inspect a PE binary: format, architecture, subsystem, imports
+  crash         Decode a Windows crash dump: exception, faulting module, address
+  audit         Audit a PE's security hardening (ASLR, DEP, CFG, `SafeSEH`, signing)
+  exports       List the exported symbols of a PE (mirror of imports)
+  sbom          Generate a `CycloneDX` SBOM for a PE (imports + toolchain provenance)
+  diff          Diff two PEs by imports, exports, sections, and size
+  size          Break down a PE's size by section bucket (code, data, resources, ...)
+  strings       Extract printable ASCII and UTF-16 strings from a file
+  deps          Inspect a PE's dependencies
+  ci            Generate CI configuration
+  config        Validate lsw.toml settings
+  sign          Authenticode-sign a PE (self-signed by default, or a real PFX cert)
+  path          Translate paths between Linux and Windows views
+  registry      Read and write the environment's isolated registry
+  debug         Debug a Windows binary with winedbg (or its gdb proxy)
+  dap           Run a Debug Adapter Protocol server over stdio for IDEs
+  compat        Measured compatibility report (imports + runtime trace)
+  compat-query  Query the persistent compatibility database
+  trace         Trace a Windows binary's DLL loads and API calls under the runtime
+  package       Build and assemble a distributable package
+  ps            List the environment's Windows/runtime processes
+  kill          Terminate an environment process (or all with --all)
+  service       Manage Windows services inside the environment
+  rust          First-class Rust support
+  dotnet        C#/.NET support (console, self-contained; managed, not native)
+  daemon        Talk to the optional lswd daemon
+  plugin        Discover and inspect out-of-process provider plugins
+  sdk           Import and manage user-provided Windows SDK sysroots
+  ide           IDE integration helpers
+  toolchain     Install and manage cross toolchains under ~/.local/share/lsw/toolchains
+  watch         Rebuild automatically when project source files change
+  clean         Remove build output (build/, dist/, and the generated resource dir)
+  doctor        Diagnose host, runtime, toolchain, and project health
+  completions   Generate shell completion scripts (bash, zsh, fish, powershell, elvish)
+  man           Generate man pages (top-level to stdout, or all pages into --dir)
+  install       Install shell completions and man pages (the binary comes from cargo/your package manager)
+  explain       Explain an LSW#### error code
+  help          Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help (see more with '--help')
+  -V, --version  Print version
+
+Global options:
+      --verbose          Verbose diagnostic logging
+      --trace            Maximum-detail trace logging (implies --verbose)
+      --format <FORMAT>  Output format for machine consumption where supported [default: human] [possible values: human, json, csv]
+      --env <NAME>       Use this environment instead of the project's active one. Environment-admin commands (ps, kill, registry, service) then work outside a project directory too
+      --color <COLOR>    Colored output (default: auto via tty + `NO_COLOR`) [default: auto] [possible values: auto, always, never]

@@ -736,7 +736,7 @@ pub(crate) fn domain_from_flags(host: bool, windows: bool) -> Domain {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::Parser;
+    use clap::{CommandFactory, Parser};
 
     #[test]
     fn parse_build_subcommand() {
@@ -824,5 +824,38 @@ mod tests {
     fn color_mode_default_auto() {
         let cli = Cli::try_parse_from(["lsw", "build"]).unwrap();
         assert_eq!(cli.color, ColorMode::Auto);
+    }
+
+    fn render_help(args: &[&str]) -> String {
+        let mut cmd = Cli::command();
+        for &name in args {
+            let sub = cmd
+                .get_subcommands()
+                .find(|s| s.get_name() == name)
+                .expect("subcommand exists")
+                .clone();
+            cmd = sub;
+        }
+        cmd.render_help().to_string()
+    }
+
+    #[test]
+    fn snapshot_help_toplevel() {
+        insta::assert_snapshot!(Cli::command().render_help().to_string());
+    }
+
+    #[test]
+    fn snapshot_help_build() {
+        insta::assert_snapshot!(render_help(&["build"]));
+    }
+
+    #[test]
+    fn snapshot_help_env() {
+        insta::assert_snapshot!(render_help(&["env"]));
+    }
+
+    #[test]
+    fn snapshot_help_inspect() {
+        insta::assert_snapshot!(render_help(&["inspect"]));
     }
 }

@@ -1,0 +1,14 @@
+---
+source: crates/lsw-cli/src/cli.rs
+expression: "render_help(&[\"build\"])"
+---
+Build Windows artifacts using native Linux tools
+
+Usage: build [OPTIONS]
+
+Options:
+      --system <SYSTEM>  Force a build system instead of auto-detection [possible values: cmake, cargo, make, ninja, meson, zig, dotnet, explicit]
+      --update-lock      Refresh lsw.lock instead of failing on drift
+      --reproducible     Zero PE timestamps for reproducible, byte-identical artifacts
+      --aot              Compile C# with `NativeAOT` to a native PE (dotnet projects only)
+  -h, --help             Print help (see more with '--help')
