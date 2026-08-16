@@ -61,13 +61,11 @@ fn note_format_gaps(cli: &Cli) {
     }
     let json_unsupported = matches!(
         &cli.command,
-        Cmd::Init { .. }
-            | Cmd::Use { .. }
+        Cmd::Use { .. }
             | Cmd::Run { .. }
             | Cmd::Exec { .. }
             | Cmd::Shell { .. }
             | Cmd::Sign { .. }
-            | Cmd::Kill { .. }
             | Cmd::Dap
             | Cmd::Ide(_)
             | Cmd::Watch { .. }
@@ -160,7 +158,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
 
     match &cli.command {
         Cmd::Setup => cmd::project::setup(&dirs, cli.format),
-        Cmd::Init { name, template } => cmd::project::init(name, template),
+        Cmd::Init { name, template } => cmd::project::init(name, template, cli.format),
         Cmd::Env(op) => cmd::project::env(op, &dirs, cli.format),
         Cmd::Use { name } => cmd::project::use_env(name, &dirs),
         Cmd::Build {
@@ -273,7 +271,7 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             bundle_deps,
         } => cmd::package::package(target, *verify, *bundle_deps, &dirs, cli.format),
         Cmd::Ps { all } => cmd::state::ps(*all, &dirs, cli.format),
-        Cmd::Kill { pid, all } => cmd::state::kill(pid, all, &dirs),
+        Cmd::Kill { pid, all } => cmd::state::kill(pid, all, &dirs, cli.format),
         Cmd::Service(op) => cmd::state::service(op, &dirs, cli.format),
         Cmd::Rust(op) => cmd::lang::rust(op, &dirs, cli.format),
         Cmd::Dotnet(op) => cmd::lang::dotnet(op, &dirs, cli.format),

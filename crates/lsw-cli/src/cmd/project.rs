@@ -52,8 +52,16 @@ pub(crate) fn setup(dirs: &Dirs, format: Format) -> lsw_core::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-pub(crate) fn init(name: &Option<String>, template: &TemplateArg) -> lsw_core::Result<ExitCode> {
+pub(crate) fn init(
+    name: &Option<String>,
+    template: &TemplateArg,
+    format: Format,
+) -> lsw_core::Result<ExitCode> {
     let report = lsw_core::init(&cwd()?, name.as_deref(), (*template).into())?;
+    if format == Format::Json {
+        crate::cmd::emit_json(&report);
+        return Ok(ExitCode::SUCCESS);
+    }
     println!("Initialized LSW project at {}", report.root.display());
     for f in &report.created {
         println!("  created {}", f.display());

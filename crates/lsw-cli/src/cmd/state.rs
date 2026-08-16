@@ -104,18 +104,39 @@ pub(crate) fn ps(all: bool, dirs: &Dirs, format: Format) -> lsw_core::Result<Exi
     Ok(ExitCode::SUCCESS)
 }
 
-pub(crate) fn kill(pid: &Option<u32>, all: &bool, dirs: &Dirs) -> lsw_core::Result<ExitCode> {
+pub(crate) fn kill(
+    pid: &Option<u32>,
+    all: &bool,
+    dirs: &Dirs,
+    format: Format,
+) -> lsw_core::Result<ExitCode> {
     if pid.is_none() && !*all {
         eprintln!("usage: lsw kill <pid> | lsw kill --all");
         return Ok(ExitCode::FAILURE);
     }
+    let json = format == Format::Json;
     let env = admin_env(dirs)?;
     if *all {
         lsw_core::psops::kill_all(&env)?;
-        println!("environment '{}' shut down", env.name);
+        if json {
+            crate::cmd::emit_json(&serde_json::json!({
+                "action": "kill_all",
+                "environment": env.name,
+            }));
+        } else {
+            println!("environment '{}' shut down", env.name);
+        }
     } else if let Some(pid) = pid {
         lsw_core::psops::kill(&env, *pid)?;
-        println!("sent SIGTERM to {pid}");
+        if json {
+            crate::cmd::emit_json(&serde_json::json!({
+                "action": "kill",
+                "pid": pid,
+                "signal": "SIGTERM",
+            }));
+        } else {
+            println!("sent SIGTERM to {pid}");
+        }
     } else {
         eprintln!("usage: lsw kill <pid> | lsw kill --all");
         return Ok(ExitCode::FAILURE);

@@ -236,7 +236,7 @@ pub(crate) fn ensure_gitignore(root: &Path) -> Result<bool> {
     Ok(true)
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 /// Init Report.
 pub struct InitReport {
     /// Root.
