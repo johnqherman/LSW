@@ -131,8 +131,8 @@ fn open_pty() -> Result<(OwnedFd, OwnedFd)> {
             &raw mut master,
             &raw mut slave,
             std::ptr::null_mut(),
-            std::ptr::null(),
-            std::ptr::null(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
         )
     };
     if rc != 0 {
@@ -189,7 +189,7 @@ pub(crate) fn run_shell_in_pty(mut command: Command, exit_hint: &str) -> Result<
     unsafe {
         command.pre_exec(|| {
             libc::setsid();
-            libc::ioctl(0, libc::TIOCSCTTY, 0);
+            libc::ioctl(0, libc::TIOCSCTTY as libc::c_ulong, 0);
             Ok(())
         });
     }
