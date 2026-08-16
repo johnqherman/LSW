@@ -359,6 +359,9 @@ pub(crate) enum Cmd {
     /// Install and manage cross toolchains under ~/.local/share/lsw/toolchains.
     #[command(subcommand)]
     Toolchain(ToolchainCmd),
+    /// Manage local Wine installations.
+    #[command(subcommand)]
+    Wine(WineCmd),
     /// Rebuild automatically when project source files change.
     Watch {
         /// Run the project executable after each successful build.
@@ -419,6 +422,25 @@ pub(crate) enum ToolchainCmd {
     List,
     /// Remove a managed toolchain by directory name.
     Remove { name: String },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum WineCmd {
+    /// Import a Wine build from a local directory or tarball.
+    Install {
+        /// Version label (e.g. "9.0", "staging-9.0").
+        version: String,
+        /// Path to an extracted Wine build directory or a .tar.* archive.
+        #[arg(long)]
+        from: PathBuf,
+    },
+    /// List installed Wine versions.
+    List,
+    /// Remove an installed Wine version.
+    Remove {
+        /// Version label to remove.
+        version: String,
+    },
 }
 
 #[derive(Subcommand)]

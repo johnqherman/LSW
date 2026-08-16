@@ -155,14 +155,20 @@ impl Dirs {
         self.data.join("packages")
     }
 
+    /// Returns the directory containing managed Wine installations.
+    pub fn wines(&self) -> PathBuf {
+        self.data.join("wine")
+    }
+
     /// Returns all managed data subdirectories.
-    pub fn managed_dirs(&self) -> [PathBuf; 5] {
+    pub fn managed_dirs(&self) -> [PathBuf; 6] {
         [
             self.environments(),
             self.sysroots(),
             self.runtimes(),
             self.toolchains(),
             self.packages(),
+            self.wines(),
         ]
     }
 

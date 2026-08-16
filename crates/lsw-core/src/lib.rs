@@ -113,6 +113,8 @@ pub mod ttyops;
 pub mod verifyops;
 /// File watcher for rebuild-on-change.
 pub mod watchops;
+/// Wine version management.
+pub mod wineops;
 /// `WinRM` remote execution.
 pub mod winrmops;
 

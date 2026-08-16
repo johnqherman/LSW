@@ -62,6 +62,52 @@ pub(crate) fn toolchain(
     }
 }
 
+pub(crate) fn wine(
+    op: &crate::cli::WineCmd,
+    dirs: &Dirs,
+    format: Format,
+) -> lsw_core::Result<ExitCode> {
+    use crate::cli::WineCmd;
+    let json = format == Format::Json;
+    match op {
+        WineCmd::Install { version, from } => {
+            let report = lsw_core::wineops::install(dirs, version, from)?;
+            if json {
+                crate::cmd::emit_json(&report);
+            } else {
+                println!(
+                    "installed Wine {} at {}",
+                    report.version,
+                    report.path.display()
+                );
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        WineCmd::List => {
+            let list = lsw_core::wineops::list(dirs);
+            if json {
+                crate::cmd::emit_json(&list);
+            } else if list.is_empty() {
+                println!("no managed Wine installations (import one with: lsw wine install <version> --from <path>)");
+            } else {
+                for w in list {
+                    println!("{:<28} {}", w.version, w.executable.display());
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        WineCmd::Remove { version } => {
+            if lsw_core::wineops::remove(dirs, version)? {
+                println!("removed {version}");
+                Ok(ExitCode::SUCCESS)
+            } else {
+                eprintln!("no managed Wine installation named '{version}'");
+                Ok(ExitCode::FAILURE)
+            }
+        }
+    }
+}
+
 pub(crate) fn clean(deps: bool) -> lsw_core::Result<ExitCode> {
     let p = crate::project()?;
     let mut targets = vec![p.root.join("build"), p.root.join("dist")];

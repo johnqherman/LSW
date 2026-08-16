@@ -247,7 +247,8 @@ mod tests {
         assert_eq!(dirs.toolchains(), PathBuf::from("/data/lsw/toolchains"));
         assert_eq!(dirs.packages(), PathBuf::from("/data/lsw/packages"));
         assert!(dirs.managed_dirs().contains(&dirs.sysroots()));
-        assert_eq!(dirs.managed_dirs().len(), 5);
+        assert!(dirs.managed_dirs().contains(&dirs.wines()));
+        assert_eq!(dirs.managed_dirs().len(), 6);
     }
 
     #[test]

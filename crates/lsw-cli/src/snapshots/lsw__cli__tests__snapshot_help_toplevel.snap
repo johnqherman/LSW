@@ -47,6 +47,7 @@ Commands:
   sdk           Import and manage user-provided Windows SDK sysroots
   ide           IDE integration helpers
   toolchain     Install and manage cross toolchains under ~/.local/share/lsw/toolchains
+  wine          Manage local Wine installations
   watch         Rebuild automatically when project source files change
   clean         Remove build output (build/, dist/, and the generated resource dir)
   doctor        Diagnose host, runtime, toolchain, and project health
