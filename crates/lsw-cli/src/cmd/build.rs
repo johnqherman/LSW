@@ -13,9 +13,13 @@ pub(crate) fn build(
     update_lock: &bool,
     reproducible: &bool,
     aot: &bool,
+    all: bool,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
+    if all {
+        return build_all(system, update_lock, reproducible, aot, dirs, format);
+    }
     let (p, env) = active_env(dirs)?;
     let report = lsw_core::build(
         &p,
@@ -50,6 +54,68 @@ pub(crate) fn build(
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn build_all(
+    system: &Option<BuildSystemArg>,
+    update_lock: &bool,
+    reproducible: &bool,
+    aot: &bool,
+    dirs: &Dirs,
+    format: Format,
+) -> lsw_core::Result<ExitCode> {
+    let ws = lsw_core::Workspace::discover(&crate::cwd()?)?
+        .ok_or(lsw_core::Error::NoBuildSystem)?;
+    let env_name = crate::env_override();
+    let mut all_ok = true;
+    for member in &ws.members {
+        let project = lsw_core::Project::discover(member)?;
+        let env = match env_name {
+            Some(name) => lsw_core::Environment::open(dirs, name)?,
+            None => lsw_core::resolve_active(dirs, &project)?,
+        };
+        if format != Format::Json {
+            println!("\n--- {} ---", member.display());
+        }
+        match lsw_core::build(
+            &project,
+            &env,
+            &BuildOptions {
+                system: system.map(|s| s.as_str().to_owned()),
+                update_lock: *update_lock,
+                reproducible: *reproducible,
+                aot: *aot,
+                coverage: false,
+            },
+        ) {
+            Ok(report) => {
+                if format == Format::Json {
+                    crate::cmd::emit_json(&serde_json::json!({
+                        "member": member.display().to_string(),
+                        "system": report.system.label(),
+                        "artifacts": report.artifacts.iter().map(|a| a.display().to_string()).collect::<Vec<_>>(),
+                    }));
+                } else {
+                    println!("Build OK ({})", report.system.label());
+                    for a in &report.artifacts {
+                        println!("  {}", a.display());
+                    }
+                }
+            }
+            Err(e) => {
+                all_ok = false;
+                if format == Format::Json {
+                    crate::cmd::emit_json(&serde_json::json!({
+                        "member": member.display().to_string(),
+                        "error": e.to_string(),
+                    }));
+                } else {
+                    eprintln!("error: {e}");
+                }
+            }
+        }
+    }
+    crate::cmd::exit_ok(all_ok)
 }
 
 pub(crate) fn run(
@@ -145,9 +211,13 @@ pub(crate) fn test(
     headless: &bool,
     junit: &Option<PathBuf>,
     coverage: bool,
+    all: bool,
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
+    if all {
+        return test_all(headless, coverage, dirs, format);
+    }
     let (p, env) = active_env(dirs)?;
     let report = lsw_core::test(
         &p,
@@ -196,6 +266,66 @@ pub(crate) fn test(
         println!("\nCompatibility status:\n  {compat}");
     }
     crate::cmd::exit_ok(report.compatibility == lsw_core::CompatStatus::LocalCompatibilityVerified)
+}
+
+fn test_all(
+    headless: &bool,
+    coverage: bool,
+    dirs: &Dirs,
+    format: Format,
+) -> lsw_core::Result<ExitCode> {
+    let ws = lsw_core::Workspace::discover(&crate::cwd()?)?
+        .ok_or(lsw_core::Error::NoTests)?;
+    let env_name = crate::env_override();
+    let mut all_ok = true;
+    for member in &ws.members {
+        let project = lsw_core::Project::discover(member)?;
+        let env = match env_name {
+            Some(name) => lsw_core::Environment::open(dirs, name)?,
+            None => lsw_core::resolve_active(dirs, &project)?,
+        };
+        if format != Format::Json {
+            println!("\n--- {} ---", member.display());
+        }
+        match lsw_core::test(
+            &project,
+            &env,
+            &lsw_core::TestOptions {
+                headless: *headless,
+                junit: None,
+                coverage,
+            },
+        ) {
+            Ok(report) => {
+                let passed = report.compatibility
+                    == lsw_core::CompatStatus::LocalCompatibilityVerified;
+                if !passed {
+                    all_ok = false;
+                }
+                if format == Format::Json {
+                    crate::cmd::emit_json(&serde_json::json!({
+                        "member": member.display().to_string(),
+                        "passed": report.tests_passed,
+                        "failed": report.tests_failed,
+                    }));
+                } else if let (Some(p), Some(f)) = (report.tests_passed, report.tests_failed) {
+                    println!("{p} passed, {f} failed");
+                }
+            }
+            Err(e) => {
+                all_ok = false;
+                if format == Format::Json {
+                    crate::cmd::emit_json(&serde_json::json!({
+                        "member": member.display().to_string(),
+                        "error": e.to_string(),
+                    }));
+                } else {
+                    eprintln!("error: {e}");
+                }
+            }
+        }
+    }
+    crate::cmd::exit_ok(all_ok)
 }
 
 pub(crate) fn shell(windows: &bool, dirs: &Dirs) -> lsw_core::Result<ExitCode> {

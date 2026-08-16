@@ -11,4 +11,5 @@ Options:
       --update-lock      Refresh lsw.lock instead of failing on drift
       --reproducible     Zero PE timestamps for reproducible, byte-identical artifacts
       --aot              Compile C# with `NativeAOT` to a native PE (dotnet projects only)
+      --all              Build all workspace members
   -h, --help             Print help (see more with '--help')

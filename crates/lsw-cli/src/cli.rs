@@ -111,6 +111,9 @@ pub(crate) enum Cmd {
         /// Compile C# with `NativeAOT` to a native PE (dotnet projects only).
         #[arg(long)]
         aot: bool,
+        /// Build all workspace members.
+        #[arg(long)]
+        all: bool,
     },
     /// Run an executable (PE via the Windows runtime, ELF natively).
     Run {
@@ -142,6 +145,9 @@ pub(crate) enum Cmd {
         /// Instrument with clang source coverage and print a report (llvm-mingw).
         #[arg(long)]
         coverage: bool,
+        /// Test all workspace members.
+        #[arg(long)]
+        all: bool,
     },
     /// Validate the project: build, wine execution, deps, hardening.
     Check {

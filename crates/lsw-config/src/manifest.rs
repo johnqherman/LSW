@@ -57,6 +57,17 @@ pub struct ProjectManifest {
     /// Third-party dependency version pins.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub dependencies: BTreeMap<String, String>,
+    /// Workspace definition listing member projects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<WorkspaceSection>,
+}
+
+/// Workspace section listing member project directories.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkspaceSection {
+    /// Relative paths to member project directories.
+    pub members: Vec<String>,
 }
 
 /// Per-artifact configuration overrides.

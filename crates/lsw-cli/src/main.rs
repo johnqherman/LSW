@@ -166,7 +166,8 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             update_lock,
             reproducible,
             aot,
-        } => cmd::build::build(system, update_lock, reproducible, aot, &dirs, cli.format),
+            all,
+        } => cmd::build::build(system, update_lock, reproducible, aot, *all, &dirs, cli.format),
         Cmd::Run {
             program,
             args,
@@ -178,7 +179,8 @@ fn dispatch(cli: &Cli) -> lsw_core::Result<ExitCode> {
             headless,
             junit,
             coverage,
-        } => cmd::build::test(headless, junit, *coverage, &dirs, cli.format),
+            all,
+        } => cmd::build::test(headless, junit, *coverage, *all, &dirs, cli.format),
         Cmd::Check { headless } => cmd::tooling::check(*headless, &dirs, cli.format),
         Cmd::Verify {
             native,

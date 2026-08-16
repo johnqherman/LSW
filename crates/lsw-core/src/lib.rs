@@ -127,7 +127,7 @@ pub use envops::{
 };
 pub use error::{Error, Result};
 pub use inspectops::{ImportStatus, InspectReport, inspect};
-pub use project::{InitReport, Project, Template, init};
+pub use project::{InitReport, Project, Template, Workspace, init};
 pub use runops::{Display, Domain, RunReport, Sandbox, run, shell};
 pub use testops::{CompatStatus, Outcome, TestOptions, TestReport, test};
 

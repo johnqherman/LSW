@@ -5,6 +5,62 @@ use lsw_config::{PROJECT_MANIFEST, ProjectManifest};
 
 use crate::error::{Error, Result};
 
+/// A workspace containing multiple LSW projects under a shared root.
+#[derive(Debug, Clone)]
+pub struct Workspace {
+    /// Root directory containing the workspace manifest.
+    pub root: PathBuf,
+    /// Resolved absolute paths to each member project directory.
+    pub members: Vec<PathBuf>,
+}
+
+impl Workspace {
+    /// Walks upward from `start` looking for an `lsw.toml` with a `[workspace]` section.
+    pub fn discover(start: &Path) -> Result<Option<Self>> {
+        let mut dir = Some(start);
+        while let Some(d) = dir {
+            let candidate = d.join(PROJECT_MANIFEST);
+            if candidate.is_file() {
+                let manifest = ProjectManifest::load(&candidate)?;
+                if let Some(ws) = &manifest.workspace {
+                    let members = resolve_members(d, &ws.members)?;
+                    return Ok(Some(Self {
+                        root: d.to_path_buf(),
+                        members,
+                    }));
+                }
+            }
+            dir = d.parent();
+        }
+        Ok(None)
+    }
+}
+
+fn resolve_members(root: &Path, members: &[String]) -> Result<Vec<PathBuf>> {
+    let mut resolved = Vec::with_capacity(members.len());
+    for member in members {
+        if member.contains("..") || Path::new(member).is_absolute() {
+            return Err(Error::InitFailed {
+                path: root.to_path_buf(),
+                detail: format!(
+                    "workspace member '{member}' must be a relative path without '..'"
+                ),
+            });
+        }
+        let path = root.join(member);
+        if !path.join(PROJECT_MANIFEST).is_file() {
+            return Err(Error::InitFailed {
+                path: path.clone(),
+                detail: format!(
+                    "workspace member '{member}' has no {PROJECT_MANIFEST}"
+                ),
+            });
+        }
+        resolved.push(path);
+    }
+    Ok(resolved)
+}
+
 #[derive(Debug, Clone)]
 /// Project.
 pub struct Project {
@@ -514,5 +570,78 @@ mod tests {
         m.save(&dir.path().join(PROJECT_MANIFEST)).unwrap();
         let err = Project::discover(dir.path()).unwrap_err();
         assert!(err.to_string().contains("LSW2008"));
+    }
+
+    #[test]
+    fn workspace_discover_finds_workspace() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let mut m = ProjectManifest::new("ws-root");
+        m.workspace = Some(lsw_config::WorkspaceSection {
+            members: vec!["apps/frontend".into(), "libs/core".into()],
+        });
+        m.save(&root.join(PROJECT_MANIFEST)).unwrap();
+
+        let app_dir = root.join("apps/frontend");
+        fs::create_dir_all(&app_dir).unwrap();
+        ProjectManifest::new("frontend")
+            .save_new(&app_dir.join(PROJECT_MANIFEST))
+            .unwrap();
+
+        let lib_dir = root.join("libs/core");
+        fs::create_dir_all(&lib_dir).unwrap();
+        ProjectManifest::new("core")
+            .save_new(&lib_dir.join(PROJECT_MANIFEST))
+            .unwrap();
+
+        let ws = Workspace::discover(&app_dir).unwrap().unwrap();
+        assert_eq!(ws.root, root);
+        assert_eq!(ws.members.len(), 2);
+    }
+
+    #[test]
+    fn workspace_discover_returns_none_without_workspace() {
+        let dir = tempfile::tempdir().unwrap();
+        ProjectManifest::new("standalone")
+            .save_new(&dir.path().join(PROJECT_MANIFEST))
+            .unwrap();
+        let ws = Workspace::discover(dir.path()).unwrap();
+        assert!(ws.is_none());
+    }
+
+    #[test]
+    fn workspace_rejects_parent_traversal() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let mut m = ProjectManifest::new("bad");
+        m.workspace = Some(lsw_config::WorkspaceSection {
+            members: vec!["../escape".into()],
+        });
+        m.save(&root.join(PROJECT_MANIFEST)).unwrap();
+        assert!(Workspace::discover(root).is_err());
+    }
+
+    #[test]
+    fn workspace_rejects_absolute_member() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let mut m = ProjectManifest::new("bad");
+        m.workspace = Some(lsw_config::WorkspaceSection {
+            members: vec!["/etc/evil".into()],
+        });
+        m.save(&root.join(PROJECT_MANIFEST)).unwrap();
+        assert!(Workspace::discover(root).is_err());
+    }
+
+    #[test]
+    fn workspace_rejects_missing_member_manifest() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let mut m = ProjectManifest::new("ws");
+        m.workspace = Some(lsw_config::WorkspaceSection {
+            members: vec!["nonexistent".into()],
+        });
+        m.save(&root.join(PROJECT_MANIFEST)).unwrap();
+        assert!(Workspace::discover(root).is_err());
     }
 }
