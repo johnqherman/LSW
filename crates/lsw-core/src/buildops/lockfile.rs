@@ -23,7 +23,7 @@ pub(crate) fn stamp_build_dir(project: &Project, env: &Environment) -> Result<()
         fs::remove_dir_all(&build_dir).map_err(|e| Error::io(build_dir.clone(), e))?;
     }
     fs::create_dir_all(&build_dir).map_err(|e| Error::io(build_dir.clone(), e))?;
-    super::safe_marker_write(&marker, &env.name);
+    super::safe_marker_write(&marker, &env.name)?;
     Ok(())
 }
 

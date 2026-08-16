@@ -371,21 +371,21 @@ pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
     let drive_c = layout.drive_c();
     let users = drive_c.join("users");
     let mut trimmed = 0;
-    let Ok(entries) = fs::read_dir(&users) else {
-        return Ok(0);
+    let entries = match fs::read_dir(&users) {
+        Ok(e) => e,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(Error::io(users, e)),
     };
-    for user in entries.flatten().take(1_000_000) {
+    for user in entries.take(1_000_000) {
+        let user = user.map_err(|e| Error::io(users.clone(), e))?;
         let udir = user.path();
-        let Ok(meta) = fs::symlink_metadata(&udir) else {
-            continue;
-        };
+        let meta = fs::symlink_metadata(&udir).map_err(|e| Error::io(udir.clone(), e))?;
         if !meta.is_dir() {
             continue;
         }
-        let Ok(inner) = fs::read_dir(&udir) else {
-            continue;
-        };
-        for entry in inner.flatten().take(1_000_000) {
+        let inner = fs::read_dir(&udir).map_err(|e| Error::io(udir.clone(), e))?;
+        for entry in inner.take(1_000_000) {
+            let entry = entry.map_err(|e| Error::io(udir.clone(), e))?;
             let link = entry.path();
             let Ok(target) = fs::read_link(&link) else {
                 continue;

@@ -30,12 +30,13 @@ const WINE_INFRASTRUCTURE: &[&str] = &[
 
 /// Returns whether wine infrastructure.
 pub fn is_wine_infrastructure(command: &str) -> bool {
-    let head = command.split_whitespace().next().unwrap_or_default();
-    let base = head.rsplit(['/', '\\']).next().unwrap_or_default();
-    WINE_INFRASTRUCTURE.contains(&base.to_ascii_lowercase().as_str())
-        || command
-            .to_ascii_lowercase()
-            .contains("explorer.exe /desktop")
+    let lower = command.to_ascii_lowercase();
+    if lower.contains("explorer.exe /desktop") {
+        return true;
+    }
+    lower
+        .split(['/', '\\', ' '])
+        .any(|seg| WINE_INFRASTRUCTURE.contains(&seg))
 }
 
 /// Ps.
@@ -52,18 +53,19 @@ pub fn ps(env: &Environment) -> Result<Vec<ProcessInfo>> {
         if !process_uses_prefix(pid, &prefix) {
             continue;
         }
-        let command = fs::read(entry.path().join("cmdline"))
-            .ok()
-            .map(|bytes| {
-                bytes
-                    .split(|b| *b == 0)
-                    .filter(|part| !part.is_empty())
-                    .map(String::from_utf8_lossy)
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            })
-            .filter(|c| !c.is_empty())
-            .unwrap_or_else(|| "<unknown>".to_owned());
+        let cmdline = fs::read(entry.path().join("cmdline")).ok();
+        let parts: Vec<String> = cmdline
+            .as_deref()
+            .unwrap_or_default()
+            .split(|b| *b == 0)
+            .filter(|part| !part.is_empty())
+            .map(|p| String::from_utf8_lossy(p).into_owned())
+            .collect();
+        let command = if parts.is_empty() {
+            "<unknown>".to_owned()
+        } else {
+            parts.join(" ")
+        };
         out.push(ProcessInfo { pid, command });
     }
     out.sort_by_key(|p| p.pid);

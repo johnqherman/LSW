@@ -206,10 +206,8 @@ fn copy_tree_depth(
             detail: "SDK directory tree is too deep".into(),
         });
     }
-    for entry in fs::read_dir(src)
-        .map_err(|e| Error::io(src.to_path_buf(), e))?
-        .flatten()
-    {
+    for entry in fs::read_dir(src).map_err(|e| Error::io(src.to_path_buf(), e))? {
+        let entry = entry.map_err(|e| Error::io(src.to_path_buf(), e))?;
         if *visited >= MAX_ENTRIES {
             return Err(Error::SdkImportFailed {
                 path: src.to_path_buf(),
@@ -219,9 +217,7 @@ fn copy_tree_depth(
         *visited += 1;
         let from = entry.path();
         let to = dst.join(entry.file_name());
-        let Ok(meta) = fs::symlink_metadata(&from) else {
-            continue;
-        };
+        let meta = fs::symlink_metadata(&from).map_err(|e| Error::io(from.clone(), e))?;
         if meta.is_dir() {
             fs::create_dir_all(&to).map_err(|e| Error::io(to.clone(), e))?;
             copy_tree_depth(&from, &to, depth - 1, files, visited)?;
