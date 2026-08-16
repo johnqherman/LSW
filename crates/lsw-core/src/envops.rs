@@ -599,6 +599,15 @@ pub fn import_env(dirs: &Dirs, name: &str, file: &Path, force: bool) -> Result<(
             detail: "tar failed to extract the environment archive".into(),
         });
     }
+    let extracted_size = crate::depsops::dir_size_check(&staging);
+    if extracted_size > 10 * 1024 * 1024 * 1024 {
+        return Err(Error::InitFailed {
+            path: file.to_path_buf(),
+            detail: format!(
+                "extracted archive size ({extracted_size} bytes) exceeds 10 GB limit"
+            ),
+        });
+    }
     let candidate = staging.join(name);
     let candidate_meta = fs::symlink_metadata(&candidate).ok();
     if !candidate_meta.is_some_and(|m| m.is_dir() && !m.file_type().is_symlink()) {

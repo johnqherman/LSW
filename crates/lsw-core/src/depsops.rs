@@ -7,9 +7,11 @@ use crate::envops::Environment;
 use crate::error::{Error, Result};
 
 const MAX_LISTING_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_EXTRACT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 const MAX_DEP_DEPTH: usize = 64;
 const MAX_DEP_NODES: usize = 100_000;
 const MAX_DIR_ENTRIES: usize = 1_000_000;
+const VCPKG_PINNED_TAG: &str = "2024.12.16";
 
 const SYSTEM_DLLS: &[&str] = &[
     "kernel32.dll",
@@ -365,6 +367,84 @@ fn curl_download(url: &str, dest: &Path) -> Result<()> {
     Ok(())
 }
 
+fn verify_gpg_signature(pkg_path: &Path, sig_url: &str, name: &str) {
+    let sig_path = pkg_path.with_extension(
+        pkg_path
+            .extension().map_or("sig".into(), |e| {
+                let ext = e.to_string_lossy();
+                format!("{ext}.sig")
+            }),
+    );
+    if curl_download(sig_url, &sig_path).is_err() {
+        tracing::warn!(
+            "could not download GPG signature for {name}; skipping signature verification"
+        );
+        return;
+    }
+    let gpg = if crate::buildops::which("gpgv").is_some() {
+        "gpgv"
+    } else if crate::buildops::which("gpg").is_some() {
+        "gpg"
+    } else {
+        tracing::warn!(
+            "gpg/gpgv not found on PATH; skipping signature verification for {name}"
+        );
+        return;
+    };
+    let result = if gpg == "gpgv" {
+        std::process::Command::new("gpgv")
+            .arg("--keyring")
+            .arg("/usr/share/keyrings/msys2-keyring.gpg")
+            .arg(&sig_path)
+            .arg(pkg_path)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+    } else {
+        std::process::Command::new("gpg")
+            .args(["--verify", "--quiet"])
+            .arg(&sig_path)
+            .arg(pkg_path)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+    };
+    match result {
+        Ok(s) if s.success() => {
+            tracing::debug!("GPG signature verified for {name}");
+        }
+        Ok(_) => {
+            tracing::warn!("GPG signature verification FAILED for {name}; package may be tampered");
+        }
+        Err(_) => {
+            tracing::warn!("could not run {gpg} for {name}; skipping signature verification");
+        }
+    }
+    let _ = std::fs::remove_file(&sig_path);
+}
+
+/// Walks a directory tree and returns total file size in bytes.
+pub fn dir_size_check(dir: &Path) -> u64 {
+    let mut total: u64 = 0;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for entry in entries.flatten().take(MAX_DIR_ENTRIES) {
+            let Ok(meta) = entry.metadata() else {
+                continue;
+            };
+            if meta.is_dir() {
+                stack.push(entry.path());
+            } else {
+                total = total.saturating_add(meta.len());
+            }
+        }
+    }
+    total
+}
+
 fn refresh_db(dirs: &lsw_config::Dirs, repo: &str) -> Result<PathBuf> {
     let cache = dirs.cache.join("msys2").join(repo);
     let db = cache.join(format!("{repo}.db"));
@@ -480,6 +560,11 @@ pub fn add(
             });
         }
     }
+    verify_gpg_signature(
+        &cached,
+        &format!("{MIRROR}/{repo}/{}.sig", pkg.filename),
+        name,
+    );
 
     let root = deps_root(project, arch);
     std::fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
@@ -543,6 +628,16 @@ pub fn add(
         return Err(Error::ExtractFailed {
             name: name.to_owned(),
             detail: "extracting package archive failed".to_owned(),
+        });
+    }
+    let extracted_size = dir_size_check(&root);
+    if extracted_size > MAX_EXTRACT_BYTES {
+        let _ = std::fs::remove_dir_all(&root);
+        return Err(Error::ExtractFailed {
+            name: name.to_owned(),
+            detail: format!(
+                "extracted size ({extracted_size} bytes) exceeds {MAX_EXTRACT_BYTES}-byte limit"
+            ),
         });
     }
 
@@ -799,7 +894,14 @@ pub fn vcpkg_bootstrap(dirs: &lsw_config::Dirs) -> Result<PathBuf> {
     if !root.join(".git").is_dir() {
         std::fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
         let out = std::process::Command::new("git")
-            .args(["clone", "--depth", "1", "https://github.com/microsoft/vcpkg.git"])
+            .args([
+                "clone",
+                "--branch",
+                VCPKG_PINNED_TAG,
+                "--depth",
+                "1",
+                "https://github.com/microsoft/vcpkg.git",
+            ])
             .arg(&root)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped())
