@@ -1,3 +1,5 @@
+#![allow(rustdoc::broken_intra_doc_links, rustdoc::invalid_html_tags)]
+
 use std::path::PathBuf;
 use std::process::ExitCode;
 

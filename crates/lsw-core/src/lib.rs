@@ -1,3 +1,6 @@
+//! Core orchestration for LSW: build, run, test, package, and inspect
+//! Windows applications from Linux using Wine and cross-compilation toolchains.
+
 pub(crate) fn sha256_file_checked(path: &std::path::Path) -> Result<String> {
     lsw_toolchain::sha256_file(path).map_err(|e| Error::io(path.to_path_buf(), e))
 }

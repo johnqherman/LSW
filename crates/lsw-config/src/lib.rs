@@ -1,3 +1,6 @@
+//! Configuration types, project manifest parsing, lockfile management,
+//! and filesystem layout conventions for LSW projects.
+
 pub const PROJECT_MANIFEST: &str = "lsw.toml";
 pub const PROJECT_LOCKFILE: &str = "lsw.lock";
 pub const ENVIRONMENT_MANIFEST: &str = "env.toml";

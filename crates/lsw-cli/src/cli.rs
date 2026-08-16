@@ -383,7 +383,7 @@ pub(crate) enum Cmd {
     Completions { shell: clap_complete::Shell },
     /// Generate man pages (top-level to stdout, or all pages into --dir).
     Man {
-        /// Directory to write lsw.1 and lsw-<subcommand>.1 into.
+        /// Directory to write lsw.1 and lsw-subcommand.1 into.
         #[arg(long)]
         dir: Option<PathBuf>,
     },

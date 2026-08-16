@@ -1,3 +1,6 @@
+//! PE (Portable Executable) parser for Windows binaries: format detection,
+//! import/export enumeration, resource extraction, and hardening flag inspection.
+
 mod details;
 mod detect;
 mod error;

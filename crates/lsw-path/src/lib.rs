@@ -1,3 +1,6 @@
+//! Bidirectional Linux/Windows path translation (Unix paths to
+//! `Z:\`-rooted Windows paths and back) for cross-compilation tooling.
+
 mod error;
 mod linux;
 mod types;
