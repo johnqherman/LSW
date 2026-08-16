@@ -215,17 +215,128 @@ mod tests {
     }
 
     #[test]
-    fn parse_version_pairs_known_keys() {
-        let mut wide: Vec<u16> = Vec::new();
-        for s in ["FileVersion", "1.2.3.4", "ProductName", "Demo", "junk"] {
-            wide.extend(s.encode_utf16());
-            wide.push(0);
+    fn parse_manifest_handles_dpi_with_xmlns() {
+        let xml = br#"<assembly><asmv3:windowsSettings>
+            <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true</dpiAware>
+            </asmv3:windowsSettings></assembly>"#;
+        let mut r = Resources::default();
+        parse_manifest(xml, &mut r);
+        assert_eq!(r.dpi_aware.as_deref(), Some("true"));
+    }
+
+    fn build_version_resource(entries: &[(&str, &str)]) -> Vec<u8> {
+        fn push_wstr(buf: &mut Vec<u8>, s: &str) {
+            for u in s.encode_utf16() {
+                buf.extend_from_slice(&u.to_le_bytes());
+            }
+            buf.extend_from_slice(&[0, 0]);
         }
-        let bytes: Vec<u8> = wide.iter().flat_map(|u| u.to_le_bytes()).collect();
+        fn pad4(buf: &mut Vec<u8>) {
+            while !buf.len().is_multiple_of(4) {
+                buf.push(0);
+            }
+        }
+        fn set_u16(buf: &mut [u8], offset: usize, val: u16) {
+            buf[offset..offset + 2].copy_from_slice(&val.to_le_bytes());
+        }
+
+        let mut string_entries = Vec::new();
+        for &(key, value) in entries {
+            let entry_start = string_entries.len();
+            string_entries.extend_from_slice(&[0, 0]); // wLength placeholder
+            let value_len = value.encode_utf16().count() + 1; // include NUL
+            string_entries.extend_from_slice(&(value_len as u16).to_le_bytes());
+            string_entries.extend_from_slice(&1u16.to_le_bytes()); // wType=1 (text)
+            push_wstr(&mut string_entries, key);
+            pad4(&mut string_entries);
+            push_wstr(&mut string_entries, value);
+            pad4(&mut string_entries);
+            let entry_len = string_entries.len() - entry_start;
+            set_u16(&mut string_entries, entry_start, entry_len as u16);
+        }
+
+        let mut string_table = Vec::new();
+        let st_start = string_table.len();
+        string_table.extend_from_slice(&[0, 0]); // wLength placeholder
+        string_table.extend_from_slice(&[0, 0]); // wValueLength=0
+        string_table.extend_from_slice(&1u16.to_le_bytes()); // wType=1
+        push_wstr(&mut string_table, "040904B0"); // codepage key
+        pad4(&mut string_table);
+        string_table.extend_from_slice(&string_entries);
+        let st_len = string_table.len() - st_start;
+        set_u16(&mut string_table, st_start, st_len as u16);
+
+        let mut string_fi = Vec::new();
+        let sfi_start = string_fi.len();
+        string_fi.extend_from_slice(&[0, 0]); // wLength placeholder
+        string_fi.extend_from_slice(&[0, 0]); // wValueLength=0
+        string_fi.extend_from_slice(&1u16.to_le_bytes()); // wType=1
+        push_wstr(&mut string_fi, "StringFileInfo");
+        pad4(&mut string_fi);
+        string_fi.extend_from_slice(&string_table);
+        let sfi_len = string_fi.len() - sfi_start;
+        set_u16(&mut string_fi, sfi_start, sfi_len as u16);
+
+        let mut root = Vec::new();
+        root.extend_from_slice(&[0, 0]); // wLength placeholder
+        root.extend_from_slice(&52u16.to_le_bytes()); // VS_FIXEDFILEINFO size
+        root.extend_from_slice(&0u16.to_le_bytes()); // wType=0 (binary)
+        push_wstr(&mut root, "VS_VERSION_INFO");
+        pad4(&mut root);
+        root.extend_from_slice(&[0u8; 52]); // VS_FIXEDFILEINFO (zeroed)
+        pad4(&mut root);
+        root.extend_from_slice(&string_fi);
+        let root_len = root.len();
+        set_u16(&mut root, 0, root_len as u16);
+
+        root
+    }
+
+    #[test]
+    fn parse_version_pairs_known_keys() {
+        let bytes = build_version_resource(&[
+            ("FileVersion", "1.2.3.4"),
+            ("ProductName", "Demo"),
+        ]);
         let mut map = std::collections::BTreeMap::new();
         parse_version(&bytes, &mut map);
         assert_eq!(map.get("FileVersion").unwrap(), "1.2.3.4");
         assert_eq!(map.get("ProductName").unwrap(), "Demo");
+    }
+
+    #[test]
+    fn parse_version_extracts_multiple_keys() {
+        let bytes = build_version_resource(&[
+            ("CompanyName", "ACME Corp"),
+            ("FileDescription", "Widget"),
+            ("FileVersion", "2.0.0.0"),
+            ("LegalCopyright", "2026 ACME"),
+        ]);
+        let mut map = std::collections::BTreeMap::new();
+        parse_version(&bytes, &mut map);
+        assert_eq!(map.get("CompanyName").unwrap(), "ACME Corp");
+        assert_eq!(map.get("FileDescription").unwrap(), "Widget");
+        assert_eq!(map.get("FileVersion").unwrap(), "2.0.0.0");
+        assert_eq!(map.get("LegalCopyright").unwrap(), "2026 ACME");
+    }
+
+    #[test]
+    fn parse_version_ignores_unknown_keys() {
+        let bytes = build_version_resource(&[
+            ("FileVersion", "1.0"),
+            ("CustomKey", "ignored"),
+        ]);
+        let mut map = std::collections::BTreeMap::new();
+        parse_version(&bytes, &mut map);
+        assert_eq!(map.len(), 1);
+        assert!(map.contains_key("FileVersion"));
+    }
+
+    #[test]
+    fn parse_version_empty_bytes() {
+        let mut map = std::collections::BTreeMap::new();
+        parse_version(&[], &mut map);
+        assert!(map.is_empty());
     }
 
     #[test]

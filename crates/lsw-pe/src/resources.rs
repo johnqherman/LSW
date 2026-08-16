@@ -148,10 +148,10 @@ fn decode_text(bytes: &[u8]) -> String {
 pub(crate) fn parse_manifest(bytes: &[u8], out: &mut Resources) {
     let text = decode_text(bytes);
     out.execution_level = between(&text, "level=\"", "\"");
-    if let Some(dpi) = between(&text, "<dpiAware>", "</dpiAware>") {
+    if let Some(dpi) = element_content(&text, "dpiAware") {
         out.dpi_aware = Some(dpi);
-    } else if text.contains("dpiAwareness") {
-        out.dpi_aware = between(&text, "<dpiAwareness>", "</dpiAwareness>");
+    } else if let Some(dpi) = element_content(&text, "dpiAwareness") {
+        out.dpi_aware = Some(dpi);
     }
     out.manifest = Some(text);
 }
@@ -163,6 +163,17 @@ fn between(text: &str, start: &str, end: &str) -> Option<String> {
     Some(rest[..e].trim().to_owned())
 }
 
+fn element_content(text: &str, local_name: &str) -> Option<String> {
+    let open_tag = format!("<{local_name}");
+    let close_tag = format!("</{local_name}>");
+    let start = text.find(&open_tag)?;
+    let after_tag = &text[start + open_tag.len()..];
+    let gt = after_tag.find('>')?;
+    let content_start = &after_tag[gt + 1..];
+    let end = content_start.find(&close_tag)?;
+    Some(content_start[..end].trim().to_owned())
+}
+
 pub(crate) fn parse_version(bytes: &[u8], out: &mut std::collections::BTreeMap<String, String>) {
     const KEYS: &[&str] = &[
         "FileVersion",
@@ -170,25 +181,124 @@ pub(crate) fn parse_version(bytes: &[u8], out: &mut std::collections::BTreeMap<S
         "ProductName",
         "CompanyName",
         "FileDescription",
+        "InternalName",
         "OriginalFilename",
         "LegalCopyright",
     ];
-    let wide: Vec<u16> = bytes
+    let Some(children_start) = skip_version_node(bytes, "VS_VERSION_INFO") else {
+        return;
+    };
+    let Some(string_fi_start) = find_child_node(&bytes[children_start..], "StringFileInfo") else {
+        return;
+    };
+    let abs = children_start + string_fi_start;
+    let Some(table_start) = skip_version_node(&bytes[abs..], "StringFileInfo") else {
+        return;
+    };
+    parse_string_table(&bytes[abs + table_start..], KEYS, out);
+}
+
+fn read_u16_le(bytes: &[u8], offset: usize) -> Option<u16> {
+    let b = bytes.get(offset..offset + 2)?;
+    Some(u16::from_le_bytes([b[0], b[1]]))
+}
+
+fn read_wstring(bytes: &[u8], offset: usize) -> Option<(String, usize)> {
+    let mut end = offset;
+    loop {
+        let word = read_u16_le(bytes, end)?;
+        end += 2;
+        if word == 0 {
+            break;
+        }
+    }
+    let words: Vec<u16> = bytes[offset..end - 2]
         .chunks_exact(2)
         .map(|c| u16::from_le_bytes([c[0], c[1]]))
         .collect();
-    let tokens: Vec<String> = wide
-        .split(|&u| u == 0)
-        .filter(|s| !s.is_empty())
-        .map(String::from_utf16_lossy)
-        .collect();
-    let mut i = 0;
-    while i + 1 < tokens.len() {
-        if KEYS.contains(&tokens[i].as_str()) {
-            out.insert(tokens[i].clone(), tokens[i + 1].clone());
-            i += 2;
-        } else {
-            i += 1;
+    Some((String::from_utf16_lossy(&words), end))
+}
+
+fn align4(offset: usize) -> usize {
+    (offset + 3) & !3
+}
+
+fn skip_version_node(bytes: &[u8], expected_key: &str) -> Option<usize> {
+    if bytes.len() < 6 {
+        return None;
+    }
+    let _w_length = read_u16_le(bytes, 0)?;
+    let w_value_length = read_u16_le(bytes, 2)?;
+    let _w_type = read_u16_le(bytes, 4)?;
+    let (key, after_key) = read_wstring(bytes, 6)?;
+    if key != expected_key {
+        return None;
+    }
+    let value_start = align4(after_key);
+    let value_bytes = w_value_length as usize;
+    let children_start = align4(value_start + value_bytes);
+    Some(children_start)
+}
+
+fn find_child_node(bytes: &[u8], key: &str) -> Option<usize> {
+    let mut offset = 0;
+    let mut budget = 256u32;
+    while offset + 6 <= bytes.len() && budget > 0 {
+        budget -= 1;
+        let w_length = read_u16_le(bytes, offset)? as usize;
+        if w_length < 6 || offset + w_length > bytes.len() {
+            break;
         }
+        let (found_key, _) = read_wstring(bytes, offset + 6)?;
+        if found_key == key {
+            return Some(offset);
+        }
+        offset = align4(offset + w_length);
+    }
+    None
+}
+
+fn parse_string_table(
+    bytes: &[u8],
+    keys: &[&str],
+    out: &mut std::collections::BTreeMap<String, String>,
+) {
+    let Some(entries_start) = skip_version_node(bytes, "").or_else(|| {
+        if bytes.len() < 6 {
+            return None;
+        }
+        let (_, after_key) = read_wstring(bytes, 6)?;
+        Some(align4(after_key))
+    }) else {
+        return;
+    };
+    let table_len = read_u16_le(bytes, 0).unwrap_or(0) as usize;
+    let table_end = table_len.min(bytes.len());
+    let mut offset = entries_start;
+    let mut budget = 1024u32;
+    while offset + 6 <= table_end && budget > 0 {
+        budget -= 1;
+        let w_length = read_u16_le(bytes, offset).unwrap_or(0) as usize;
+        if w_length < 6 {
+            break;
+        }
+        let entry_end = (offset + w_length).min(table_end);
+        let w_value_length = read_u16_le(bytes, offset + 2).unwrap_or(0) as usize;
+        if let Some((key, after_key)) = read_wstring(bytes, offset + 6)
+            && keys.contains(&key.as_str())
+            && w_value_length > 0
+        {
+            let value_start = align4(after_key);
+            let value_chars = w_value_length.saturating_sub(1);
+            let value_end = (value_start + value_chars * 2).min(entry_end);
+            if value_start < value_end {
+                let words: Vec<u16> = bytes[value_start..value_end]
+                    .chunks_exact(2)
+                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                    .collect();
+                out.insert(key, String::from_utf16_lossy(&words));
+            }
+        }
+        offset = align4(entry_end);
     }
 }

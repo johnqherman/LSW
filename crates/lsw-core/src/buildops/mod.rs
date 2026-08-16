@@ -223,7 +223,7 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
 
     let mut artifacts = find_artifacts(&artifact_dir, &project.root);
     if flat_layout {
-        artifacts = reconcile_flat_artifacts(project, artifacts, &pre_build);
+        artifacts = reconcile_flat_artifacts(project, artifacts, &pre_build)?;
     }
     verify_artifacts_are_pe(project, &artifacts)?;
 
@@ -370,7 +370,7 @@ fn build_cmake(
         &["cmake".to_owned(), "--build".to_owned(), "build".to_owned()],
         commands,
     )?;
-    write_cmake_toolchain_marker(&project.root.join("build"), &cmake_config);
+    write_cmake_toolchain_marker(&project.root.join("build"), &cmake_config)?;
     Ok(project.root.join("build"))
 }
 
@@ -460,7 +460,7 @@ fn build_meson(
         }
         run_step(project, env, tc, &setup, commands)?;
         if let Some(hash) = &cross_hash {
-            safe_marker_write(&fp_path, hash);
+            safe_marker_write(&fp_path, hash)?;
         }
     }
     run_step(
@@ -482,7 +482,7 @@ fn reconcile_flat_artifacts(
     project: &Project,
     mut artifacts: Vec<PathBuf>,
     pre_build: &std::collections::HashMap<PathBuf, (u64, std::time::SystemTime)>,
-) -> Vec<PathBuf> {
+) -> Result<Vec<PathBuf>> {
     let manifest = project.root.join("build").join(".lsw-artifacts");
     artifacts.retain(|rel| is_safe_artifact(rel));
     let touched: Vec<PathBuf> = artifacts
@@ -499,7 +499,9 @@ fn reconcile_flat_artifacts(
         .collect();
     if !touched.is_empty() {
         artifacts = touched;
-        safe_marker_write(&manifest, encode_artifact_manifest(&artifacts));
+        if let Err(e) = safe_marker_write(&manifest, encode_artifact_manifest(&artifacts)) {
+            tracing::warn!("could not write artifact manifest: {e}");
+        }
     } else if let Some(recorded) = read_capped(&manifest, 4 * 1024 * 1024) {
         let remembered: Vec<PathBuf> = decode_artifact_manifest(&recorded)
             .into_iter()
@@ -509,7 +511,7 @@ fn reconcile_flat_artifacts(
             artifacts = remembered;
         }
     }
-    artifacts
+    Ok(artifacts)
 }
 
 fn verify_artifacts_are_pe(project: &Project, artifacts: &[PathBuf]) -> Result<()> {
@@ -564,12 +566,12 @@ fn refresh_stale_cmake_build_dir(build_dir: &Path, config: &str) -> Result<()> {
     Ok(())
 }
 
-fn write_cmake_toolchain_marker(build_dir: &Path, config: &str) {
-    let _ = fs::create_dir_all(build_dir);
+fn write_cmake_toolchain_marker(build_dir: &Path, config: &str) -> Result<()> {
+    fs::create_dir_all(build_dir).map_err(|e| Error::io(build_dir.to_path_buf(), e))?;
     safe_marker_write(
         &build_dir.join(".lsw-toolchain"),
         cmake_config_fingerprint(config),
-    );
+    )
 }
 
 fn is_safe_artifact(rel: &Path) -> bool {
@@ -611,13 +613,11 @@ pub(crate) fn read_capped_string(path: &Path, max: u64) -> Option<String> {
     String::from_utf8(read_capped(path, max)?).ok()
 }
 
-pub(super) fn safe_marker_write(path: &Path, contents: impl AsRef<[u8]>) {
-    if fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
-        && fs::remove_file(path).is_err()
-    {
-        return;
+pub(super) fn safe_marker_write(path: &Path, contents: impl AsRef<[u8]>) -> Result<()> {
+    if fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+        fs::remove_file(path).map_err(|e| Error::io(path.to_path_buf(), e))?;
     }
-    let _ = fs::write(path, contents);
+    fs::write(path, contents).map_err(|e| Error::io(path.to_path_buf(), e))
 }
 
 fn file_fingerprint(path: &Path) -> Option<(u64, std::time::SystemTime)> {
@@ -701,10 +701,14 @@ fn walk_depth(
 }
 
 pub(crate) fn which(program: &str) -> Option<PathBuf> {
+    use std::os::unix::fs::PermissionsExt;
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
         .map(|d| d.join(program))
-        .find(|c| c.is_file())
+        .find(|c| {
+            c.metadata()
+                .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+        })
 }
 
 fn deploy_runtime_dlls(
