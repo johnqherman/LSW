@@ -14,7 +14,9 @@ pub(crate) fn registry(
         RegistryCmd::Seed => None,
         _ => Some(admin_env(dirs)?),
     };
-    let (p, env) = if let Some(env) = env { (None, env) } else {
+    let (p, env) = if let Some(env) = env {
+        (None, env)
+    } else {
         let (p, env) = active_env(dirs)?;
         (Some(p), env)
     };

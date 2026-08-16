@@ -143,10 +143,7 @@ mod tests {
 
     #[test]
     fn clang_triple_arm64ec() {
-        assert_eq!(
-            clang_triple(TargetArch::Arm64Ec),
-            "arm64ec-pc-windows-gnu"
-        );
+        assert_eq!(clang_triple(TargetArch::Arm64Ec), "arm64ec-pc-windows-gnu");
     }
 
     #[test]

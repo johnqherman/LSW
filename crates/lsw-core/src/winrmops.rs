@@ -41,10 +41,8 @@ impl CurlCredFile {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos());
-        let path = std::env::temp_dir().join(format!(
-            "lsw-winrm-cred-{}-{nanos}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("lsw-winrm-cred-{}-{nanos}", std::process::id()));
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -496,9 +494,7 @@ mod tests {
     #[test]
     fn collect_streams_decodes_stdout() {
         let encoded = B64.encode(b"hello world");
-        let resp = format!(
-            "<rsp:Stream Name=\"stdout\" CommandId=\"c1\">{encoded}</rsp:Stream>"
-        );
+        let resp = format!("<rsp:Stream Name=\"stdout\" CommandId=\"c1\">{encoded}</rsp:Stream>");
         let mut out = Vec::new();
         collect_streams(&resp, "stdout", &mut out);
         assert_eq!(out, b"hello world");
@@ -507,9 +503,7 @@ mod tests {
     #[test]
     fn collect_streams_ignores_other_name() {
         let encoded = B64.encode(b"err data");
-        let resp = format!(
-            "<rsp:Stream Name=\"stderr\" CommandId=\"c1\">{encoded}</rsp:Stream>"
-        );
+        let resp = format!("<rsp:Stream Name=\"stderr\" CommandId=\"c1\">{encoded}</rsp:Stream>");
         let mut out = Vec::new();
         collect_streams(&resp, "stdout", &mut out);
         assert!(out.is_empty());

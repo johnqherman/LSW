@@ -595,7 +595,10 @@ fn build_inno(
 ) -> Result<PathBuf> {
     let wine = &env.manifest.runtime.executable;
     let iscc = which("iscc").or_else(|| {
-        let pf = env.layout.drive_c().join("Program Files (x86)/Inno Setup 6/ISCC.exe");
+        let pf = env
+            .layout
+            .drive_c()
+            .join("Program Files (x86)/Inno Setup 6/ISCC.exe");
         pf.is_file().then_some(pf)
     });
     let Some(iscc) = iscc else {
@@ -617,8 +620,10 @@ fn build_inno(
     strip_existing(&out_path)?;
 
     let mapper = crate::envops::mapper(env, project);
-    let win_iss = mapper.to_windows(&std::path::absolute(&iss_path).map_err(|e| Error::io(iss_path.clone(), e))?)?;
-    let win_out = mapper.to_windows(&std::path::absolute(dist).map_err(|e| Error::io(dist.to_path_buf(), e))?)?;
+    let win_iss = mapper
+        .to_windows(&std::path::absolute(&iss_path).map_err(|e| Error::io(iss_path.clone(), e))?)?;
+    let win_out = mapper
+        .to_windows(&std::path::absolute(dist).map_err(|e| Error::io(dist.to_path_buf(), e))?)?;
 
     let output = Command::new(wine)
         .arg(&iscc)

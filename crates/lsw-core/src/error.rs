@@ -503,9 +503,7 @@ mod tests {
 
     #[test]
     fn display_includes_error_code_and_detail() {
-        let e = Error::EnvironmentNotFound {
-            name: "dev".into(),
-        };
+        let e = Error::EnvironmentNotFound { name: "dev".into() };
         let msg = e.to_string();
         assert!(msg.contains("LSW2002"));
         assert!(msg.contains("dev"));

@@ -603,9 +603,7 @@ pub fn import_env(dirs: &Dirs, name: &str, file: &Path, force: bool) -> Result<(
     if extracted_size > 10 * 1024 * 1024 * 1024 {
         return Err(Error::InitFailed {
             path: file.to_path_buf(),
-            detail: format!(
-                "extracted archive size ({extracted_size} bytes) exceeds 10 GB limit"
-            ),
+            detail: format!("extracted archive size ({extracted_size} bytes) exceeds 10 GB limit"),
         });
     }
     let candidate = staging.join(name);
@@ -621,7 +619,10 @@ pub fn import_env(dirs: &Dirs, name: &str, file: &Path, force: bool) -> Result<(
     if manifest.name != name {
         return Err(Error::InitFailed {
             path: file.to_path_buf(),
-            detail: format!("archive environment is named '{}' instead of '{name}'", manifest.name),
+            detail: format!(
+                "archive environment is named '{}' instead of '{name}'",
+                manifest.name
+            ),
         });
     }
     for path in [

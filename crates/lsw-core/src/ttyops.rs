@@ -79,7 +79,11 @@ impl Drop for RawModeGuard {
     fn drop(&mut self) {
         unsafe {
             libc::tcsetattr(0, libc::TCSANOW, &raw const self.original);
-            libc::sigaction(libc::SIGTERM, &raw const self.prev_term, std::ptr::null_mut());
+            libc::sigaction(
+                libc::SIGTERM,
+                &raw const self.prev_term,
+                std::ptr::null_mut(),
+            );
             libc::sigaction(libc::SIGHUP, &raw const self.prev_hup, std::ptr::null_mut());
             let saved = TERMIOS_RESTORE.swap(std::ptr::null_mut(), Ordering::AcqRel);
             if !saved.is_null() {
@@ -110,7 +114,11 @@ impl WinchGuard {
 impl Drop for WinchGuard {
     fn drop(&mut self) {
         unsafe {
-            libc::sigaction(libc::SIGWINCH, &raw const self.previous, std::ptr::null_mut());
+            libc::sigaction(
+                libc::SIGWINCH,
+                &raw const self.previous,
+                std::ptr::null_mut(),
+            );
         }
     }
 }

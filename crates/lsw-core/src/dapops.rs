@@ -1193,10 +1193,7 @@ pub fn serve<R: BufRead, W: Write>(
         if req.kind != "request" {
             continue;
         }
-        let terminating = matches!(
-            req.command.as_deref(),
-            Some("terminate" | "disconnect")
-        );
+        let terminating = matches!(req.command.as_deref(), Some("terminate" | "disconnect"));
         let responses = adapter.handle(&req)?;
         for msg in &responses {
             write_message(writer, msg)?;

@@ -137,7 +137,10 @@ mod tests {
 
     #[test]
     fn sign_nonexistent_file_returns_error() {
-        let result = sign(Path::new("/nonexistent/binary.exe"), &SignOptions::default());
+        let result = sign(
+            Path::new("/nonexistent/binary.exe"),
+            &SignOptions::default(),
+        );
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::NotExecutable { .. }));
     }

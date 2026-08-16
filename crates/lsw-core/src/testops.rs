@@ -536,19 +536,13 @@ fn find_dotnet_test_exe(publish_dir: &Path, project_name: &str) -> Result<std::p
     if path.is_file() {
         return Ok(path);
     }
-    let hit = std::fs::read_dir(publish_dir)
-        .ok()
-        .and_then(|entries| {
-            entries
-                .flatten()
-                .take(10_000)
-                .find(|e| {
-                    e.file_name()
-                        .to_string_lossy()
-                        .ends_with(".exe")
-                })
-                .map(|e| e.path())
-        });
+    let hit = std::fs::read_dir(publish_dir).ok().and_then(|entries| {
+        entries
+            .flatten()
+            .take(10_000)
+            .find(|e| e.file_name().to_string_lossy().ends_with(".exe"))
+            .map(|e| e.path())
+    });
     hit.ok_or(Error::NoTests)
 }
 
@@ -557,7 +551,8 @@ fn parse_dotnet_summary(stdout: &str) -> (Option<u32>, Option<u32>) {
     let mut failed: Option<u32> = None;
     for line in stdout.lines() {
         let line = line.trim();
-        if line.starts_with("Passed!") || line.starts_with("Failed!") || line.starts_with("Total:") {
+        if line.starts_with("Passed!") || line.starts_with("Failed!") || line.starts_with("Total:")
+        {
             for segment in line.split([',', '-']) {
                 let part = segment.trim();
                 if let Some(n) = part

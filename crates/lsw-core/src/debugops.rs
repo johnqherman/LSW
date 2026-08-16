@@ -91,8 +91,8 @@ mod tests {
 
     #[test]
     fn debug_rejects_nonexistent_program() {
-        use std::path::PathBuf;
         use lsw_config::*;
+        use std::path::PathBuf;
         let env = crate::envops::Environment {
             name: "test".into(),
             manifest: EnvironmentManifest {

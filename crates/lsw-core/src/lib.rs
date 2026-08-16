@@ -167,7 +167,10 @@ mod tests {
 
     #[test]
     fn xml_escape_unicode_preserved() {
-        assert_eq!(xml_escape("caf\u{00e9} <\u{2603}>"), "caf\u{00e9} &lt;\u{2603}&gt;");
+        assert_eq!(
+            xml_escape("caf\u{00e9} <\u{2603}>"),
+            "caf\u{00e9} &lt;\u{2603}&gt;"
+        );
     }
 
     #[test]

@@ -175,10 +175,8 @@ impl PassFile {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos());
-        let path = std::env::temp_dir().join(format!(
-            "lsw-sign-pass-{}-{nanos}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("lsw-sign-pass-{}-{nanos}", std::process::id()));
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)

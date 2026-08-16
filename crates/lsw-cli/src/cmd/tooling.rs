@@ -88,7 +88,9 @@ pub(crate) fn wine(
             if json {
                 crate::cmd::emit_json(&list);
             } else if list.is_empty() {
-                println!("no managed Wine installations (import one with: lsw wine install <version> --from <path>)");
+                println!(
+                    "no managed Wine installations (import one with: lsw wine install <version> --from <path>)"
+                );
             } else {
                 for w in list {
                     println!("{:<28} {}", w.version, w.executable.display());

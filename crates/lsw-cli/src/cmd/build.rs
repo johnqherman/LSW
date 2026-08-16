@@ -64,8 +64,8 @@ fn build_all(
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
-    let ws = lsw_core::Workspace::discover(&crate::cwd()?)?
-        .ok_or(lsw_core::Error::NoBuildSystem)?;
+    let ws =
+        lsw_core::Workspace::discover(&crate::cwd()?)?.ok_or(lsw_core::Error::NoBuildSystem)?;
     let env_name = crate::env_override();
     let mut all_ok = true;
     for member in &ws.members {
@@ -126,7 +126,9 @@ pub(crate) fn run(
     dirs: &Dirs,
 ) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
-    let program = if let Some(program) = program { program.clone() } else {
+    let program = if let Some(program) = program {
+        program.clone()
+    } else {
         let build = lsw_core::build(&p, &env, &BuildOptions::default())?;
         match pick_built(&build, true) {
             Picked::None => {
@@ -274,8 +276,7 @@ fn test_all(
     dirs: &Dirs,
     format: Format,
 ) -> lsw_core::Result<ExitCode> {
-    let ws = lsw_core::Workspace::discover(&crate::cwd()?)?
-        .ok_or(lsw_core::Error::NoTests)?;
+    let ws = lsw_core::Workspace::discover(&crate::cwd()?)?.ok_or(lsw_core::Error::NoTests)?;
     let env_name = crate::env_override();
     let mut all_ok = true;
     for member in &ws.members {
@@ -297,8 +298,8 @@ fn test_all(
             },
         ) {
             Ok(report) => {
-                let passed = report.compatibility
-                    == lsw_core::CompatStatus::LocalCompatibilityVerified;
+                let passed =
+                    report.compatibility == lsw_core::CompatStatus::LocalCompatibilityVerified;
                 if !passed {
                     all_ok = false;
                 }

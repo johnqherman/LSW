@@ -44,9 +44,8 @@ pub(crate) fn kill_validated(pid: u32, prefix: &Path) -> Result<(), crate::Runti
         if !process_in_prefix(pid, prefix) {
             return Err(crate::RuntimeError::ProcessNotInEnvironment { pid });
         }
-        pidfd_send_signal(&pidfd, libc::SIGTERM).map_err(|_| {
-            crate::RuntimeError::ProcessNotInEnvironment { pid }
-        })
+        pidfd_send_signal(&pidfd, libc::SIGTERM)
+            .map_err(|_| crate::RuntimeError::ProcessNotInEnvironment { pid })
     } else {
         tracing::debug!(pid, "pidfd_open unavailable, falling back to kill()");
         if !process_in_prefix(pid, prefix) {

@@ -154,10 +154,7 @@ mod tests {
     #[test]
     fn pick_built_many_artifacts() {
         let report = lsw_core::BuildReport {
-            artifacts: vec![
-                PathBuf::from("build/a.exe"),
-                PathBuf::from("build/b.dll"),
-            ],
+            artifacts: vec![PathBuf::from("build/a.exe"), PathBuf::from("build/b.dll")],
             system: lsw_core::BuildSystem::Cmake,
             commands: vec![],
             lock_written: false,

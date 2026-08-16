@@ -375,7 +375,12 @@ pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
                 crate::cmd::emit_json(&report);
             } else {
                 for pkg in &report.installed {
-                    println!("{} vcpkg installed {} ({})", color::green("+"), pkg, report.triplet);
+                    println!(
+                        "{} vcpkg installed {} ({})",
+                        color::green("+"),
+                        pkg,
+                        report.triplet
+                    );
                 }
                 println!("  vcpkg packages available to builds via -I/-L flags");
             }

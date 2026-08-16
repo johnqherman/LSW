@@ -492,8 +492,17 @@ mod tests {
 
     #[test]
     fn step_status_serializes() {
-        assert_eq!(serde_json::to_string(&StepStatus::Pass).unwrap(), "\"pass\"");
-        assert_eq!(serde_json::to_string(&StepStatus::Fail).unwrap(), "\"fail\"");
-        assert_eq!(serde_json::to_string(&StepStatus::Skip).unwrap(), "\"skip\"");
+        assert_eq!(
+            serde_json::to_string(&StepStatus::Pass).unwrap(),
+            "\"pass\""
+        );
+        assert_eq!(
+            serde_json::to_string(&StepStatus::Fail).unwrap(),
+            "\"fail\""
+        );
+        assert_eq!(
+            serde_json::to_string(&StepStatus::Skip).unwrap(),
+            "\"skip\""
+        );
     }
 }

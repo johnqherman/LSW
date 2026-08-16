@@ -296,7 +296,7 @@ pub struct InstalledDep {
 }
 
 pub(crate) fn repo_for(arch: lsw_config::TargetArch) -> Result<(&'static str, &'static str)> {
-    use lsw_config::TargetArch::{X86_64, X86, Aarch64};
+    use lsw_config::TargetArch::{Aarch64, X86, X86_64};
     match arch {
         X86_64 => Ok(("mingw64", "mingw-w64-x86_64")),
         X86 => Ok(("mingw32", "mingw-w64-i686")),
@@ -368,13 +368,10 @@ fn curl_download(url: &str, dest: &Path) -> Result<()> {
 }
 
 fn verify_gpg_signature(pkg_path: &Path, sig_url: &str, name: &str) {
-    let sig_path = pkg_path.with_extension(
-        pkg_path
-            .extension().map_or("sig".into(), |e| {
-                let ext = e.to_string_lossy();
-                format!("{ext}.sig")
-            }),
-    );
+    let sig_path = pkg_path.with_extension(pkg_path.extension().map_or("sig".into(), |e| {
+        let ext = e.to_string_lossy();
+        format!("{ext}.sig")
+    }));
     if curl_download(sig_url, &sig_path).is_err() {
         tracing::warn!(
             "could not download GPG signature for {name}; skipping signature verification"
@@ -386,9 +383,7 @@ fn verify_gpg_signature(pkg_path: &Path, sig_url: &str, name: &str) {
     } else if crate::buildops::which("gpg").is_some() {
         "gpg"
     } else {
-        tracing::warn!(
-            "gpg/gpgv not found on PATH; skipping signature verification for {name}"
-        );
+        tracing::warn!("gpg/gpgv not found on PATH; skipping signature verification for {name}");
         return;
     };
     let result = if gpg == "gpgv" {
@@ -978,7 +973,10 @@ pub fn vcpkg_install(
 }
 
 /// Returns vcpkg installed include/lib paths for the given architecture, if any packages are installed.
-pub fn vcpkg_dirs(dirs: &lsw_config::Dirs, arch: lsw_config::TargetArch) -> Option<(PathBuf, PathBuf)> {
+pub fn vcpkg_dirs(
+    dirs: &lsw_config::Dirs,
+    arch: lsw_config::TargetArch,
+) -> Option<(PathBuf, PathBuf)> {
     let Ok(triplet) = vcpkg_triplet(arch) else {
         return None;
     };

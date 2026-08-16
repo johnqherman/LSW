@@ -34,9 +34,9 @@ impl PathMapper {
             for component in rest.components() {
                 match component {
                     Component::Normal(part) => {
-                        let part = part.to_str().ok_or_else(|| PathError::NonUtf8 {
-                            path: path.clone(),
-                        })?;
+                        let part = part
+                            .to_str()
+                            .ok_or_else(|| PathError::NonUtf8 { path: path.clone() })?;
                         if part.contains('\\') {
                             return Err(PathError::Unmapped {
                                 path: path.to_string_lossy().into_owned(),

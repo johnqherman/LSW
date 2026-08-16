@@ -57,7 +57,9 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<RustInitRepo
     if let Some(n) = name {
         crate::envops::validate_name("project", n)?;
     }
-    let (root, project_name) = if let Some(n) = name { (parent.join(n), n.to_owned()) } else {
+    let (root, project_name) = if let Some(n) = name {
+        (parent.join(n), n.to_owned())
+    } else {
         let n = parent
             .file_name()
             .map(|s| s.to_string_lossy().into_owned())

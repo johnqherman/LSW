@@ -294,10 +294,7 @@ mod tests {
 
     #[test]
     fn parse_version_pairs_known_keys() {
-        let bytes = build_version_resource(&[
-            ("FileVersion", "1.2.3.4"),
-            ("ProductName", "Demo"),
-        ]);
+        let bytes = build_version_resource(&[("FileVersion", "1.2.3.4"), ("ProductName", "Demo")]);
         let mut map = std::collections::BTreeMap::new();
         parse_version(&bytes, &mut map);
         assert_eq!(map.get("FileVersion").unwrap(), "1.2.3.4");
@@ -322,10 +319,7 @@ mod tests {
 
     #[test]
     fn parse_version_ignores_unknown_keys() {
-        let bytes = build_version_resource(&[
-            ("FileVersion", "1.0"),
-            ("CustomKey", "ignored"),
-        ]);
+        let bytes = build_version_resource(&[("FileVersion", "1.0"), ("CustomKey", "ignored")]);
         let mut map = std::collections::BTreeMap::new();
         parse_version(&bytes, &mut map);
         assert_eq!(map.len(), 1);

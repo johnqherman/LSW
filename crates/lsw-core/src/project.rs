@@ -50,13 +50,13 @@ fn resolve_members(root: &Path, members: &[String]) -> Result<Vec<PathBuf>> {
         {
             return Err(Error::InitFailed {
                 path: root.to_path_buf(),
-                detail: format!(
-                    "workspace member '{member}' must be a relative path without '..'"
-                ),
+                detail: format!("workspace member '{member}' must be a relative path without '..'"),
             });
         }
         let joined = root.join(member);
-        let path = joined.canonicalize().map_err(|e| Error::io(joined.clone(), e))?;
+        let path = joined
+            .canonicalize()
+            .map_err(|e| Error::io(joined.clone(), e))?;
         if !path.starts_with(&canonical_root) {
             return Err(Error::InitFailed {
                 path,
@@ -66,9 +66,7 @@ fn resolve_members(root: &Path, members: &[String]) -> Result<Vec<PathBuf>> {
         if !path.join(PROJECT_MANIFEST).is_file() {
             return Err(Error::InitFailed {
                 path: path.clone(),
-                detail: format!(
-                    "workspace member '{member}' has no {PROJECT_MANIFEST}"
-                ),
+                detail: format!("workspace member '{member}' has no {PROJECT_MANIFEST}"),
             });
         }
         resolved.push(path);
