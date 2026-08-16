@@ -86,3 +86,82 @@ pub(crate) mod project;
 pub(crate) mod state;
 pub(crate) mod tooling;
 pub(crate) mod verify;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exit_ok_success() {
+        let code = exit_ok(true).unwrap();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[test]
+    fn exit_ok_failure() {
+        let code = exit_ok(false).unwrap();
+        assert_eq!(code, ExitCode::FAILURE);
+    }
+
+    #[test]
+    fn pick_built_empty_report() {
+        let report = lsw_core::BuildReport {
+            artifacts: vec![],
+            system: lsw_core::BuildSystem::Cmake,
+            commands: vec![],
+            lock_written: false,
+        };
+        assert!(matches!(pick_built(&report, false), Picked::None));
+    }
+
+    #[test]
+    fn pick_built_single_exe() {
+        let report = lsw_core::BuildReport {
+            artifacts: vec![PathBuf::from("build/app.exe")],
+            system: lsw_core::BuildSystem::Cmake,
+            commands: vec![],
+            lock_written: false,
+        };
+        assert!(matches!(pick_built(&report, false), Picked::One(_)));
+    }
+
+    #[test]
+    fn pick_built_filters_non_pe() {
+        let report = lsw_core::BuildReport {
+            artifacts: vec![
+                PathBuf::from("build/libfoo.a"),
+                PathBuf::from("build/foo.o"),
+            ],
+            system: lsw_core::BuildSystem::Cmake,
+            commands: vec![],
+            lock_written: false,
+        };
+        assert!(matches!(pick_built(&report, false), Picked::None));
+    }
+
+    #[test]
+    fn pick_built_includes_dll_when_not_exe_only() {
+        let report = lsw_core::BuildReport {
+            artifacts: vec![PathBuf::from("build/foo.dll")],
+            system: lsw_core::BuildSystem::Cmake,
+            commands: vec![],
+            lock_written: false,
+        };
+        assert!(matches!(pick_built(&report, false), Picked::One(_)));
+        assert!(matches!(pick_built(&report, true), Picked::None));
+    }
+
+    #[test]
+    fn pick_built_many_artifacts() {
+        let report = lsw_core::BuildReport {
+            artifacts: vec![
+                PathBuf::from("build/a.exe"),
+                PathBuf::from("build/b.dll"),
+            ],
+            system: lsw_core::BuildSystem::Cmake,
+            commands: vec![],
+            lock_written: false,
+        };
+        assert!(matches!(pick_built(&report, false), Picked::Many(_)));
+    }
+}

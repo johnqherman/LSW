@@ -65,14 +65,14 @@ impl BuildSystemArg {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum ColorMode {
     Auto,
     Always,
     Never,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum Format {
     Human,
     Json,
@@ -730,5 +730,99 @@ pub(crate) fn domain_from_flags(host: bool, windows: bool) -> Domain {
         Domain::Windows
     } else {
         Domain::Auto
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn parse_build_subcommand() {
+        let cli = Cli::try_parse_from(["lsw", "build"]).unwrap();
+        assert!(matches!(cli.command, Cmd::Build { .. }));
+    }
+
+    #[test]
+    fn parse_verbose_flag() {
+        let cli = Cli::try_parse_from(["lsw", "--verbose", "build"]).unwrap();
+        assert!(cli.verbose);
+    }
+
+    #[test]
+    fn parse_format_json() {
+        let cli = Cli::try_parse_from(["lsw", "--format", "json", "build"]).unwrap();
+        assert_eq!(cli.format, Format::Json);
+    }
+
+    #[test]
+    fn parse_env_override() {
+        let cli = Cli::try_parse_from(["lsw", "--env", "dev", "build"]).unwrap();
+        assert_eq!(cli.env, Some("dev".into()));
+    }
+
+    #[test]
+    fn parse_init_with_name() {
+        let cli = Cli::try_parse_from(["lsw", "init", "myapp"]).unwrap();
+        if let Cmd::Init { name, .. } = cli.command {
+            assert_eq!(name, Some("myapp".into()));
+        } else {
+            panic!("expected Init");
+        }
+    }
+
+    #[test]
+    fn parse_run_with_program() {
+        let cli = Cli::try_parse_from(["lsw", "run", "app.exe"]).unwrap();
+        if let Cmd::Run { program, .. } = cli.command {
+            assert_eq!(program, Some(PathBuf::from("app.exe")));
+        } else {
+            panic!("expected Run");
+        }
+    }
+
+    #[test]
+    fn unknown_subcommand_is_error() {
+        assert!(Cli::try_parse_from(["lsw", "nonexistent"]).is_err());
+    }
+
+    #[test]
+    fn default_format_is_human() {
+        let cli = Cli::try_parse_from(["lsw", "build"]).unwrap();
+        assert_eq!(cli.format, Format::Human);
+    }
+
+    #[test]
+    fn domain_flags_default_auto() {
+        assert_eq!(domain_from_flags(false, false), Domain::Auto);
+    }
+
+    #[test]
+    fn domain_flags_host() {
+        assert_eq!(domain_from_flags(true, false), Domain::Host);
+    }
+
+    #[test]
+    fn domain_flags_windows() {
+        assert_eq!(domain_from_flags(false, true), Domain::Windows);
+    }
+
+    #[test]
+    fn domain_flags_host_takes_precedence() {
+        assert_eq!(domain_from_flags(true, true), Domain::Host);
+    }
+
+    #[test]
+    fn build_system_arg_as_str() {
+        assert_eq!(BuildSystemArg::Cmake.as_str(), "cmake");
+        assert_eq!(BuildSystemArg::Cargo.as_str(), "cargo");
+        assert_eq!(BuildSystemArg::Explicit.as_str(), "explicit");
+    }
+
+    #[test]
+    fn color_mode_default_auto() {
+        let cli = Cli::try_parse_from(["lsw", "build"]).unwrap();
+        assert_eq!(cli.color, ColorMode::Auto);
     }
 }
