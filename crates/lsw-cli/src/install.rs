@@ -96,6 +96,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(unsafe_code)]
     fn default_prefix_honors_prefix_env() {
         unsafe { std::env::set_var("PREFIX", "/opt/lsw") };
         assert_eq!(default_prefix(), PathBuf::from("/opt/lsw"));

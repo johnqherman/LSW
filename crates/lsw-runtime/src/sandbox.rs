@@ -72,6 +72,7 @@ fn dirs_home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
+#[allow(unsafe_code)]
 pub(crate) fn apply_rlimits(command: &mut Command, spec: &SandboxSpec) {
     let cpu = spec.cpu_seconds;
     let mem = spec.memory_bytes;

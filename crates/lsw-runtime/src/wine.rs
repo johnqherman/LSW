@@ -319,6 +319,7 @@ impl RuntimeProvider for WineRuntime {
             })
     }
 
+    #[allow(unsafe_code)]
     fn kill(&self, prefix: &Path, pid: u32) -> Result<(), RuntimeError> {
         if !process_in_prefix(pid, prefix) {
             return Err(RuntimeError::ProcessNotInEnvironment { pid });

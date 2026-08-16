@@ -118,6 +118,7 @@ pub struct DbLock {
 }
 
 impl DbLock {
+    #[allow(unsafe_code)]
     fn acquire(dirs: &Dirs) -> Result<Self> {
         use std::os::unix::io::AsRawFd;
         std::fs::create_dir_all(&dirs.data).map_err(|e| Error::io(dirs.data.clone(), e))?;

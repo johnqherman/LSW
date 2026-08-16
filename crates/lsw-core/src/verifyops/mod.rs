@@ -476,6 +476,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(unsafe_code)]
     fn expand_tilde_uses_home() {
         unsafe { std::env::set_var("HOME", "/home/tester") };
         assert_eq!(

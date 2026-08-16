@@ -1,3 +1,5 @@
+#![allow(unsafe_code)]
+
 use std::os::fd::{FromRawFd, OwnedFd, RawFd};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};

@@ -150,6 +150,7 @@ impl Plugin {
                 .as_mut()
                 .ok_or_else(|| plugin_err(&self.name, "plugin stdin closed".into()))?;
             let fd = stdin.as_raw_fd();
+            #[allow(unsafe_code)]
             let nonblock_ok = unsafe {
                 let flags = libc::fcntl(fd, libc::F_GETFL);
                 flags != -1 && libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) != -1

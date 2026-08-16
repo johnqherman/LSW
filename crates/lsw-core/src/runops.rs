@@ -467,6 +467,7 @@ const SIGINT_EXIT_WINDOW_MS: i64 = 2000;
 
 static SHELL_SESSION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+#[allow(unsafe_code)]
 extern "C" fn shell_sigint(_: libc::c_int) {
     use std::sync::atomic::Ordering;
     let mut ts = libc::timespec {
@@ -498,6 +499,7 @@ struct ShellSignalGuard {
 }
 
 impl ShellSignalGuard {
+    #[allow(unsafe_code)]
     fn install() -> Self {
         use std::sync::atomic::Ordering;
         LAST_SIGINT_MS.store(i64::MIN / 2, Ordering::Relaxed);
@@ -514,6 +516,7 @@ impl ShellSignalGuard {
 }
 
 impl Drop for ShellSignalGuard {
+    #[allow(unsafe_code)]
     fn drop(&mut self) {
         use std::sync::atomic::Ordering;
         SHELL_CHILD_PID.store(0, Ordering::Relaxed);
