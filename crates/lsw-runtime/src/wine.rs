@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use lsw_config::ResolvedRuntime;
 
-use crate::env::{process_in_prefix, scrub_wine_env};
+use crate::env::scrub_wine_env;
 use crate::sandbox::{
     apply_rlimits, bwrap_args, find_bwrap, find_pasta, find_xvfb_run, sandbox_base_env,
     should_unshare_net,
@@ -384,16 +384,8 @@ impl RuntimeProvider for WineRuntime {
             })
     }
 
-    #[allow(unsafe_code)]
     fn kill(&self, prefix: &Path, pid: u32) -> Result<(), RuntimeError> {
-        if !process_in_prefix(pid, prefix) {
-            return Err(RuntimeError::ProcessNotInEnvironment { pid });
-        }
-        let rc = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
-        if rc != 0 {
-            return Err(RuntimeError::ProcessNotInEnvironment { pid });
-        }
-        Ok(())
+        crate::env::kill_validated(pid, prefix)
     }
 
     fn diagnostics(&self, prefix: &Path) -> RuntimeDiagnostics {
