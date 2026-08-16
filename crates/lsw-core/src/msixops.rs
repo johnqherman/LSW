@@ -172,10 +172,13 @@ impl PassFile {
     fn write(pass: &str) -> Result<Self> {
         use std::io::Write;
         use std::os::unix::fs::OpenOptionsExt;
-        let path = std::env::temp_dir().join(format!("lsw-sign-pass-{}", std::process::id()));
-        if std::fs::symlink_metadata(&path).is_ok() {
-            std::fs::remove_file(&path).map_err(|e| Error::io(path.clone(), e))?;
-        }
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let path = std::env::temp_dir().join(format!(
+            "lsw-sign-pass-{}-{nanos}",
+            std::process::id()
+        ));
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)

@@ -152,7 +152,10 @@ pub fn list(dirs: &Dirs) -> Result<Vec<SdkSummary>> {
         .flatten()
         .take(100_000)
     {
-        if !entry.path().is_dir() {
+        if !entry
+            .file_type()
+            .is_ok_and(|t| t.is_dir() && !t.is_symlink())
+        {
             continue;
         }
         let manifest_path = SdkManifest::path(&entry.path());

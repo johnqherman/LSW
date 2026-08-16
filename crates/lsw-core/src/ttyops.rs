@@ -157,6 +157,14 @@ fn write_all_fd(fd: RawFd, mut data: &[u8]) {
     }
 }
 
+fn kill_session(child: &mut std::process::Child) {
+    let pid = child.id() as libc::pid_t;
+    let killed = unsafe { libc::kill(-pid, libc::SIGKILL) == 0 };
+    if !killed {
+        let _ = child.kill();
+    }
+}
+
 pub(crate) fn run_shell_in_pty(mut command: Command, exit_hint: &str) -> Result<ExitStatus> {
     use std::os::fd::AsRawFd;
     use std::os::unix::process::CommandExt;
@@ -190,6 +198,7 @@ pub(crate) fn run_shell_in_pty(mut command: Command, exit_hint: &str) -> Result<
     let master_fd = master.as_raw_fd();
     let mut last_ctrl_c: Option<Instant> = None;
     let mut killed = false;
+    let mut child_exited = false;
     let mut buf = [0u8; 4096];
 
     loop {
@@ -231,7 +240,7 @@ pub(crate) fn run_shell_in_pty(mut command: Command, exit_hint: &str) -> Result<
                 if let Some(prev) = last_ctrl_c
                     && now.duration_since(prev) <= DOUBLE_PRESS_WINDOW
                 {
-                    let _ = child.kill();
+                    kill_session(&mut child);
                     killed = true;
                 } else {
                     write_all_fd(2, exit_hint.as_bytes());
@@ -251,9 +260,18 @@ pub(crate) fn run_shell_in_pty(mut command: Command, exit_hint: &str) -> Result<
             write_all_fd(1, &buf[..n as usize]);
         }
 
-        if let Ok(Some(_)) = child.try_wait() {
-            break;
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                child_exited = true;
+                break;
+            }
+            Ok(None) => {}
+            Err(_) => break,
         }
+    }
+
+    if !child_exited && !killed {
+        kill_session(&mut child);
     }
 
     loop {

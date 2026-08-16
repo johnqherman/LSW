@@ -1,4 +1,5 @@
 use std::fs;
+use std::os::unix::fs::DirBuilderExt;
 use std::path::{Component, Path, PathBuf};
 
 use lsw_config::{
@@ -23,9 +24,9 @@ pub fn validate_name(kind: &str, name: &str) -> Result<()> {
         || name == ".."
         || name.ends_with('.')
         || name.ends_with(' ')
-        || name.chars().any(|c| {
-            matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control()
-        })
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '+' | ' '))
         || WINDOWS_RESERVED.contains(
             &name
                 .split('.')
@@ -60,6 +61,14 @@ impl Environment {
         validate_name("environment", name)?;
         let root = dirs.environment(name);
         let layout = EnvironmentLayout::new(root);
+        for path in [layout.root.clone(), layout.prefix(), layout.drive_c()] {
+            if fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_symlink()) {
+                return Err(Error::InitFailed {
+                    path,
+                    detail: "managed environment path is a symlink".into(),
+                });
+            }
+        }
         if !layout.manifest().is_file() {
             return Err(Error::EnvironmentNotFound {
                 name: name.to_owned(),
@@ -118,7 +127,8 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
         Some(sdk_name) => {
             validate_name("sdk", sdk_name)?;
             let sdk_root = dirs.sysroot(sdk_name);
-            if !sdk_root.is_dir() {
+            let sdk_meta = fs::symlink_metadata(&sdk_root).ok();
+            if !sdk_meta.is_some_and(|m| m.is_dir() && !m.file_type().is_symlink()) {
                 return Err(Error::SdkNotFound {
                     name: sdk_name.clone(),
                 });
@@ -421,7 +431,7 @@ struct Replacement {
 
 impl Replacement {
     fn begin(root: &Path) -> Result<Self> {
-        let backup = if root.exists() {
+        let backup = if fs::symlink_metadata(root).is_ok() {
             let bak = backup_path(root);
             let _ = fs::remove_dir_all(&bak);
             fs::rename(root, &bak).map_err(|e| Error::io(root.to_path_buf(), e))?;
@@ -560,21 +570,27 @@ pub fn export_env(dirs: &Dirs, name: &str, file: &Path) -> Result<()> {
 pub fn import_env(dirs: &Dirs, name: &str, file: &Path, force: bool) -> Result<()> {
     validate_name("environment", name)?;
     let root = dirs.environment(name);
-    if root.exists() {
-        if !force {
-            return Err(Error::EnvironmentExists {
-                name: name.to_owned(),
-            });
-        }
-        std::fs::remove_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
+    if fs::symlink_metadata(&root).is_ok() && !force {
+        return Err(Error::EnvironmentExists {
+            name: name.to_owned(),
+        });
     }
-    std::fs::create_dir_all(dirs.environments()).map_err(|e| Error::io(dirs.environments(), e))?;
+    let environments = dirs.environments();
+    fs::create_dir_all(&environments).map_err(|e| Error::io(environments.clone(), e))?;
+    let staging = backup_path(&root);
+    fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&staging)
+        .map_err(|e| Error::io(staging.clone(), e))?;
+    let staging_guard = CleanupDir(staging.clone());
     let status = std::process::Command::new("tar")
         .arg("--zstd")
         .arg("-xf")
         .arg(file)
         .arg("-C")
-        .arg(dirs.environments())
+        .arg(&staging)
+        .arg("--")
+        .arg(name)
         .status()
         .map_err(|e| Error::io(std::path::PathBuf::from("tar"), e))?;
     if !status.success() {
@@ -583,13 +599,50 @@ pub fn import_env(dirs: &Dirs, name: &str, file: &Path, force: bool) -> Result<(
             detail: "tar failed to extract the environment archive".into(),
         });
     }
-    if !root.is_dir() {
+    let candidate = staging.join(name);
+    let candidate_meta = fs::symlink_metadata(&candidate).ok();
+    if !candidate_meta.is_some_and(|m| m.is_dir() && !m.file_type().is_symlink()) {
         return Err(Error::InitFailed {
             path: file.to_path_buf(),
             detail: format!("archive did not contain an environment named '{name}'"),
         });
     }
-    Environment::open(dirs, name).map(|_| ())
+    let candidate_layout = EnvironmentLayout::new(candidate.clone());
+    let manifest = EnvironmentManifest::load(&candidate_layout.manifest())?;
+    if manifest.name != name {
+        return Err(Error::InitFailed {
+            path: file.to_path_buf(),
+            detail: format!("archive environment is named '{}' instead of '{name}'", manifest.name),
+        });
+    }
+    for path in [
+        candidate_layout.prefix(),
+        candidate_layout.drive_c(),
+        candidate_layout.src(),
+        candidate_layout.temp(),
+        candidate_layout.logs(),
+    ] {
+        if fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(Error::InitFailed {
+                path,
+                detail: "archive contains a symlink at a managed environment path".into(),
+            });
+        }
+    }
+    let mut replacement = Replacement::begin(&root)?;
+    fs::rename(&candidate, &root).map_err(|e| Error::io(root.clone(), e))?;
+    Environment::open(dirs, name)?;
+    replacement.commit();
+    drop(staging_guard);
+    Ok(())
+}
+
+struct CleanupDir(PathBuf);
+
+impl Drop for CleanupDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
 }
 
 /// Provision winetricks.
@@ -723,6 +776,65 @@ mod tests {
     }
 
     #[test]
+    fn import_env_does_not_extract_sibling_environments() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = Dirs {
+            data: tmp.path().join("data"),
+            config: tmp.path().join("cfg"),
+            cache: tmp.path().join("cache"),
+        };
+        let archive_root = tmp.path().join("archive");
+        let layout = EnvironmentLayout::new(archive_root.join("safe"));
+        for path in [layout.src(), layout.temp(), layout.logs()] {
+            fs::create_dir_all(path).unwrap();
+        }
+        EnvironmentManifest {
+            name: "safe".into(),
+            format: ENVIRONMENT_FORMAT_VERSION,
+            target_arch: TargetArch::X86_64,
+            toolchain: lsw_config::ResolvedToolchain {
+                provider: "llvm-mingw".into(),
+                version: "1".into(),
+                cc: "/cc".into(),
+                cxx: "/cxx".into(),
+                sysroot: "/s".into(),
+                c_flags: vec![],
+                cxx_flags: vec![],
+                link_flags: vec![],
+            },
+            runtime: lsw_config::ResolvedRuntime {
+                provider: "wine".into(),
+                version: "9".into(),
+                executable: "/wine".into(),
+            },
+        }
+        .save(&layout.manifest())
+        .unwrap();
+        fs::create_dir_all(archive_root.join("victim")).unwrap();
+        fs::write(archive_root.join("victim/marker"), b"archive").unwrap();
+        let archive = tmp.path().join("env.tar.zst");
+        let status = std::process::Command::new("tar")
+            .args(["--zstd", "-cf"])
+            .arg(&archive)
+            .arg("-C")
+            .arg(&archive_root)
+            .args(["safe", "victim"])
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        fs::create_dir_all(dirs.environment("victim")).unwrap();
+        fs::write(dirs.environment("victim").join("marker"), b"original").unwrap();
+        import_env(&dirs, "safe", &archive, false).unwrap();
+
+        assert!(Environment::open(&dirs, "safe").is_ok());
+        assert_eq!(
+            fs::read(dirs.environment("victim").join("marker")).unwrap(),
+            b"original"
+        );
+    }
+
+    #[test]
     fn harden_profiles_replaces_host_escaping_symlinks_only() {
         let tmp = tempfile::tempdir().unwrap();
         let layout = EnvironmentLayout::new(tmp.path().join("env"));
@@ -755,6 +867,22 @@ mod tests {
     }
 
     #[test]
+    fn open_rejects_symlinked_environment_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = Dirs {
+            data: tmp.path().join("data"),
+            config: tmp.path().join("cfg"),
+            cache: tmp.path().join("cache"),
+        };
+        let outside = tmp.path().join("outside");
+        fs::create_dir_all(&outside).unwrap();
+        fs::create_dir_all(dirs.environments()).unwrap();
+        std::os::unix::fs::symlink(&outside, dirs.environment("linked")).unwrap();
+
+        assert!(Environment::open(&dirs, "linked").is_err());
+    }
+
+    #[test]
     fn list_empty_when_no_environments() {
         let tmp = tempfile::tempdir().unwrap();
         let dirs = Dirs {
@@ -767,7 +895,18 @@ mod tests {
 
     #[test]
     fn hostile_names_are_rejected_before_any_filesystem_touch() {
-        for bad in ["", ".", "..", "a/b", "a\\b", "../../etc", "x\0y"] {
+        for bad in [
+            "",
+            ".",
+            "..",
+            "a/b",
+            "a\\b",
+            "../../etc",
+            "x\0y",
+            "$(touch owned)",
+            "name;command",
+            "name`command`",
+        ] {
             let err = validate_name("environment", bad).unwrap_err();
             assert!(err.to_string().contains("LSW2012"), "accepted {bad:?}");
         }

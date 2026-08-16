@@ -157,12 +157,46 @@ pub fn verify_reproducible(
         ..BuildOptions::default()
     };
 
-    let stage = std::env::temp_dir().join(format!("lsw-repro-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&stage);
-    std::fs::create_dir_all(&stage).map_err(|e| Error::io(stage.clone(), e))?;
-    let result = verify_with_stage(project, env, filter, &opts, &stage);
-    let _ = std::fs::remove_dir_all(&stage);
-    result
+    let stage = ReproStage::create()?;
+    verify_with_stage(project, env, filter, &opts, &stage.0)
+}
+
+struct ReproStage(PathBuf);
+
+impl ReproStage {
+    fn create() -> Result<Self> {
+        use std::os::unix::fs::DirBuilderExt;
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let base = std::env::temp_dir();
+        for _ in 0..64 {
+            let counter = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos());
+            let path = base.join(format!(
+                "lsw-repro-{}-{nanos}-{counter}",
+                std::process::id()
+            ));
+            match std::fs::DirBuilder::new().mode(0o700).create(&path) {
+                Ok(()) => return Ok(Self(path)),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(e) => return Err(Error::io(path, e)),
+            }
+        }
+        Err(Error::io(
+            base,
+            std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "could not create a unique reproducibility directory",
+            ),
+        ))
+    }
+}
+
+impl Drop for ReproStage {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }
 
 fn verify_with_stage(

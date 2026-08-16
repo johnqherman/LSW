@@ -1,6 +1,7 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
+use std::time::{Duration, Instant};
 
 use lsw_config::ResolvedRuntime;
 
@@ -34,6 +35,7 @@ pub trait RuntimeProvider {
 
 const WINE_ID: &str = "wine";
 pub(crate) const SYSTEM_REG: &str = "system.reg";
+const WINESERVER_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Wine runtime provider.
 #[derive(Debug, Clone, Copy, Default)]
@@ -51,14 +53,24 @@ pub fn base_env(prefix: &Path) -> Vec<(String, String)> {
     ]
 }
 
-/// Returns true if the environment variable affects the host dynamic linker.
+/// Returns true if the environment variable affects host process startup.
 pub fn host_loader_sensitive(key: &str) -> bool {
     key.starts_with("LD_")
         || matches!(
             key,
-            "GCONV_PATH"
+            "BASH_ENV"
+                | "ENV"
+                | "GCONV_PATH"
                 | "GETCONF_DIR"
                 | "HOSTALIASES"
+                | "NODE_OPTIONS"
+                | "PATH"
+                | "PERL5LIB"
+                | "PERL5OPT"
+                | "PYTHONHOME"
+                | "PYTHONPATH"
+                | "RUBYLIB"
+                | "RUBYOPT"
                 | "WINEDLLPATH"
                 | "WINELOADER"
                 | "WINESERVER"
@@ -137,14 +149,14 @@ impl WineRuntime {
     pub fn shutdown_prefix(&self, prefix: &Path) -> Result<(), RuntimeError> {
         let wineserver = Self::wineserver_executable()?;
         for flag in ["-k", "-w"] {
-            let status = command_with_prefix(&wineserver, prefix)
-                .arg(flag)
-                .status()
-                .map_err(|source| RuntimeError::SpawnFailed {
-                    program: wineserver.clone(),
-                    source,
-                })?;
-            let _ = status;
+            let mut command = command_with_prefix(&wineserver, prefix);
+            command.arg(flag);
+            let status = wait_with_timeout(&mut command, &wineserver, WINESERVER_TIMEOUT)?;
+            if !status.success() {
+                return Err(RuntimeError::ExecutionFailed {
+                    detail: format!("'{} {flag}' exited with {status}", wineserver.display()),
+                });
+            }
         }
         Ok(())
     }
@@ -261,6 +273,46 @@ fn command_with_prefix(program: &Path, prefix: &Path) -> Command {
     command
 }
 
+fn wait_with_timeout(
+    command: &mut Command,
+    program: &Path,
+    timeout: Duration,
+) -> Result<ExitStatus, RuntimeError> {
+    let mut child = command
+        .spawn()
+        .map_err(|source| RuntimeError::SpawnFailed {
+            program: program.to_path_buf(),
+            source,
+        })?;
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(RuntimeError::ExecutionFailed {
+                    detail: format!(
+                        "'{}' did not exit within {} seconds",
+                        program.display(),
+                        timeout.as_secs()
+                    ),
+                });
+            }
+            Err(source) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(RuntimeError::ExecutionFailed {
+                    detail: format!("waiting for '{}' failed: {source}", program.display()),
+                });
+            }
+        }
+    }
+}
+
 impl RuntimeProvider for WineRuntime {
     fn id(&self) -> &'static str {
         WINE_ID
@@ -353,5 +405,41 @@ impl RuntimeProvider for WineRuntime {
             prefix_exists: prefix.is_dir(),
             prefix_initialized: prefix.join(SYSTEM_REG).is_file(),
         }
+    }
+}
+
+#[cfg(test)]
+mod wine_tests {
+    use super::*;
+
+    fn script(body: &str) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("command");
+        std::fs::write(&path, format!("{body}\n")).unwrap();
+        (dir, path)
+    }
+
+    #[test]
+    fn wait_with_timeout_reports_nonzero_status() {
+        let (_dir, path) = script("exit 7");
+        let status = wait_with_timeout(
+            Command::new("/bin/sh").arg(&path).arg("-k"),
+            Path::new("/bin/sh"),
+            Duration::from_secs(1),
+        )
+        .unwrap();
+        assert_eq!(status.code(), Some(7));
+    }
+
+    #[test]
+    fn wait_with_timeout_kills_stuck_process() {
+        let (_dir, path) = script("while :; do :; done");
+        let error = wait_with_timeout(
+            Command::new("/bin/sh").arg(&path).arg("-w"),
+            Path::new("/bin/sh"),
+            Duration::from_millis(25),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("did not exit"));
     }
 }

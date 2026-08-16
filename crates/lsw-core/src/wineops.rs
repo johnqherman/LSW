@@ -68,19 +68,37 @@ pub fn install(dirs: &lsw_config::Dirs, version: &str, source: &Path) -> Result<
 
     fs::create_dir_all(&dest).map_err(|e| Error::io(dest.clone(), e))?;
 
-    if source.is_dir() {
-        copy_tree(source, &dest)?;
-    } else {
-        extract_tarball(source, &dest)?;
-    }
+    let result = (|| {
+        if source.is_dir() {
+            copy_tree(source, &dest)?;
+        } else {
+            extract_tarball(source, &dest)?;
+        }
 
-    let executable = find_wine_executable(&dest).ok_or_else(|| Error::ToolMissing {
-        tool: "wine".into(),
-        fix: format!(
-            "the imported directory does not contain bin/wine or bin/wine64; check {}",
-            source.display()
-        ),
-    })?;
+        find_wine_executable(&dest).ok_or_else(|| Error::ToolMissing {
+            tool: "wine".into(),
+            fix: format!(
+                "the imported directory does not contain bin/wine or bin/wine64; check {}",
+                source.display()
+            ),
+        })
+    })();
+
+    let executable = match result {
+        Ok(executable) => executable,
+        Err(error) => {
+            if let Err(cleanup) = fs::remove_dir_all(&dest) {
+                return Err(Error::ExtractFailed {
+                    name: source.display().to_string(),
+                    detail: format!(
+                        "{error}; also could not remove partial install {}: {cleanup}",
+                        dest.display()
+                    ),
+                });
+            }
+            return Err(error);
+        }
+    };
 
     Ok(WineInstallation {
         version: version.to_owned(),
@@ -136,18 +154,23 @@ fn copy_tree_depth(
     max: usize,
 ) -> Result<()> {
     if depth == 0 {
-        return Ok(());
+        return Err(Error::ExtractFailed {
+            name: src.display().to_string(),
+            detail: "Wine directory tree is too deep".into(),
+        });
     }
     fs::create_dir_all(dst).map_err(|e| Error::io(dst.to_path_buf(), e))?;
     let entries = fs::read_dir(src).map_err(|e| Error::io(src.to_path_buf(), e))?;
-    for entry in entries.flatten() {
+    for entry in entries {
+        let entry = entry.map_err(|e| Error::io(src.to_path_buf(), e))?;
         *count += 1;
         if *count > max {
-            return Ok(());
+            return Err(Error::ExtractFailed {
+                name: src.display().to_string(),
+                detail: format!("Wine directory contains more than {max} entries"),
+            });
         }
-        let Ok(meta) = entry.metadata() else {
-            continue;
-        };
+        let meta = entry.metadata().map_err(|e| Error::io(entry.path(), e))?;
         let name = entry.file_name();
         let target = dst.join(&name);
         if meta.is_dir() {
@@ -293,5 +316,17 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dirs = test_dirs(&tmp);
         assert!(install(&dirs, "1.0", Path::new("/nonexistent/wine")).is_err());
+    }
+
+    #[test]
+    fn failed_install_removes_partial_destination() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(&tmp);
+        let src = tmp.path().join("wine-source");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("partial"), b"incomplete").unwrap();
+
+        assert!(install(&dirs, "broken", &src).is_err());
+        assert!(!dirs.wines().join("broken").exists());
     }
 }

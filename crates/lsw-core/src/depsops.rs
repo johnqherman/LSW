@@ -344,6 +344,10 @@ fn curl_download(url: &str, dest: &Path) -> Result<()> {
             "-fsSL",
             "--retry",
             "2",
+            "--proto",
+            "=https",
+            "--proto-redir",
+            "=https",
             "--max-filesize",
             "1073741824",
             "-o",
@@ -452,6 +456,7 @@ pub fn add(
     name: &str,
 ) -> Result<PkgRef> {
     use std::io::Read;
+    crate::envops::validate_name("package", name)?;
     let (repo, prefix) = repo_for(arch)?;
     let pkg = resolve(dirs, repo, prefix, name)?;
     if !is_safe_filename(&pkg.filename) {
@@ -626,6 +631,19 @@ fn copy_dir_capped(src: &Path, dst: &Path, depth: usize, visited: &mut usize) ->
             detail: "vendor tree is too deep".into(),
         });
     }
+    let src_meta = std::fs::symlink_metadata(src).map_err(|e| Error::io(src.to_path_buf(), e))?;
+    if src_meta.file_type().is_symlink() || !src_meta.is_dir() {
+        return Err(Error::ExtractFailed {
+            name: src.display().to_string(),
+            detail: "vendor source directory is a symlink or is not a directory".into(),
+        });
+    }
+    if std::fs::symlink_metadata(dst).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(Error::ExtractFailed {
+            name: dst.display().to_string(),
+            detail: "vendor destination directory is a symlink".into(),
+        });
+    }
     std::fs::create_dir_all(dst).map_err(|e| Error::io(dst.to_path_buf(), e))?;
     let mut copied = 0;
     for entry in std::fs::read_dir(src)
@@ -649,6 +667,12 @@ fn copy_dir_capped(src: &Path, dst: &Path, depth: usize, visited: &mut usize) ->
         if meta.is_dir() {
             copied += copy_dir_capped(&entry.path(), &to, depth - 1, visited)?;
         } else if meta.is_file() {
+            if std::fs::symlink_metadata(&to).is_ok_and(|m| m.file_type().is_symlink()) {
+                return Err(Error::ExtractFailed {
+                    name: to.display().to_string(),
+                    detail: "vendor destination file is a symlink".into(),
+                });
+            }
             std::fs::copy(entry.path(), &to).map_err(|e| Error::io(entry.path(), e))?;
             copied += 1;
         }
@@ -926,6 +950,26 @@ mod tests {
             vcpkg_root(&dirs),
             PathBuf::from("/home/u/.local/share/lsw/vcpkg")
         );
+    }
+
+    #[test]
+    fn vendor_rejects_symlinked_source_subdirectory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("source");
+        let outside = tmp.path().join("outside");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.h"), b"secret").unwrap();
+        std::os::unix::fs::symlink(&outside, source.join("include")).unwrap();
+        let project = crate::project::Project {
+            root: tmp.path().join("project"),
+            manifest: lsw_config::ProjectManifest::new("project"),
+        };
+        std::fs::create_dir_all(&project.root).unwrap();
+        project.manifest.save(&project.manifest_path()).unwrap();
+
+        assert!(vendor(&project, lsw_config::TargetArch::X86_64, &source).is_err());
+        assert!(!project.root.join("deps/x86_64/include/secret.h").exists());
     }
 
     #[test]

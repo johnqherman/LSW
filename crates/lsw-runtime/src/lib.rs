@@ -194,6 +194,21 @@ mod tests {
     }
 
     #[test]
+    fn full_env_rejects_host_interpreter_injection() {
+        let extra = vec![
+            ("PATH".to_owned(), "/project/bin".to_owned()),
+            ("BASH_ENV".to_owned(), "/project/evil.sh".to_owned()),
+            ("PYTHONPATH".to_owned(), "/project/python".to_owned()),
+            ("APP_SETTING".to_owned(), "safe".to_owned()),
+        ];
+        let env = full_env(Path::new("/p"), &extra);
+        assert!(!env.iter().any(|(key, _)| key == "PATH"));
+        assert!(!env.iter().any(|(key, _)| key == "BASH_ENV"));
+        assert!(!env.iter().any(|(key, _)| key == "PYTHONPATH"));
+        assert!(env.contains(&("APP_SETTING".to_owned(), "safe".to_owned())));
+    }
+
+    #[test]
     fn egl_pin_only_on_all_nvidia_systems() {
         use crate::gpu::egl_vendor_pin_for;
         let dir = tempfile::tempdir().unwrap();

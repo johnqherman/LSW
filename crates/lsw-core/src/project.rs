@@ -37,9 +37,17 @@ impl Workspace {
 }
 
 fn resolve_members(root: &Path, members: &[String]) -> Result<Vec<PathBuf>> {
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|e| Error::io(root.to_path_buf(), e))?;
     let mut resolved = Vec::with_capacity(members.len());
     for member in members {
-        if member.contains("..") || Path::new(member).is_absolute() {
+        let member_path = Path::new(member);
+        if member_path.is_absolute()
+            || member_path
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
             return Err(Error::InitFailed {
                 path: root.to_path_buf(),
                 detail: format!(
@@ -47,7 +55,14 @@ fn resolve_members(root: &Path, members: &[String]) -> Result<Vec<PathBuf>> {
                 ),
             });
         }
-        let path = root.join(member);
+        let joined = root.join(member);
+        let path = joined.canonicalize().map_err(|e| Error::io(joined.clone(), e))?;
+        if !path.starts_with(&canonical_root) {
+            return Err(Error::InitFailed {
+                path,
+                detail: format!("workspace member '{member}' resolves outside the workspace"),
+            });
+        }
         if !path.join(PROJECT_MANIFEST).is_file() {
             return Err(Error::InitFailed {
                 path: path.clone(),
@@ -619,6 +634,26 @@ mod tests {
         });
         m.save(&root.join(PROJECT_MANIFEST)).unwrap();
         assert!(Workspace::discover(root).is_err());
+    }
+
+    #[test]
+    fn workspace_rejects_symlink_member_outside_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("workspace");
+        let outside = dir.path().join("outside");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        ProjectManifest::new("outside")
+            .save(&outside.join(PROJECT_MANIFEST))
+            .unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("member")).unwrap();
+        fs::write(
+            root.join(PROJECT_MANIFEST),
+            "[project]\nname = \"root\"\n[target]\nos = \"windows\"\narch = \"x86_64\"\n[workspace]\nmembers = [\"member\"]\n",
+        )
+        .unwrap();
+
+        assert!(Workspace::discover(&root).is_err());
     }
 
     #[test]

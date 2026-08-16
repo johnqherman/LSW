@@ -476,17 +476,18 @@ fn build_nsis(
             fix: "install nsis (provides makensis), or use --target msi".into(),
         });
     }
-    let name = &project.manifest.project.name;
+    let name = nsis_escape(&project.manifest.project.name);
     let pkg = &project.manifest.package;
-    let version = pkg.version.as_deref().unwrap_or("1.0.0");
-    let publisher = pkg.publisher.as_deref().unwrap_or("LSW");
+    let version = nsis_escape(pkg.version.as_deref().unwrap_or("1.0.0"));
+    let publisher = nsis_escape(pkg.publisher.as_deref().unwrap_or("LSW"));
     let out_name = format!("{stem}-setup.exe");
 
     let mut install_files = String::new();
     let mut delete_files = String::new();
     for f in files {
-        let win = f.replace('/', "\\");
-        let _ = writeln!(install_files, "  File \"/oname={win}\" \"{f}\"");
+        let escaped = nsis_escape(f);
+        let win = nsis_escape(&f.replace('/', "\\"));
+        let _ = writeln!(install_files, "  File \"/oname={win}\" \"{escaped}\"");
         let _ = writeln!(delete_files, "  Delete \"$INSTDIR\\{win}\"");
     }
     let mut shortcuts = String::new();
@@ -500,7 +501,8 @@ fn build_nsis(
                 let title = p
                     .file_stem()
                     .map_or_else(|| f.clone(), |s| s.to_string_lossy().into_owned());
-                let win = f.replace('/', "\\");
+                let title = nsis_escape(&title);
+                let win = nsis_escape(&f.replace('/', "\\"));
                 let _ = writeln!(
                     shortcuts,
                     "  CreateShortcut \"$SMPROGRAMS\\{name}\\{title}.lnk\" \"$INSTDIR\\{win}\""
@@ -567,6 +569,22 @@ fn build_nsis(
     Ok(out_path)
 }
 
+fn nsis_escape(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for c in value.chars() {
+        match c {
+            '$' => escaped.push_str("$$"),
+            '"' => escaped.push_str("$\\\""),
+            '\r' => escaped.push_str("$\\r"),
+            '\n' => escaped.push_str("$\\n"),
+            '\t' => escaped.push_str("$\\t"),
+            c if c.is_control() => escaped.push('?'),
+            c => escaped.push(c),
+        }
+    }
+    escaped
+}
+
 fn build_inno(
     project: &Project,
     env: &Environment,
@@ -630,12 +648,14 @@ fn stem_no_ext(name: &str) -> &str {
 }
 
 fn render_iss(name: &str, package: &lsw_config::PackageSection, files: &[String]) -> String {
-    let version = package.version.as_deref().unwrap_or("1.0.0");
-    let publisher = package.publisher.as_deref().unwrap_or("LSW");
+    let name = inno_escape(name, false);
+    let version = inno_escape(package.version.as_deref().unwrap_or("1.0.0"), false);
+    let publisher = inno_escape(package.publisher.as_deref().unwrap_or("LSW"), false);
     let guid = deterministic_guid(&format!("lsw:{name}:inno"));
 
     let mut file_entries = String::new();
     for f in files {
+        let f = inno_escape(f, true);
         let _ = writeln!(
             file_entries,
             "Source: \"{f}\"; DestDir: \"{{app}}\"; Flags: ignoreversion"
@@ -650,6 +670,8 @@ fn render_iss(name: &str, package: &lsw_config::PackageSection, files: &[String]
                 let title = p
                     .file_stem()
                     .map_or_else(|| f.clone(), |s| s.to_string_lossy().into_owned());
+                let title = inno_escape(&title, true);
+                let f = inno_escape(f, true);
                 let _ = writeln!(
                     icon_entries,
                     "Name: \"{{group}}\\{title}\"; Filename: \"{{app}}\\{f}\""
@@ -678,6 +700,20 @@ fn render_iss(name: &str, package: &lsw_config::PackageSection, files: &[String]
         let _ = write!(sections, "\n[Icons]\n{icon_entries}");
     }
     sections
+}
+
+fn inno_escape(value: &str, quoted: bool) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for c in value.chars() {
+        match c {
+            '{' => escaped.push_str("{{"),
+            '"' if quoted => escaped.push_str("\"\""),
+            '\r' | '\n' | '\t' => escaped.push(' '),
+            c if c.is_control() => escaped.push('?'),
+            c => escaped.push(c),
+        }
+    }
+    escaped
 }
 
 fn dist_relative_out(dist: &std::path::Path, dir: &std::path::Path, out_name: &str) -> String {
@@ -871,6 +907,19 @@ mod tests {
         assert!(iss.contains("Source: \"app.exe\""));
         assert!(iss.contains("Source: \"lib.dll\""));
         assert!(!iss.contains("[Icons]"));
+    }
+
+    #[test]
+    fn installer_escapes_compiler_directives() {
+        assert_eq!(nsis_escape("$TEMP\"\n!system"), "$$TEMP$\\\"$\\n!system");
+        let pkg = lsw_config::PackageSection {
+            publisher: Some("Acme\n#include evil.iss {#Exec(\"bad\")}".into()),
+            ..Default::default()
+        };
+        let iss = render_iss("demo", &pkg, &["app\"\n.exe".into()]);
+        assert!(!iss.contains("\n#include"));
+        assert!(iss.contains("{{#Exec"));
+        assert!(!iss.contains("app\"\n.exe"));
     }
 
     #[test]

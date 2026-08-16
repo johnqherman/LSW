@@ -96,7 +96,6 @@ impl Winrm {
         let mut child = Command::new("curl")
             .args([
                 "-s",
-                "-k",
                 "--max-time",
                 "180",
                 "--max-filesize",

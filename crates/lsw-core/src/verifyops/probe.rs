@@ -94,9 +94,11 @@ pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Opt
     let local_script = std::env::temp_dir().join(format!("lsw_probe_{nonce}.ps1"));
     {
         use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
         let mut f = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
+            .mode(0o600)
             .open(&local_script)
             .map_err(|e| Error::io(local_script.clone(), e))?;
         f.write_all(script.as_bytes())
