@@ -4,6 +4,20 @@ use crate::error::PathError;
 use crate::types::PathMapper;
 
 impl PathMapper {
+    /// ```
+    /// use lsw_path::PathMapper;
+    /// use std::path::Path;
+    ///
+    /// let m = PathMapper::for_environment(
+    ///     Path::new("/env/drive_c"),
+    ///     Path::new("/home/alice/demo"),
+    ///     "demo",
+    /// );
+    /// assert_eq!(
+    ///     m.to_windows(Path::new("/home/alice/demo/src/main.c")).unwrap(),
+    ///     "C:\\src\\demo\\src\\main.c",
+    /// );
+    /// ```
     pub fn to_windows(&self, path: &Path) -> Result<String, PathError> {
         if !path.is_absolute() {
             return Err(PathError::NotAbsolute {

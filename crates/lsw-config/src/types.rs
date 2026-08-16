@@ -15,6 +15,10 @@ pub enum TargetArch {
 }
 
 impl TargetArch {
+    /// ```
+    /// use lsw_config::TargetArch;
+    /// assert_eq!(TargetArch::X86_64.mingw_triple(), "x86_64-w64-mingw32");
+    /// ```
     pub fn mingw_triple(self) -> &'static str {
         match self {
             TargetArch::X86_64 => "x86_64-w64-mingw32",
@@ -35,6 +39,11 @@ impl TargetArch {
         }
     }
 
+    /// ```
+    /// use lsw_config::TargetArch;
+    /// assert_eq!(TargetArch::X86_64.win_arch_name(), "x64");
+    /// assert_eq!(TargetArch::X86.win_arch_name(), "x86");
+    /// ```
     pub fn win_arch_name(self) -> &'static str {
         match self {
             TargetArch::X86_64 => "x64",

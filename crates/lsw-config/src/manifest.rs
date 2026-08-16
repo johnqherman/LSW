@@ -272,6 +272,10 @@ pub struct CommandSection {
 }
 
 impl ProjectManifest {
+    /// ```
+    /// let m = lsw_config::ProjectManifest::new("hello-win32");
+    /// assert_eq!(m.project.name, "hello-win32");
+    /// ```
     pub fn new(name: &str) -> Self {
         Self {
             project: ProjectSection {

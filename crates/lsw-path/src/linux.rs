@@ -19,6 +19,20 @@ fn normalize<'a>(comps: &[&'a str]) -> Vec<&'a str> {
 }
 
 impl PathMapper {
+    /// ```
+    /// use lsw_path::PathMapper;
+    /// use std::path::{Path, PathBuf};
+    ///
+    /// let m = PathMapper::for_environment(
+    ///     Path::new("/env/drive_c"),
+    ///     Path::new("/home/alice/demo"),
+    ///     "demo",
+    /// );
+    /// assert_eq!(
+    ///     m.to_linux("C:\\src\\demo\\src\\main.c").unwrap(),
+    ///     PathBuf::from("/home/alice/demo/src/main.c"),
+    /// );
+    /// ```
     pub fn to_linux(&self, path: &str) -> Result<PathBuf, PathError> {
         let (drive, raw_comps) = parse_windows(path)?;
         let comps = normalize(&raw_comps);
