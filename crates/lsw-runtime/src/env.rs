@@ -11,8 +11,9 @@ pub(crate) fn process_in_prefix(pid: u32, prefix: &Path) -> bool {
         .any(|entry| entry == needle.as_bytes())
 }
 
+#[cfg(target_os = "linux")]
 #[allow(unsafe_code)]
-pub(crate) fn pidfd_open(pid: u32) -> std::io::Result<std::os::fd::OwnedFd> {
+fn pidfd_open(pid: u32) -> std::io::Result<std::os::fd::OwnedFd> {
     use std::os::fd::FromRawFd;
     let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid as libc::pid_t, 0i32) };
     if fd < 0 {
@@ -21,8 +22,9 @@ pub(crate) fn pidfd_open(pid: u32) -> std::io::Result<std::os::fd::OwnedFd> {
     Ok(unsafe { std::os::fd::OwnedFd::from_raw_fd(fd as i32) })
 }
 
+#[cfg(target_os = "linux")]
 #[allow(unsafe_code)]
-pub(crate) fn pidfd_send_signal(pidfd: &std::os::fd::OwnedFd, sig: i32) -> std::io::Result<()> {
+fn pidfd_send_signal(pidfd: &std::os::fd::OwnedFd, sig: i32) -> std::io::Result<()> {
     use std::os::fd::AsRawFd;
     let rc = unsafe {
         libc::syscall(
@@ -40,24 +42,23 @@ pub(crate) fn pidfd_send_signal(pidfd: &std::os::fd::OwnedFd, sig: i32) -> std::
 }
 
 pub(crate) fn kill_validated(pid: u32, prefix: &Path) -> Result<(), crate::RuntimeError> {
+    #[cfg(target_os = "linux")]
     if let Ok(pidfd) = pidfd_open(pid) {
         if !process_in_prefix(pid, prefix) {
             return Err(crate::RuntimeError::ProcessNotInEnvironment { pid });
         }
-        pidfd_send_signal(&pidfd, libc::SIGTERM)
-            .map_err(|_| crate::RuntimeError::ProcessNotInEnvironment { pid })
-    } else {
-        tracing::debug!(pid, "pidfd_open unavailable, falling back to kill()");
-        if !process_in_prefix(pid, prefix) {
-            return Err(crate::RuntimeError::ProcessNotInEnvironment { pid });
-        }
-        #[allow(unsafe_code)]
-        let rc = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
-        if rc != 0 {
-            return Err(crate::RuntimeError::ProcessNotInEnvironment { pid });
-        }
-        Ok(())
+        return pidfd_send_signal(&pidfd, libc::SIGTERM)
+            .map_err(|_| crate::RuntimeError::ProcessNotInEnvironment { pid });
     }
+    if !process_in_prefix(pid, prefix) {
+        return Err(crate::RuntimeError::ProcessNotInEnvironment { pid });
+    }
+    #[allow(unsafe_code)]
+    let rc = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+    if rc != 0 {
+        return Err(crate::RuntimeError::ProcessNotInEnvironment { pid });
+    }
+    Ok(())
 }
 
 const HOST_WINE_VARS: &[&str] = &[
