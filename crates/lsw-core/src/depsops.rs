@@ -747,6 +747,126 @@ pub fn dep_dirs(
     }
 }
 
+/// Returns the vcpkg triplet for the given target architecture.
+pub fn vcpkg_triplet(arch: lsw_config::TargetArch) -> Result<&'static str> {
+    use lsw_config::TargetArch::{Aarch64, X86, X86_64};
+    match arch {
+        X86_64 => Ok("x64-mingw-static"),
+        X86 => Ok("x86-mingw-static"),
+        Aarch64 => Ok("arm64-mingw-static"),
+        other => Err(Error::DepArchUnsupported {
+            arch: format!("{other:?}").to_lowercase(),
+        }),
+    }
+}
+
+/// Returns the managed vcpkg root directory.
+pub fn vcpkg_root(dirs: &lsw_config::Dirs) -> PathBuf {
+    dirs.data.join("vcpkg")
+}
+
+/// Bootstraps vcpkg by cloning the repository if absent and running the bootstrap script.
+pub fn vcpkg_bootstrap(dirs: &lsw_config::Dirs) -> Result<PathBuf> {
+    let root = vcpkg_root(dirs);
+    let exe = root.join("vcpkg");
+    if exe.is_file() {
+        return Ok(exe);
+    }
+    if !root.join(".git").is_dir() {
+        std::fs::create_dir_all(&root).map_err(|e| Error::io(root.clone(), e))?;
+        let out = std::process::Command::new("git")
+            .args(["clone", "--depth", "1", "https://github.com/microsoft/vcpkg.git"])
+            .arg(&root)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .map_err(|e| Error::io(PathBuf::from("git"), e))?;
+        if !out.status.success() {
+            let _ = std::fs::remove_dir_all(&root);
+            return Err(Error::DownloadFailed {
+                url: "https://github.com/microsoft/vcpkg.git".into(),
+                detail: String::from_utf8_lossy(&out.stderr).trim().to_owned(),
+            });
+        }
+    }
+    let bootstrap = root.join("bootstrap-vcpkg.sh");
+    let out = std::process::Command::new("sh")
+        .arg(&bootstrap)
+        .current_dir(&root)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .map_err(|e| Error::io(bootstrap.clone(), e))?;
+    if !out.status.success() {
+        return Err(Error::ToolMissing {
+            tool: "vcpkg".into(),
+            fix: format!(
+                "bootstrap failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+        });
+    }
+    Ok(exe)
+}
+
+#[derive(Debug, Serialize)]
+/// Report from a vcpkg install operation.
+pub struct VcpkgReport {
+    /// Packages that were installed.
+    pub installed: Vec<String>,
+    /// The vcpkg triplet used.
+    pub triplet: String,
+}
+
+/// Installs one or more vcpkg packages for the environment's target architecture.
+pub fn vcpkg_install(
+    dirs: &lsw_config::Dirs,
+    env: &Environment,
+    packages: &[String],
+) -> Result<VcpkgReport> {
+    let triplet = vcpkg_triplet(env.manifest.target_arch)?;
+    let vcpkg = vcpkg_bootstrap(dirs)?;
+    let root = vcpkg_root(dirs);
+    let mut installed = Vec::new();
+    for pkg in packages {
+        let spec = format!("{pkg}:{triplet}");
+        let out = std::process::Command::new(&vcpkg)
+            .args(["install", &spec])
+            .current_dir(&root)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .map_err(|e| Error::io(vcpkg.clone(), e))?;
+        if !out.status.success() {
+            return Err(Error::DepNotFound {
+                name: pkg.clone(),
+                repo: format!("vcpkg ({triplet})"),
+            });
+        }
+        installed.push(pkg.clone());
+    }
+    Ok(VcpkgReport {
+        installed,
+        triplet: triplet.to_owned(),
+    })
+}
+
+/// Returns vcpkg installed include/lib paths for the given architecture, if any packages are installed.
+pub fn vcpkg_dirs(dirs: &lsw_config::Dirs, arch: lsw_config::TargetArch) -> Option<(PathBuf, PathBuf)> {
+    let Ok(triplet) = vcpkg_triplet(arch) else {
+        return None;
+    };
+    let root = vcpkg_root(dirs);
+    let installed = root.join("installed").join(triplet);
+    let include = installed.join("include");
+    let lib = installed.join("lib");
+    if include.is_dir() || lib.is_dir() {
+        Some((include, lib))
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -776,5 +896,45 @@ mod tests {
         let index = DllIndex::build(&[dir.path().to_path_buf()]);
         assert!(index.resolve("libfoo-1.dll").is_some());
         assert!(index.resolve("missing.dll").is_none());
+    }
+
+    #[test]
+    fn vcpkg_triplet_maps_arches() {
+        assert_eq!(
+            vcpkg_triplet(lsw_config::TargetArch::X86_64).unwrap(),
+            "x64-mingw-static"
+        );
+        assert_eq!(
+            vcpkg_triplet(lsw_config::TargetArch::X86).unwrap(),
+            "x86-mingw-static"
+        );
+        assert_eq!(
+            vcpkg_triplet(lsw_config::TargetArch::Aarch64).unwrap(),
+            "arm64-mingw-static"
+        );
+        assert!(vcpkg_triplet(lsw_config::TargetArch::Armv7).is_err());
+    }
+
+    #[test]
+    fn vcpkg_root_is_under_data_dir() {
+        let dirs = lsw_config::Dirs {
+            config: PathBuf::from("/home/u/.config/lsw"),
+            data: PathBuf::from("/home/u/.local/share/lsw"),
+            cache: PathBuf::from("/home/u/.cache/lsw"),
+        };
+        assert_eq!(
+            vcpkg_root(&dirs),
+            PathBuf::from("/home/u/.local/share/lsw/vcpkg")
+        );
+    }
+
+    #[test]
+    fn vcpkg_dirs_returns_none_when_not_installed() {
+        let dirs = lsw_config::Dirs {
+            config: PathBuf::from("/nonexistent/config"),
+            data: PathBuf::from("/nonexistent/data"),
+            cache: PathBuf::from("/nonexistent/cache"),
+        };
+        assert!(vcpkg_dirs(&dirs, lsw_config::TargetArch::X86_64).is_none());
     }
 }

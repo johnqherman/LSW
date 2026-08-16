@@ -368,6 +368,20 @@ pub(crate) fn deps(op: &DepsCmd, dirs: &Dirs, format: Format) -> lsw_core::Resul
             crate::cmd::exit_ok(removed)
         }
 
+        DepsCmd::Vcpkg { packages } => {
+            let (_p, env) = active_env(dirs)?;
+            let report = lsw_core::depsops::vcpkg_install(dirs, &env, packages)?;
+            if format == Format::Json {
+                crate::cmd::emit_json(&report);
+            } else {
+                for pkg in &report.installed {
+                    println!("{} vcpkg installed {} ({})", color::green("+"), pkg, report.triplet);
+                }
+                println!("  vcpkg packages available to builds via -I/-L flags");
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
         DepsCmd::List => {
             let (p, _env) = active_env(dirs)?;
             let deps = lsw_core::depsops::list(&p);

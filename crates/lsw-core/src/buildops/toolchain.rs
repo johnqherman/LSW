@@ -125,6 +125,15 @@ pub(crate) fn effective_flags(
         cxx_list.push(include_flag);
         link_list.push(format!("-L{}", lib.display()));
     }
+    if let Ok(dirs) = lsw_config::Dirs::resolve()
+        && let Some((include, lib)) =
+            crate::depsops::vcpkg_dirs(&dirs, env.manifest.target_arch)
+    {
+        let include_flag = format!("-I{}", include.display());
+        c_list.push(include_flag.clone());
+        cxx_list.push(include_flag);
+        link_list.push(format!("-L{}", lib.display()));
+    }
     (
         join_flags(c_list),
         join_flags(cxx_list),
