@@ -66,3 +66,77 @@ fn dll_available(system32: &HashSet<String>, dll: &str) -> bool {
     }
     system32.contains(&wanted)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_system32() -> HashSet<String> {
+        ["kernel32.dll", "ntdll.dll", "user32.dll"]
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn dll_available_case_insensitive() {
+        let names = sample_system32();
+        assert!(dll_available(&names, "KERNEL32.DLL"));
+        assert!(dll_available(&names, "Kernel32.dll"));
+    }
+
+    #[test]
+    fn dll_available_api_set_shortcut() {
+        let names = HashSet::new();
+        assert!(dll_available(&names, "api-ms-win-crt-runtime-l1-1-0.dll"));
+        assert!(dll_available(&names, "ext-ms-win-ntuser-gui-l1-3-0.dll"));
+    }
+
+    #[test]
+    fn dll_available_missing() {
+        let names = sample_system32();
+        assert!(!dll_available(&names, "nonexistent.dll"));
+    }
+
+    #[test]
+    fn import_status_debug() {
+        let s = ImportStatus {
+            dll: "foo.dll".into(),
+            available: Some(true),
+        };
+        let dbg = format!("{s:?}");
+        assert!(dbg.contains("foo.dll"));
+    }
+
+    #[test]
+    fn inspect_report_fields() {
+        let r = InspectReport {
+            info: lsw_pe::PeInfo {
+                format: lsw_pe::PeFormat::Pe32Plus,
+                machine: lsw_pe::Machine::X86_64,
+                subsystem: lsw_pe::Subsystem::Console,
+            },
+            details: lsw_pe::PeDetails {
+                entry_point: 0x1000,
+                image_base: 0x0014_0000_0000,
+                sections: vec![],
+            },
+            hardening: lsw_pe::Hardening {
+                aslr: true,
+                high_entropy_va: Some(true),
+                dep: true,
+                cfg: false,
+                seh: None,
+                force_integrity: false,
+                signed: false,
+            },
+            resources: lsw_pe::Resources::default(),
+            imports: vec![ImportStatus {
+                dll: "KERNEL32.dll".into(),
+                available: Some(true),
+            }],
+        };
+        assert_eq!(r.info.format, lsw_pe::PeFormat::Pe32Plus);
+        assert_eq!(r.imports.len(), 1);
+    }
+}

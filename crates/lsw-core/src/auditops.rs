@@ -110,3 +110,58 @@ pub fn exports(path: &Path) -> Result<Vec<String>> {
     }
     Ok(lsw_pe::exports(path)?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_flag_enabled() {
+        assert_eq!(AuditStatus::from_flag(true), AuditStatus::Enabled);
+    }
+
+    #[test]
+    fn from_flag_disabled() {
+        assert_eq!(AuditStatus::from_flag(false), AuditStatus::Disabled);
+    }
+
+    #[test]
+    fn tri_some_true() {
+        let c = tri("test", Some(true), "yes", "n/a");
+        assert_eq!(c.status, AuditStatus::Enabled);
+        assert_eq!(c.detail, "yes");
+    }
+
+    #[test]
+    fn tri_some_false() {
+        let c = tri("test", Some(false), "no", "n/a");
+        assert_eq!(c.status, AuditStatus::Disabled);
+    }
+
+    #[test]
+    fn tri_none() {
+        let c = tri("test", None, "yes", "n/a");
+        assert_eq!(c.status, AuditStatus::NotApplicable);
+        assert_eq!(c.detail, "n/a");
+    }
+
+    #[test]
+    fn check_builds_named_entry() {
+        let c = check("ASLR", AuditStatus::Enabled, "ok");
+        assert_eq!(c.name, "ASLR");
+    }
+
+    #[test]
+    fn audit_rejects_nonexistent_file() {
+        let r = audit(Path::new("/nonexistent/binary.exe"));
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn audit_status_serializes() {
+        let json = serde_json::to_string(&AuditStatus::Enabled).unwrap();
+        assert_eq!(json, "\"enabled\"");
+        let json = serde_json::to_string(&AuditStatus::NotApplicable).unwrap();
+        assert_eq!(json, "\"not_applicable\"");
+    }
+}

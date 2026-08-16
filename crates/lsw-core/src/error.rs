@@ -272,3 +272,64 @@ impl Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn code_extracts_lsw_prefix() {
+        let e = Error::NoActiveEnvironment;
+        assert_eq!(e.code(), "LSW2001");
+    }
+
+    #[test]
+    fn code_extracts_from_transparent_variants() {
+        let inner = lsw_pe::PeError::NotPe {
+            path: PathBuf::from("x.txt"),
+        };
+        let e = Error::Pe(inner);
+        assert!(e.code().starts_with("LSW"));
+    }
+
+    #[test]
+    fn io_helper_builds_variant() {
+        let src = std::io::Error::new(std::io::ErrorKind::NotFound, "gone");
+        let e = Error::io("/tmp/x", src);
+        assert!(e.to_string().contains("LSW2010"));
+        assert!(e.to_string().contains("/tmp/x"));
+    }
+
+    #[test]
+    fn display_includes_error_code_and_detail() {
+        let e = Error::EnvironmentNotFound {
+            name: "dev".into(),
+        };
+        let msg = e.to_string();
+        assert!(msg.contains("LSW2002"));
+        assert!(msg.contains("dev"));
+    }
+
+    #[test]
+    fn build_failed_shows_command() {
+        let e = Error::BuildFailed {
+            command: "cmake --build .".into(),
+            code: Some(2),
+        };
+        assert!(e.to_string().contains("cmake --build ."));
+    }
+
+    #[test]
+    fn all_named_variants_have_lsw_codes() {
+        let samples: Vec<Error> = vec![
+            Error::NoActiveEnvironment,
+            Error::NoBuildSystem,
+            Error::NoTests,
+            Error::TestEmulatorMissing,
+        ];
+        for e in samples {
+            let code = e.code();
+            assert!(code.starts_with("LSW2"), "missing code in: {e}");
+        }
+    }
+}
