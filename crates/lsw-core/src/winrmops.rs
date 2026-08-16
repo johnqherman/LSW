@@ -27,9 +27,40 @@ const B64: base64::engine::GeneralPurpose = base64::engine::general_purpose::STA
 
 struct Winrm {
     addr: String,
-    user: String,
-    password: String,
+    cred_file: CurlCredFile,
     counter: std::cell::Cell<u64>,
+}
+
+struct CurlCredFile {
+    path: std::path::PathBuf,
+}
+
+impl CurlCredFile {
+    fn write(user: &str, password: &str) -> Result<Self> {
+        use std::os::unix::fs::OpenOptionsExt;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let path = std::env::temp_dir().join(format!(
+            "lsw-winrm-cred-{}-{nanos}",
+            std::process::id()
+        ));
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)
+            .map_err(|e| Error::io(path.clone(), e))?;
+        file.write_all(format!("user = \"{user}:{password}\"").as_bytes())
+            .map_err(|e| Error::io(path.clone(), e))?;
+        Ok(CurlCredFile { path })
+    }
+}
+
+impl Drop for CurlCredFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
 }
 
 impl Winrm {
@@ -44,29 +75,29 @@ impl Winrm {
                 fix: "install curl to reach the Windows verification host over WinRM".into(),
             });
         }
-        let force_https = cfg.transport.as_deref() == Some("https");
+        let insecure = cfg.transport.as_deref() == Some("winrm-insecure");
         let (user, hostport) = match host.split_once('@') {
             Some((u, h)) => (u.to_owned(), h.to_owned()),
             None => ("Administrator".to_owned(), host.clone()),
         };
-        let default_port = if force_https { "5986" } else { "5985" };
+        let default_port = if insecure { "5985" } else { "5986" };
         let (hostname, port) = match hostport.rsplit_once(':') {
             Some((h, p)) if p.chars().all(|c| c.is_ascii_digit()) => (h.to_owned(), p.to_owned()),
             _ => (hostport.clone(), default_port.to_owned()),
         };
-        let scheme = if force_https || port == "5986" {
-            "https"
-        } else {
+        let scheme = if insecure && port != "5986" {
             "http"
+        } else {
+            "https"
         };
         let password = std::env::var("LSW_WINRM_PASSWORD").map_err(|_| Error::ProbeFailed {
             host: host.clone(),
             detail: "set LSW_WINRM_PASSWORD in the environment for WinRM auth".into(),
         })?;
+        let cred_file = CurlCredFile::write(&user, &password)?;
         Ok(Some(Winrm {
             addr: format!("{scheme}://{hostname}:{port}/wsman"),
-            user,
-            password,
+            cred_file,
             counter: std::cell::Cell::new(0),
         }))
     }
@@ -100,8 +131,10 @@ impl Winrm {
                 "180",
                 "--max-filesize",
                 "33554432",
-                "-u",
-                &format!("{}:{}", self.user, self.password),
+                "--config",
+            ])
+            .arg(self.cred_file.path.as_os_str())
+            .args([
                 "-X",
                 "POST",
                 &self.addr,
@@ -510,14 +543,17 @@ mod tests {
         assert!(sel.contains("shell-42"));
     }
 
+    fn test_winrm(addr: &str) -> Winrm {
+        Winrm {
+            addr: addr.into(),
+            cred_file: CurlCredFile::write("admin", "pass").unwrap(),
+            counter: std::cell::Cell::new(0),
+        }
+    }
+
     #[test]
     fn message_id_increments() {
-        let w = Winrm {
-            addr: "http://host:5985/wsman".into(),
-            user: "admin".into(),
-            password: "pass".into(),
-            counter: std::cell::Cell::new(0),
-        };
+        let w = test_winrm("http://host:5985/wsman");
         let id1 = w.message_id();
         let id2 = w.message_id();
         assert_ne!(id1, id2);
@@ -527,12 +563,7 @@ mod tests {
 
     #[test]
     fn header_contains_action_and_address() {
-        let w = Winrm {
-            addr: "http://host:5985/wsman".into(),
-            user: "admin".into(),
-            password: "pass".into(),
-            counter: std::cell::Cell::new(0),
-        };
+        let w = test_winrm("http://host:5985/wsman");
         let hdr = w.header("http://example.com/Action");
         assert!(hdr.contains("http://host:5985/wsman"));
         assert!(hdr.contains("http://example.com/Action"));
@@ -541,13 +572,18 @@ mod tests {
 
     #[test]
     fn header_escapes_address() {
-        let w = Winrm {
-            addr: "http://host&co:5985/wsman".into(),
-            user: "admin".into(),
-            password: "pass".into(),
-            counter: std::cell::Cell::new(0),
-        };
+        let w = test_winrm("http://host&co:5985/wsman");
         let hdr = w.header("test");
         assert!(hdr.contains("host&amp;co"));
+    }
+
+    #[test]
+    fn cred_file_is_mode_0600() {
+        use std::os::unix::fs::PermissionsExt;
+        let cred = CurlCredFile::write("admin", "secret").unwrap();
+        let mode = std::fs::metadata(&cred.path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+        let content = std::fs::read_to_string(&cred.path).unwrap();
+        assert!(content.contains("admin:secret"));
     }
 }
