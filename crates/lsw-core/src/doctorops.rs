@@ -11,28 +11,42 @@ use crate::project::Project;
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+/// Status.
 pub enum Status {
+    /// Ok.
     Ok,
+    /// Warn.
     Warn,
+    /// Fail.
     Fail,
 }
 
 #[derive(Debug, Serialize)]
+/// Row.
 pub struct Row {
+    /// Label.
     pub label: String,
+    /// Value.
     pub value: String,
+    /// Status.
     pub status: Status,
 }
 
 #[derive(Debug, Serialize)]
+/// Section.
 pub struct Section {
+    /// Name.
     pub name: String,
+    /// Rows.
     pub rows: Vec<Row>,
 }
 
 #[derive(Debug, Serialize)]
+/// Doctor Report.
 pub struct DoctorReport {
+    /// Sections.
     pub sections: Vec<Section>,
+    /// Healthy.
     pub healthy: bool,
 }
 
@@ -199,6 +213,7 @@ fn target_support_rows(arch: lsw_config::TargetArch) -> Vec<Row> {
     rows
 }
 
+/// Doctor.
 pub fn doctor(dirs: &Dirs, project: Option<&Project>) -> Result<DoctorReport> {
     let mut sections = Vec::new();
 

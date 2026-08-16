@@ -1,11 +1,18 @@
 //! Configuration types, project manifest parsing, lockfile management,
 //! and filesystem layout conventions for LSW projects.
 
+#![deny(missing_docs)]
+
+/// Filename for the project manifest.
 pub const PROJECT_MANIFEST: &str = "lsw.toml";
+/// Filename for the project lockfile.
 pub const PROJECT_LOCKFILE: &str = "lsw.lock";
+/// Filename for the environment manifest inside each environment directory.
 pub const ENVIRONMENT_MANIFEST: &str = "env.toml";
 
+/// Current format version for environment manifests.
 pub const ENVIRONMENT_FORMAT_VERSION: u32 = 1;
+/// Current format version for lockfiles.
 pub const LOCKFILE_VERSION: u32 = 1;
 
 mod dirs;

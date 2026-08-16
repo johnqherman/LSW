@@ -24,6 +24,7 @@ const HOST_WINE_VARS: &[&str] = &[
     "WINEESYNC",
 ];
 
+/// Removes host-side Wine environment variables from a command.
 pub fn scrub_wine_env(command: &mut Command) {
     for var in HOST_WINE_VARS {
         command.env_remove(var);

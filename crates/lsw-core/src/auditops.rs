@@ -6,9 +6,13 @@ use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+/// Audit Status.
 pub enum AuditStatus {
+    /// Enabled.
     Enabled,
+    /// Disabled.
     Disabled,
+    /// Not Applicable.
     NotApplicable,
 }
 
@@ -23,15 +27,22 @@ impl AuditStatus {
 }
 
 #[derive(Debug, Serialize)]
+/// Audit Check.
 pub struct AuditCheck {
+    /// Name.
     pub name: String,
+    /// Status.
     pub status: AuditStatus,
+    /// Detail.
     pub detail: String,
 }
 
 #[derive(Debug, Serialize)]
+/// Audit Report.
 pub struct AuditReport {
+    /// Checks.
     pub checks: Vec<AuditCheck>,
+    /// Hardened.
     pub hardened: bool,
 }
 
@@ -50,6 +61,7 @@ fn tri(name: &str, value: Option<bool>, detail: &str, na_detail: &str) -> AuditC
     }
 }
 
+/// Audit.
 pub fn audit(path: &Path) -> Result<AuditReport> {
     if !path.is_file() {
         return Err(Error::NotExecutable {
@@ -101,6 +113,7 @@ pub fn audit(path: &Path) -> Result<AuditReport> {
     Ok(AuditReport { checks, hardened })
 }
 
+/// Exports.
 pub fn exports(path: &Path) -> Result<Vec<String>> {
     if !path.is_file() {
         return Err(Error::NotExecutable {

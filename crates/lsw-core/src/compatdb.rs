@@ -9,20 +9,28 @@ use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+/// Verdict.
 pub enum Verdict {
+    /// Supported.
     Supported,
+    /// Unsupported.
     Unsupported,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Entry.
 pub struct Entry {
+    /// Supported count.
     pub supported_count: u64,
+    /// Unsupported count.
     pub unsupported_count: u64,
     #[serde(default)]
+    /// Last runtime.
     pub last_runtime: String,
 }
 
 impl Entry {
+    /// Verdict.
     pub fn verdict(&self) -> Verdict {
         if self.supported_count > 0 {
             Verdict::Supported
@@ -33,10 +41,13 @@ impl Entry {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Compat Db.
 pub struct CompatDb {
     #[serde(default = "one")]
+    /// Version.
     pub version: u32,
     #[serde(default)]
+    /// Entries.
     pub entries: BTreeMap<String, Entry>,
 }
 
@@ -49,6 +60,7 @@ impl CompatDb {
         dirs.data.join("compat-db.json")
     }
 
+    /// Load.
     pub fn load(dirs: &Dirs) -> Result<Self> {
         let path = Self::path(dirs);
         let empty = || Self {
@@ -75,6 +87,7 @@ impl CompatDb {
         }
     }
 
+    /// Save.
     pub fn save(&self, dirs: &Dirs) -> Result<()> {
         let path = Self::path(dirs);
         let dir = path.parent().unwrap_or_else(|| std::path::Path::new("."));
@@ -87,6 +100,7 @@ impl CompatDb {
         std::fs::rename(&tmp, &path).map_err(|e| Error::io(path, e))
     }
 
+    /// Record.
     pub fn record(&mut self, runtime: &str, supported: &[String], unsupported: &[String]) {
         for key in supported {
             let e = self.entries.entry(normalize(key)).or_default();
@@ -100,10 +114,12 @@ impl CompatDb {
         }
     }
 
+    /// Lock.
     pub fn lock(dirs: &Dirs) -> Result<DbLock> {
         DbLock::acquire(dirs)
     }
 
+    /// Query.
     pub fn query(&self, key: &str) -> Option<&Entry> {
         self.entries.get(&normalize(key))
     }
@@ -113,6 +129,7 @@ fn normalize(key: &str) -> String {
     key.trim().to_ascii_lowercase()
 }
 
+/// Db Lock.
 pub struct DbLock {
     _file: std::fs::File,
 }

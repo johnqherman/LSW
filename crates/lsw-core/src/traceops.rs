@@ -15,41 +15,66 @@ const TRACE_MAX_FIELD: usize = 512;
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+/// Trace Event Kind.
 pub enum TraceEventKind {
+    /// Dll.
     Dll,
+    /// Registry.
     Registry,
+    /// Filesystem.
     Filesystem,
+    /// Call.
     Call,
+    /// Unsupported.
     Unsupported,
 }
 
 #[derive(Debug, Serialize)]
+/// Trace Event.
 pub struct TraceEvent {
+    /// At ms.
     pub at_ms: u64,
+    /// Kind.
     pub kind: TraceEventKind,
+    /// Verb.
     pub verb: String,
+    /// Path or key.
     pub path_or_key: String,
 }
 
 #[derive(Debug, Serialize)]
+/// Trace Report.
 pub struct TraceReport {
+    /// Imported dlls.
     pub imported_dlls: Vec<String>,
+    /// Loaded dlls.
     pub loaded_dlls: Vec<String>,
+    /// Observed calls.
     pub observed_calls: Vec<String>,
+    /// Registry access.
     pub registry_access: Vec<String>,
+    /// Filesystem access.
     pub filesystem_access: Vec<String>,
+    /// Unsupported.
     pub unsupported: Vec<String>,
+    /// Timeline.
     pub timeline: Vec<TraceEvent>,
+    /// Timeline truncated.
     pub timeline_truncated: bool,
+    /// Exit code.
     pub exit_code: Option<i32>,
 }
 
 #[derive(Debug, Default)]
+/// Trace Options.
 pub struct TraceOptions {
+    /// Relay.
     pub relay: bool,
+    /// Filter.
     pub filter: Option<String>,
 }
 
+/// Trace.
 pub fn trace(
     env: &Environment,
     program: &Path,

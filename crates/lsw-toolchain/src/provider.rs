@@ -21,11 +21,15 @@ use crate::error::{ProbeReport, ToolchainError};
 use crate::gnu::{LlvmMingw, MingwGcc};
 use crate::util::run_tool;
 
+/// A cross-compilation toolchain that can resolve paths and probe itself.
 pub trait ToolchainProvider {
+    /// Returns the unique identifier for this provider.
     fn id(&self) -> &'static str;
 
+    /// Resolves compiler/linker/sysroot paths for the given architecture.
     fn resolve(&self, arch: TargetArch) -> Result<ResolvedToolchain, ToolchainError>;
 
+    /// Compiles a test program to verify the toolchain works.
     fn probe(&self, arch: TargetArch) -> Result<ProbeReport, ToolchainError> {
         let tc = self.resolve(arch)?;
         Ok(run_probe(self.id(), &tc))
@@ -39,10 +43,12 @@ pub(crate) fn unavailable(id: &str, detail: &str) -> ToolchainError {
     }
 }
 
+/// Returns all available toolchain providers in priority order.
 pub fn providers() -> Vec<Box<dyn ToolchainProvider>> {
     vec![Box::new(LlvmMingw), Box::new(MingwGcc)]
 }
 
+/// Selects and probes a toolchain, preferring `preferred` if given.
 pub fn select(
     preferred: Option<&str>,
     arch: TargetArch,

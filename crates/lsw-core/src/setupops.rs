@@ -8,20 +8,32 @@ use crate::project::Project;
 use lsw_config::{Dirs, TargetArch};
 
 #[derive(Debug, Serialize)]
+/// Setup Report.
 pub struct SetupReport {
+    /// Project name.
     pub project_name: String,
+    /// Project root.
     pub project_root: String,
+    /// Build system.
     pub build_system: Option<String>,
+    /// Manifest created.
     pub manifest_created: bool,
+    /// Environment.
     pub environment: String,
+    /// Environment created.
     pub environment_created: bool,
+    /// Toolchain.
     pub toolchain: String,
+    /// Runtime.
     pub runtime: String,
+    /// Arch mismatch.
     pub arch_mismatch: Option<String>,
 }
 
+/// Default env name.
 pub const DEFAULT_ENV_NAME: &str = "windows-x64";
 
+/// Default env name.
 pub fn default_env_name(arch: TargetArch) -> &'static str {
     match arch {
         TargetArch::X86_64 => DEFAULT_ENV_NAME,
@@ -32,6 +44,7 @@ pub fn default_env_name(arch: TargetArch) -> &'static str {
     }
 }
 
+/// Setup.
 pub fn setup(dirs: &Dirs, start: &Path) -> Result<SetupReport> {
     let (mut project, manifest_created) = discover_or_create(start)?;
     let build_system =

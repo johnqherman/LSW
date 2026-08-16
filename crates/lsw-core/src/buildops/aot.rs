@@ -146,10 +146,13 @@ const IMPORT_LIBS: &[(&str, &str)] = &[
     ("mingwcrt.lib", "libmingw32.a"),
 ];
 
+/// Aot Setup.
 pub struct AotSetup {
+    /// Linker wrapper.
     pub linker_wrapper: PathBuf,
 }
 
+/// Prepare.
 pub fn prepare(project: &Project, env: &Environment, tc: &ResolvedToolchain) -> Result<AotSetup> {
     if env.manifest.target_arch != TargetArch::X86_64 {
         return Err(Error::AotUnsupported {
@@ -266,6 +269,7 @@ pub fn prepare(project: &Project, env: &Environment, tc: &ResolvedToolchain) -> 
     Ok(AotSetup { linker_wrapper })
 }
 
+/// Publish args.
 pub fn publish_args(setup: &AotSetup) -> Vec<String> {
     vec![
         "-p:PublishAot=true".to_owned(),

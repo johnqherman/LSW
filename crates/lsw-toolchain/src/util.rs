@@ -9,24 +9,32 @@ use sha2::{Digest, Sha256};
 const MAX_TOOL_OUTPUT: u64 = 16 * 1024 * 1024;
 const DRAIN_WAIT: Duration = Duration::from_secs(5);
 
+/// Output of a subprocess with capped stdout/stderr and optional timeout.
 pub struct CappedOutput {
+    /// Process exit status.
     pub status: ExitStatus,
+    /// Captured stdout (truncated at the cap).
     pub stdout: Vec<u8>,
+    /// Captured stderr (truncated at the cap).
     pub stderr: Vec<u8>,
+    /// Whether the process was killed due to timeout.
     pub timed_out: bool,
 }
 
+/// Handle to a background thread draining a reader into a bounded buffer.
 pub struct Drain {
     done: mpsc::Receiver<()>,
     buf: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
 }
 
 impl Drain {
+    /// Waits for EOF and returns the accumulated buffer.
     pub fn wait_eof(self) -> Vec<u8> {
         let _ = self.done.recv();
         self.take()
     }
 
+    /// Waits up to `timeout` for EOF and returns the accumulated buffer.
     pub fn wait_timeout(self, timeout: Duration) -> Vec<u8> {
         let _ = self.done.recv_timeout(timeout);
         self.take()
@@ -41,6 +49,7 @@ impl Drain {
     }
 }
 
+/// Spawns a thread that reads `reader` into a bounded buffer of at most `cap` bytes.
 pub fn drain_capped(mut reader: impl std::io::Read + Send + 'static, cap: u64) -> Drain {
     let (tx, done) = mpsc::channel();
     let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -68,6 +77,7 @@ pub fn drain_capped(mut reader: impl std::io::Read + Send + 'static, cap: u64) -
     Drain { done, buf }
 }
 
+/// Runs a command capturing stdout/stderr up to `cap` bytes with an optional timeout.
 pub fn capped_output_with(
     cmd: &mut Command,
     cap: u64,
@@ -123,6 +133,7 @@ pub(crate) fn capped_output(cmd: &mut Command) -> std::io::Result<std::process::
     })
 }
 
+/// Returns the first line of `cc --version`, or `"unknown"`.
 pub fn compiler_version(cc: &Path) -> String {
     let Ok(out) = capped_output(Command::new(cc).arg("--version")) else {
         return "unknown".to_owned();
@@ -147,6 +158,7 @@ pub(crate) fn starts_with_mz(path: &Path) -> bool {
         .is_some_and(|m| &m == b"MZ")
 }
 
+/// Returns the hex-encoded SHA-256 digest of a file.
 pub fn sha256_file(path: &Path) -> std::io::Result<String> {
     let mut file = fs::File::open(path)?;
     let mut hasher = Sha256::new();
@@ -154,6 +166,7 @@ pub fn sha256_file(path: &Path) -> std::io::Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+/// Returns the hex-encoded SHA-256 digest of a byte slice.
 pub fn sha256_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -178,6 +191,7 @@ pub(crate) fn which(name: &str) -> Option<PathBuf> {
     None
 }
 
+/// Locates the `windres` resource compiler next to `cc` or on PATH.
 pub fn find_windres(cc: &Path, triple: &str) -> Option<PathBuf> {
     let triple_tool = format!("{triple}-windres");
     if let Some(bindir) = cc.parent() {

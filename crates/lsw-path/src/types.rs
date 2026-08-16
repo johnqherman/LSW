@@ -4,12 +4,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::windows::{parse_windows, render_windows};
 
+/// A single Linux-to-Windows directory mapping.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Mapping {
+    /// Linux directory path.
     pub linux: PathBuf,
+    /// Corresponding Windows path (e.g. `C:\src\project`).
     pub windows: String,
 }
 
+/// Bidirectional path translator between Linux and Windows paths.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PathMapper {
     pub(crate) mappings: Vec<Mapping>,
@@ -72,6 +76,7 @@ impl PathMapper {
         ])
     }
 
+    /// Returns the ordered list of mappings.
     pub fn mappings(&self) -> &[Mapping] {
         &self.mappings
     }

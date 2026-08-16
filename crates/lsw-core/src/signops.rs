@@ -6,19 +6,28 @@ use crate::msixops::SignIdentity;
 const DEFAULT_PUBLISHER: &str = "CN=LSW Self-Signed, O=LSW";
 
 #[derive(Debug, Default)]
+/// Sign Options.
 pub struct SignOptions {
+    /// Publisher.
     pub publisher: Option<String>,
+    /// Pfx.
     pub pfx: Option<PathBuf>,
+    /// Pfx pass env.
     pub pfx_pass_env: Option<String>,
+    /// Timestamp url.
     pub timestamp_url: Option<String>,
 }
 
 #[derive(Debug)]
+/// Verify Outcome.
 pub struct VerifyOutcome {
+    /// Valid.
     pub valid: bool,
+    /// Detail.
     pub detail: String,
 }
 
+/// Verify signature.
 pub fn verify_signature(path: &Path) -> Result<VerifyOutcome> {
     if !path.is_file() {
         return Err(Error::NotExecutable {
@@ -59,6 +68,7 @@ pub fn verify_signature(path: &Path) -> Result<VerifyOutcome> {
     })
 }
 
+/// Sign.
 pub fn sign(path: &Path, opts: &SignOptions) -> Result<()> {
     if !path.is_file() {
         return Err(Error::NotExecutable {

@@ -11,26 +11,35 @@ use crate::sandbox::{
 };
 use crate::types::{DisplayMode, ExecutionRequest, NetworkMode, RuntimeDiagnostics, RuntimeError};
 
+/// Trait for Windows runtime providers (Wine, etc.).
 pub trait RuntimeProvider {
+    /// Returns the unique identifier (e.g. `"wine"`).
     fn id(&self) -> &'static str;
 
+    /// Resolves the runtime executable and version.
     fn resolve(&self) -> Result<ResolvedRuntime, RuntimeError>;
 
+    /// Initializes a Wine prefix at the given path.
     fn prepare(&self, prefix: &Path) -> Result<(), RuntimeError>;
 
+    /// Executes a Windows program under this runtime.
     fn execute(&self, req: &ExecutionRequest) -> Result<ExitStatus, RuntimeError>;
 
+    /// Kills a process running inside this runtime's prefix.
     fn kill(&self, prefix: &Path, pid: u32) -> Result<(), RuntimeError>;
 
+    /// Returns diagnostic information about this runtime.
     fn diagnostics(&self, prefix: &Path) -> RuntimeDiagnostics;
 }
 
 const WINE_ID: &str = "wine";
 pub(crate) const SYSTEM_REG: &str = "system.reg";
 
+/// Wine runtime provider.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WineRuntime;
 
+/// Returns the default Wine environment variables for a given prefix.
 pub fn base_env(prefix: &Path) -> Vec<(String, String)> {
     vec![
         ("WINEPREFIX".to_owned(), prefix.display().to_string()),
@@ -42,6 +51,7 @@ pub fn base_env(prefix: &Path) -> Vec<(String, String)> {
     ]
 }
 
+/// Returns true if the environment variable affects the host dynamic linker.
 pub fn host_loader_sensitive(key: &str) -> bool {
     key.starts_with("LD_")
         || matches!(
@@ -123,6 +133,7 @@ impl WineRuntime {
         find_wine().ok_or(RuntimeError::WineNotFound)
     }
 
+    /// Gracefully shuts down the wineserver for a prefix.
     pub fn shutdown_prefix(&self, prefix: &Path) -> Result<(), RuntimeError> {
         let wineserver = Self::wineserver_executable()?;
         for flag in ["-k", "-w"] {
@@ -157,6 +168,7 @@ impl WineRuntime {
         })
     }
 
+    /// Spawns a Wine process without waiting for it.
     pub fn spawn(&self, req: &ExecutionRequest) -> Result<std::process::Child, RuntimeError> {
         let mut command = self.command(req)?;
         command.spawn().map_err(|source| RuntimeError::SpawnFailed {
@@ -165,6 +177,7 @@ impl WineRuntime {
         })
     }
 
+    /// Builds the Wine command without spawning it.
     pub fn command(&self, req: &ExecutionRequest) -> Result<Command, RuntimeError> {
         let (loader, executable) = match &req.emulate {
             Some(em) => (Some(em.qemu.clone()), em.wine.clone()),

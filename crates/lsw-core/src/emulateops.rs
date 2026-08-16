@@ -35,6 +35,7 @@ fn is_executable(path: &std::path::Path) -> bool {
         .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
+/// Resolve.
 pub fn resolve(target: TargetArch) -> Result<Option<Emulation>> {
     if family(target) == host_family() {
         return Ok(None);

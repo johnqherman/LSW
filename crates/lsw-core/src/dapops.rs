@@ -27,26 +27,37 @@ const MAX_STEP_OUTPUT: usize = 4 * 1024 * 1024;
 const MAX_HEADER_BYTES: usize = 8 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Protocol Message.
 pub struct ProtocolMessage {
+    /// Seq.
     pub seq: i64,
     #[serde(rename = "type")]
+    /// Kind.
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Command.
     pub command: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Event.
     pub event: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Request seq.
     pub request_seq: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Success.
     pub success: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Message.
     pub message: Option<String>,
     #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    /// Arguments.
     pub arguments: serde_json::Value,
     #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    /// Body.
     pub body: serde_json::Value,
 }
 
+/// Read message.
 pub fn read_message<R: BufRead>(reader: &mut R) -> Result<Option<ProtocolMessage>> {
     let mut content_length: Option<usize> = None;
     let mut header_total: usize = 0;
@@ -93,6 +104,7 @@ pub fn read_message<R: BufRead>(reader: &mut R) -> Result<Option<ProtocolMessage
     Ok(Some(msg))
 }
 
+/// Write message.
 pub fn write_message<W: Write>(writer: &mut W, msg: &ProtocolMessage) -> Result<()> {
     let body = serde_json::to_vec(msg).map_err(|e| Error::Dap {
         detail: format!("cannot serialize DAP message: {e}"),
@@ -115,6 +127,7 @@ struct Breakpoint {
     verified: bool,
 }
 
+/// Adapter.
 pub struct Adapter<'a> {
     env: &'a Environment,
     seq: i64,
@@ -139,6 +152,7 @@ impl Drop for Adapter<'_> {
 }
 
 impl<'a> Adapter<'a> {
+    /// Creates a new instance.
     pub fn new(env: &'a Environment) -> Self {
         Self {
             env,
@@ -220,6 +234,7 @@ impl<'a> Adapter<'a> {
         }
     }
 
+    /// Handle.
     pub fn handle(&mut self, req: &ProtocolMessage) -> Result<Vec<ProtocolMessage>> {
         let command = req.command.as_deref().unwrap_or("");
         match command {
@@ -1164,6 +1179,7 @@ fn parse_q_offsets(reply: &str, image_base: u64) -> Option<u64> {
     None
 }
 
+/// Serve.
 pub fn serve<R: BufRead, W: Write>(
     env: &Environment,
     reader: &mut R,

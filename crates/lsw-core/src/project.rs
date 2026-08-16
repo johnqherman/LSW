@@ -6,8 +6,11 @@ use lsw_config::{PROJECT_MANIFEST, ProjectManifest};
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone)]
+/// Project.
 pub struct Project {
+    /// Root.
     pub root: PathBuf,
+    /// Manifest.
     pub manifest: ProjectManifest,
 }
 
@@ -49,6 +52,7 @@ pub(crate) fn scaffold_write(
 }
 
 impl Project {
+    /// Discover.
     pub fn discover(start: &Path) -> Result<Self> {
         let (root, manifest) = ProjectManifest::discover(start)?;
         crate::envops::validate_name("project", &manifest.project.name)?;
@@ -60,10 +64,12 @@ impl Project {
         Ok(Self { root, manifest })
     }
 
+    /// Manifest path.
     pub fn manifest_path(&self) -> PathBuf {
         self.root.join(PROJECT_MANIFEST)
     }
 
+    /// Lockfile path.
     pub fn lockfile_path(&self) -> PathBuf {
         self.root.join(lsw_config::PROJECT_LOCKFILE)
     }
@@ -74,12 +80,18 @@ impl Project {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// Template.
 pub enum Template {
     #[default]
+    /// Console.
     Console,
+    /// Cpp.
     Cpp,
+    /// Gui.
     Gui,
+    /// Dll.
     Dll,
+    /// Service.
     Service,
 }
 
@@ -225,9 +237,13 @@ pub(crate) fn ensure_gitignore(root: &Path) -> Result<bool> {
 }
 
 #[derive(Debug)]
+/// Init Report.
 pub struct InitReport {
+    /// Root.
     pub root: PathBuf,
+    /// Created.
     pub created: Vec<PathBuf>,
+    /// Existing build.
     pub existing_build: Option<String>,
 }
 
@@ -257,6 +273,7 @@ pub(crate) fn sanitize_project_name(raw: &str) -> String {
     trimmed.to_owned()
 }
 
+/// Init.
 pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<InitReport> {
     fn write_file(
         path: &PathBuf,

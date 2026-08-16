@@ -25,6 +25,7 @@ fn cmake_flags(flags: impl IntoIterator<Item = String>) -> String {
         .join(" ")
 }
 
+/// Writes a `CMake` toolchain file for cross-compiling to Windows.
 pub fn write_cmake_toolchain_file(
     path: &Path,
     tc: &ResolvedToolchain,

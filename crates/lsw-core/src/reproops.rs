@@ -8,22 +8,33 @@ use crate::error::{Error, Result};
 use crate::project::Project;
 
 #[derive(Debug, Serialize)]
+/// Section Divergence.
 pub struct SectionDivergence {
+    /// Name.
     pub name: String,
+    /// Detail.
     pub detail: String,
 }
 
 #[derive(Debug, Serialize)]
+/// Artifact Repro.
 pub struct ArtifactRepro {
+    /// Artifact.
     pub artifact: String,
+    /// Identical.
     pub identical: bool,
+    /// Sha256.
     pub sha256: [String; 2],
+    /// Diverging sections.
     pub diverging_sections: Vec<SectionDivergence>,
 }
 
 #[derive(Debug, Serialize)]
+/// Repro Report.
 pub struct ReproReport {
+    /// Identical.
     pub identical: bool,
+    /// Artifacts.
     pub artifacts: Vec<ArtifactRepro>,
 }
 
@@ -135,6 +146,7 @@ fn section_divergences(a: &Path, b: &Path) -> Vec<SectionDivergence> {
     out
 }
 
+/// Verify reproducible.
 pub fn verify_reproducible(
     project: &Project,
     env: &Environment,

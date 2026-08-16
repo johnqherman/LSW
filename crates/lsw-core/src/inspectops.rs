@@ -8,20 +8,30 @@ use crate::envops::Environment;
 use crate::error::Result;
 
 #[derive(Debug)]
+/// Inspect Report.
 pub struct InspectReport {
+    /// Info.
     pub info: PeInfo,
+    /// Details.
     pub details: lsw_pe::PeDetails,
+    /// Hardening.
     pub hardening: lsw_pe::Hardening,
+    /// Resources.
     pub resources: lsw_pe::Resources,
+    /// Imports.
     pub imports: Vec<ImportStatus>,
 }
 
 #[derive(Debug)]
+/// Import Status.
 pub struct ImportStatus {
+    /// Dll.
     pub dll: String,
+    /// Available.
     pub available: Option<bool>,
 }
 
+/// Inspect.
 pub fn inspect(path: &Path, env: Option<&Environment>) -> Result<InspectReport> {
     let image = PeImage::open(path)?;
     let info = image.info()?;

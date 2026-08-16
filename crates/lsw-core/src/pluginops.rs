@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 
+/// Protocol version.
 pub const PROTOCOL_VERSION: u32 = 1;
 
 const PREFIX: &str = "lsw-provider-";
@@ -33,12 +34,17 @@ const CALL_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_PENDING_RESPONSES: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Handshake.
 pub struct Handshake {
+    /// Protocol.
     pub protocol: u32,
+    /// Provider.
     pub provider: String,
     #[serde(rename = "providerVersion")]
+    /// Provider version.
     pub provider_version: String,
     #[serde(default)]
+    /// Kind.
     pub kind: String,
 }
 
@@ -59,6 +65,7 @@ struct Response {
     error: Option<serde_json::Value>,
 }
 
+/// Plugin.
 pub struct Plugin {
     name: String,
     child: Child,
@@ -66,10 +73,12 @@ pub struct Plugin {
     rx: std::sync::mpsc::Receiver<std::io::Result<Vec<u8>>>,
     reader: Option<std::thread::JoinHandle<()>>,
     next_id: u64,
+    /// Handshake.
     pub handshake: Handshake,
 }
 
 impl Plugin {
+    /// Connect.
     pub fn connect(name: &str, path: &std::path::Path) -> Result<Self> {
         let mut child = spawn_plugin(path)?;
 
@@ -142,6 +151,7 @@ impl Plugin {
         Ok(plugin)
     }
 
+    /// Call.
     pub fn call(&mut self, method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
         let id = self.next_id;
         let Some(next) = self.next_id.checked_add(1) else {
@@ -259,6 +269,7 @@ impl Plugin {
             .ok_or_else(|| plugin_err(&self.name, "response has neither result nor error".into()))
     }
 
+    /// Shutdown.
     pub fn shutdown(mut self) {
         let _ = self.call("shutdown", serde_json::Value::Null);
     }
@@ -330,11 +341,15 @@ fn read_bounded_line<R: BufRead>(reader: &mut R, max: u64) -> std::io::Result<Op
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Discovered Plugin.
 pub struct DiscoveredPlugin {
+    /// Name.
     pub name: String,
+    /// Path.
     pub path: PathBuf,
 }
 
+/// Discover.
 pub fn discover() -> Vec<DiscoveredPlugin> {
     match std::env::var_os("PATH") {
         Some(path_var) => discover_in(std::env::split_paths(&path_var)),

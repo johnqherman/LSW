@@ -1,10 +1,15 @@
 #[derive(Debug, Clone, Copy)]
+/// Explanation.
 pub struct Explanation {
+    /// Code.
     pub code: &'static str,
+    /// Summary.
     pub summary: &'static str,
+    /// Hint.
     pub hint: &'static str,
 }
 
+/// Explain.
 pub fn explain(code: &str) -> Option<Explanation> {
     let normalized = normalize(code);
     TABLE.iter().find(|e| e.code == normalized).copied()

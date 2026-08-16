@@ -6,23 +6,35 @@ use serde::Serialize;
 use crate::error::{Error, Result};
 
 #[derive(Debug, Serialize)]
+/// Delta.
 pub struct Delta {
+    /// Added.
     pub added: Vec<String>,
+    /// Removed.
     pub removed: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
+/// Section Resize.
 pub struct SectionResize {
+    /// Name.
     pub name: String,
+    /// Raw size delta.
     pub raw_size_delta: i64,
 }
 
 #[derive(Debug, Serialize)]
+/// Diff Report.
 pub struct DiffReport {
+    /// Imports.
     pub imports: Delta,
+    /// Exports.
     pub exports: Delta,
+    /// Sections.
     pub sections: Delta,
+    /// Resized.
     pub resized: Vec<SectionResize>,
+    /// Size delta.
     pub size_delta: i64,
 }
 
@@ -85,6 +97,7 @@ fn file_len(path: &Path) -> Result<u64> {
         .map_err(|e| Error::io(path.to_path_buf(), e))
 }
 
+/// Diff.
 pub fn diff(a: &Path, b: &Path) -> Result<DiffReport> {
     require_file(a)?;
     require_file(b)?;

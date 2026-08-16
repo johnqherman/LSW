@@ -44,11 +44,15 @@ const TEMPLATE_MAIN: &str = r#"fn main() {
 const TEMPLATE_LSW: &str = "";
 
 #[derive(Debug)]
+/// Rust Init Report.
 pub struct RustInitReport {
+    /// Root.
     pub root: std::path::PathBuf,
+    /// Created.
     pub created: Vec<std::path::PathBuf>,
 }
 
+/// Init.
 pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<RustInitReport> {
     if let Some(n) = name {
         crate::envops::validate_name("project", n)?;
@@ -103,23 +107,36 @@ pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<RustInitRepo
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+/// Check.
 pub enum Check {
+    /// Ok.
     Ok,
+    /// Not Configured.
     NotConfigured,
+    /// Missing.
     Missing,
 }
 
 #[derive(Debug, Serialize)]
+/// Rust Doctor.
 pub struct RustDoctor {
+    /// Target.
     pub target: String,
+    /// Compiler target.
     pub compiler_target: Check,
+    /// Linker.
     pub linker: Check,
+    /// Crt.
     pub crt: Check,
+    /// Windows imports.
     pub windows_imports: Check,
+    /// Runtime execution.
     pub runtime_execution: Check,
+    /// Native validation.
     pub native_validation: Check,
 }
 
+/// Doctor.
 pub fn doctor(env: &Environment) -> Result<RustDoctor> {
     let arch = env.manifest.target_arch;
     let triple = arch.rust_gnu_triple();

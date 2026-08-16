@@ -7,6 +7,7 @@ use crate::error::{CLANG_CL_ID, ProbeReport, ToolchainError};
 use crate::provider::unavailable;
 use crate::util::{compiler_version, starts_with_mz, which};
 
+/// Resolves a clang-cl MSVC-ABI toolchain using an imported Windows SDK.
 pub fn resolve_msvc(
     arch: TargetArch,
     sdk_root: &Path,
@@ -92,6 +93,7 @@ pub(crate) fn msvc_search_paths(root: &Path, lib_archs: &[&str]) -> (Vec<PathBuf
     (includes, libs)
 }
 
+/// Probes a clang-cl MSVC-ABI toolchain by compiling a test program.
 pub fn probe_msvc(tc: &ResolvedToolchain) -> ProbeReport {
     let fail = |detail: String, compiled: bool| ProbeReport::failure(CLANG_CL_ID, detail, compiled);
 

@@ -22,25 +22,39 @@ const CDB_X86: &[&str] = &[
 ];
 
 #[derive(Debug, Serialize)]
+/// Native Frame.
 pub struct NativeFrame {
+    /// Index.
     pub index: usize,
+    /// Call site.
     pub call_site: String,
 }
 
 #[derive(Debug, Serialize)]
+/// Native Backtrace.
 pub struct NativeBacktrace {
+    /// Host.
     pub host: String,
+    /// Exception.
     pub exception: Option<String>,
+    /// Frames.
     pub frames: Vec<NativeFrame>,
 }
 
 #[derive(Debug, Serialize)]
+/// Native Analysis.
 pub struct NativeAnalysis {
+    /// Host.
     pub host: String,
+    /// Bucket id.
     pub bucket_id: Option<String>,
+    /// Failure class.
     pub failure_class: Option<String>,
+    /// Symbol.
     pub symbol: Option<String>,
+    /// Image.
     pub image: Option<String>,
+    /// Frames.
     pub frames: Vec<NativeFrame>,
 }
 
@@ -144,6 +158,7 @@ fn run_remote_cdb(remote: &RemoteCdb, script: &str) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// Native backtrace.
 pub fn native_backtrace(
     project: &Project,
     program: &std::path::Path,
@@ -155,6 +170,7 @@ pub fn native_backtrace(
     Ok(Some(parse_backtrace(remote.host, &stdout)))
 }
 
+/// Native analyze.
 pub fn native_analyze(
     project: &Project,
     target: &std::path::Path,
@@ -171,6 +187,7 @@ pub fn native_analyze(
     Ok(Some(parse_analysis(remote.host, &stdout)))
 }
 
+/// Native interactive.
 pub fn native_interactive(
     project: &Project,
     target: &std::path::Path,

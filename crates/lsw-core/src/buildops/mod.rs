@@ -7,6 +7,7 @@ use crate::envops::{self, Environment};
 use crate::error::{Error, Result};
 use crate::project::Project;
 
+/// Aot operations.
 pub mod aot;
 mod lockfile;
 mod toolchain;
@@ -20,18 +21,28 @@ use toolchain::{run_step, run_step_with_env, write_meson_cross_file};
 const MAX_DIR_ENTRIES: usize = 1_000_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Build System.
 pub enum BuildSystem {
+    /// Cmake.
     Cmake,
+    /// Cargo.
     Cargo,
+    /// Make.
     Make,
+    /// Ninja.
     Ninja,
+    /// Meson.
     Meson,
+    /// Zig.
     Zig,
+    /// Dotnet.
     Dotnet,
+    /// Explicit.
     Explicit,
 }
 
 impl BuildSystem {
+    /// Label.
     pub fn label(self) -> &'static str {
         match self {
             BuildSystem::Cmake => "CMake",
@@ -113,22 +124,34 @@ pub(crate) fn zig_target(arch: TargetArch) -> Option<&'static str> {
 }
 
 #[derive(Debug, Default)]
+/// Build Options.
 pub struct BuildOptions {
+    /// System.
     pub system: Option<String>,
+    /// Update lock.
     pub update_lock: bool,
+    /// Reproducible.
     pub reproducible: bool,
+    /// Aot.
     pub aot: bool,
+    /// Coverage.
     pub coverage: bool,
 }
 
 #[derive(Debug)]
+/// Build Report.
 pub struct BuildReport {
+    /// System.
     pub system: BuildSystem,
+    /// Commands.
     pub commands: Vec<String>,
+    /// Artifacts.
     pub artifacts: Vec<PathBuf>,
+    /// Lock written.
     pub lock_written: bool,
 }
 
+/// Build.
 pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Result<BuildReport> {
     check_case_sensitivity(project)?;
     envops::link_project(env, project)?;

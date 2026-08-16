@@ -1,6 +1,8 @@
 //! Cross-compilation toolchain providers (MinGW-w64, LLVM/clang-cl) and
 //! Meson/CMake cross-file generation for targeting Windows from Linux.
 
+#![deny(missing_docs)]
+
 mod crossfile;
 mod error;
 mod gnu;

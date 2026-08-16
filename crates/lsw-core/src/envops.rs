@@ -16,6 +16,7 @@ const WINDOWS_RESERVED: &[&str] = &[
     "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
 ];
 
+/// Validate name.
 pub fn validate_name(kind: &str, name: &str) -> Result<()> {
     let bad = name.is_empty()
         || name == "."
@@ -43,13 +44,18 @@ pub fn validate_name(kind: &str, name: &str) -> Result<()> {
 }
 
 #[derive(Debug, Clone)]
+/// Environment.
 pub struct Environment {
+    /// Name.
     pub name: String,
+    /// Layout.
     pub layout: EnvironmentLayout,
+    /// Manifest.
     pub manifest: EnvironmentManifest,
 }
 
 impl Environment {
+    /// Open.
     pub fn open(dirs: &Dirs, name: &str) -> Result<Self> {
         validate_name("environment", name)?;
         let root = dirs.environment(name);
@@ -69,21 +75,32 @@ impl Environment {
 }
 
 #[derive(Debug)]
+/// Env Create Options.
 pub struct EnvCreateOptions {
+    /// Name.
     pub name: String,
+    /// Arch.
     pub arch: TargetArch,
+    /// Toolchain.
     pub toolchain: Option<String>,
+    /// Sdk.
     pub sdk: Option<String>,
+    /// Force.
     pub force: bool,
+    /// Expose home.
     pub expose_home: bool,
 }
 
 #[derive(Debug)]
+/// Env Create Report.
 pub struct EnvCreateReport {
+    /// Environment.
     pub environment: Environment,
+    /// Probe.
     pub probe: ProbeReport,
 }
 
+/// Create.
 pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
     validate_name("environment", &opts.name)?;
     let root = dirs.environment(&opts.name);
@@ -168,14 +185,21 @@ pub fn create(dirs: &Dirs, opts: &EnvCreateOptions) -> Result<EnvCreateReport> {
 }
 
 #[derive(Debug)]
+/// Env Summary.
 pub struct EnvSummary {
+    /// Name.
     pub name: String,
+    /// Arch.
     pub arch: TargetArch,
+    /// Toolchain.
     pub toolchain: String,
+    /// Runtime.
     pub runtime: String,
+    /// Healthy.
     pub healthy: bool,
 }
 
+/// List.
 pub fn list(dirs: &Dirs) -> Result<Vec<EnvSummary>> {
     let root = dirs.environments();
     if !root.is_dir() {
@@ -224,6 +248,7 @@ pub fn list(dirs: &Dirs) -> Result<Vec<EnvSummary>> {
     Ok(out)
 }
 
+/// Remove.
 pub fn remove(dirs: &Dirs, name: &str) -> Result<()> {
     validate_name("environment", name)?;
     let root = dirs.environment(name);
@@ -235,6 +260,7 @@ pub fn remove(dirs: &Dirs, name: &str) -> Result<()> {
     fs::remove_dir_all(&root).map_err(|e| Error::io(root, e))
 }
 
+/// Clone env.
 pub fn clone_env(dirs: &Dirs, src: &str, dst: &str, force: bool) -> Result<Environment> {
     validate_name("environment", src)?;
     validate_name("environment", dst)?;
@@ -275,6 +301,7 @@ pub fn clone_env(dirs: &Dirs, src: &str, dst: &str, force: bool) -> Result<Envir
     Ok(opened)
 }
 
+/// Restore.
 pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateReport> {
     validate_name("environment", name)?;
     let lock = Lockfile::load(&project.lockfile_path())?;
@@ -303,12 +330,14 @@ pub fn restore(dirs: &Dirs, project: &Project, name: &str) -> Result<EnvCreateRe
     Ok(report)
 }
 
+/// Use environment.
 pub fn use_environment(dirs: &Dirs, project: &mut Project, name: &str) -> Result<()> {
     Environment::open(dirs, name)?;
     project.manifest.environment.name = Some(name.to_owned());
     project.save_manifest()
 }
 
+/// Resolve active.
 pub fn resolve_active(dirs: &Dirs, project: &Project) -> Result<Environment> {
     let from_manifest = project.manifest.environment.name.clone();
     let name = match from_manifest {
@@ -327,6 +356,7 @@ fn profile_dir(layout: &EnvironmentLayout) -> PathBuf {
         .join(crate::runops::windows_user())
 }
 
+/// Harden profiles.
 pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
     let drive_c = layout.drive_c();
     let users = drive_c.join("users");
@@ -459,6 +489,7 @@ fn provision_profile(layout: &EnvironmentLayout) -> Result<()> {
     Ok(())
 }
 
+/// Link project.
 pub fn link_project(env: &Environment, project: &Project) -> Result<PathBuf> {
     validate_name("project", &project.manifest.project.name)?;
     let src_dir = env.layout.src();
@@ -489,6 +520,7 @@ pub fn link_project(env: &Environment, project: &Project) -> Result<PathBuf> {
     Ok(link)
 }
 
+/// Mapper.
 pub fn mapper(env: &Environment, project: &Project) -> lsw_path::PathMapper {
     lsw_path::PathMapper::for_environment(
         &env.layout.drive_c(),
@@ -497,6 +529,7 @@ pub fn mapper(env: &Environment, project: &Project) -> lsw_path::PathMapper {
     )
 }
 
+/// Export env.
 pub fn export_env(dirs: &Dirs, name: &str, file: &Path) -> Result<()> {
     validate_name("environment", name)?;
     let root = dirs.environment(name);
@@ -523,6 +556,7 @@ pub fn export_env(dirs: &Dirs, name: &str, file: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Import env.
 pub fn import_env(dirs: &Dirs, name: &str, file: &Path, force: bool) -> Result<()> {
     validate_name("environment", name)?;
     let root = dirs.environment(name);
@@ -558,6 +592,7 @@ pub fn import_env(dirs: &Dirs, name: &str, file: &Path, force: bool) -> Result<(
     Environment::open(dirs, name).map(|_| ())
 }
 
+/// Provision winetricks.
 pub fn provision_winetricks(
     env: &Environment,
     verbs: &[String],
@@ -579,6 +614,7 @@ pub fn provision_winetricks(
         .map_err(|e| Error::io(std::path::PathBuf::from("winetricks"), e))
 }
 
+/// Lockfile for.
 pub fn lockfile_for(env: &Environment, project: Option<&Project>) -> Result<Lockfile> {
     let tc = &env.manifest.toolchain;
     let rt = &env.manifest.runtime;

@@ -305,6 +305,7 @@ impl Winrm {
     }
 }
 
+/// Run on host.
 pub fn run_on_host(
     project: &Project,
     artifacts: &[std::path::PathBuf],

@@ -10,18 +10,31 @@ use crate::project::Project;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Ide Env.
 pub struct IdeEnv {
+    /// Target.
     pub target: String,
+    /// Environment.
     pub environment: String,
+    /// Compiler.
     pub compiler: String,
+    /// Cxx compiler.
     pub cxx_compiler: String,
+    /// Sysroot.
     pub sysroot: String,
+    /// Include paths.
     pub include_paths: Vec<String>,
+    /// Defines.
     pub defines: Vec<String>,
+    /// C flags.
     pub c_flags: Vec<String>,
+    /// Cxx flags.
     pub cxx_flags: Vec<String>,
+    /// Link flags.
     pub link_flags: Vec<String>,
+    /// Wine prefix.
     pub wine_prefix: String,
+    /// Project windows root.
     pub project_windows_root: Option<String>,
 }
 
@@ -35,6 +48,7 @@ fn clang_triple(arch: TargetArch) -> &'static str {
     }
 }
 
+/// Ide env.
 pub fn ide_env(env: &Environment, project: Option<&Project>) -> Result<IdeEnv> {
     let tc = &env.manifest.toolchain;
 

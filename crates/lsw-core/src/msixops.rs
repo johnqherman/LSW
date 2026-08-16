@@ -14,6 +14,7 @@ const BLOCK_SIZE: usize = 65536;
 const MAX_MSIX_ARTIFACT: u64 = 4 * 1024 * 1024 * 1024;
 const MAX_BLOCKMAP_BYTES: usize = 256 * 1024 * 1024;
 
+/// Build msix.
 pub fn build_msix(
     project: &Project,
     arch: TargetArch,
@@ -143,12 +144,18 @@ pub fn build_msix(
     Ok(msix)
 }
 
+/// Sign Identity.
 pub enum SignIdentity<'a> {
+    /// Dev Cert.
     DevCert {
+        /// Undocumented.
         publisher: &'a str,
     },
+    /// Pfx.
     Pfx {
+        /// Undocumented.
         path: &'a Path,
+        /// Undocumented.
         pass: Option<String>,
     },
 }
@@ -187,6 +194,7 @@ impl Drop for PassFile {
     }
 }
 
+/// Authenticode sign with.
 pub fn authenticode_sign_with(
     unsigned: &Path,
     out: &Path,

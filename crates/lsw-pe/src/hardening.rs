@@ -7,22 +7,32 @@ use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile};
 use crate::error::PeError;
 use crate::image::{PeImage, dispatch_pe};
 
+/// Security hardening flags extracted from a PE image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Hardening {
+    /// Address Space Layout Randomization (DYNAMICBASE).
     pub aslr: bool,
+    /// High-entropy 64-bit ASLR (`None` for 32-bit images).
     pub high_entropy_va: Option<bool>,
+    /// Data Execution Prevention (NXCOMPAT).
     pub dep: bool,
+    /// Control Flow Guard.
     pub cfg: bool,
+    /// Mandatory code signing at load time.
     pub force_integrity: bool,
+    /// Structured Exception Handling validation (`None` for x64).
     pub seh: Option<bool>,
+    /// Authenticode signature present.
     pub signed: bool,
 }
 
+/// Reads hardening flags from a PE file on disk.
 pub fn hardening(path: &Path) -> Result<Hardening, PeError> {
     PeImage::open(path)?.hardening()
 }
 
 impl PeImage {
+    /// Extracts hardening flags from the loaded image.
     pub fn hardening(&self) -> Result<Hardening, PeError> {
         dispatch_pe!(&self.path, &self.data, hardening_typed)
     }

@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
 
+/// Github workflow.
 pub fn github_workflow(project_name: &str) -> String {
     let escaped: String = project_name
         .chars()
@@ -131,6 +132,7 @@ jobs:
     )
 }
 
+/// Gitlab pipeline.
 pub fn gitlab_pipeline() -> String {
     let lsw_version = env!("CARGO_PKG_VERSION");
     format!(
@@ -170,6 +172,7 @@ build-windows:
     )
 }
 
+/// Init gitlab.
 pub fn init_gitlab(project_root: &Path) -> Result<PathBuf> {
     let path = project_root.join(".gitlab-ci.yml");
     if std::fs::symlink_metadata(&path).is_ok() {
@@ -182,6 +185,7 @@ pub fn init_gitlab(project_root: &Path) -> Result<PathBuf> {
     Ok(path)
 }
 
+/// Init github.
 pub fn init_github(project_root: &Path) -> Result<PathBuf> {
     let name = project_root.file_name().map_or_else(
         || "lsw-project".to_owned(),

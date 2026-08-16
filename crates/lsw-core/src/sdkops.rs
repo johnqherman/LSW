@@ -10,10 +10,15 @@ use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+/// Sdk Manifest.
 pub struct SdkManifest {
+    /// Name.
     pub name: String,
+    /// Source.
     pub source: PathBuf,
+    /// Has include.
     pub has_include: bool,
+    /// Has lib.
     pub has_lib: bool,
 }
 
@@ -24,9 +29,13 @@ impl SdkManifest {
 }
 
 #[derive(Debug)]
+/// Sdk Import Report.
 pub struct SdkImportReport {
+    /// Name.
     pub name: String,
+    /// Root.
     pub root: PathBuf,
+    /// Files copied.
     pub files_copied: usize,
 }
 
@@ -37,6 +46,7 @@ fn has_sdk_dir(root: &Path, kind: &str) -> bool {
         .any(|base| base.join(kind).is_dir() || base.join(&cap).is_dir())
 }
 
+/// Acquire.
 pub fn acquire(
     dirs: &Dirs,
     name: &str,
@@ -79,6 +89,7 @@ pub fn acquire(
     result
 }
 
+/// Import.
 pub fn import(dirs: &Dirs, name: &str, from: &Path, force: bool) -> Result<SdkImportReport> {
     validate_name("sdk", name)?;
     let from_meta = fs::symlink_metadata(from).map_err(|e| Error::io(from.to_path_buf(), e))?;
@@ -119,12 +130,17 @@ pub fn import(dirs: &Dirs, name: &str, from: &Path, force: bool) -> Result<SdkIm
 }
 
 #[derive(Debug)]
+/// Sdk Summary.
 pub struct SdkSummary {
+    /// Name.
     pub name: String,
+    /// Source.
     pub source: PathBuf,
+    /// Usable.
     pub usable: bool,
 }
 
+/// List.
 pub fn list(dirs: &Dirs) -> Result<Vec<SdkSummary>> {
     let root = dirs.sysroots();
     if !root.is_dir() {
@@ -154,6 +170,7 @@ pub fn list(dirs: &Dirs) -> Result<Vec<SdkSummary>> {
     Ok(out)
 }
 
+/// Remove.
 pub fn remove(dirs: &Dirs, name: &str) -> Result<()> {
     validate_name("sdk", name)?;
     let root = dirs.sysroot(name);

@@ -10,41 +10,64 @@ use crate::project::Project;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+/// Outcome.
 pub enum Outcome {
+    /// Pass.
     Pass,
+    /// Fail.
     Fail,
+    /// Not Run.
     NotRun,
 }
 
 #[derive(Debug, Serialize)]
+/// Component.
 pub struct Component {
+    /// Label.
     pub label: String,
+    /// Outcome.
     pub outcome: Outcome,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+/// Compat Status.
 pub enum CompatStatus {
+    /// Local Compatibility Verified.
     LocalCompatibilityVerified,
+    /// Local Compatibility Failed.
     LocalCompatibilityFailed,
+    /// Not Run.
     NotRun,
 }
 
 #[derive(Debug, Serialize)]
+/// Test Report.
 pub struct TestReport {
+    /// Build.
     pub build: Component,
+    /// Runtime.
     pub runtime: Component,
+    /// Native.
     pub native: Component,
+    /// Command.
     pub command: String,
+    /// Tests passed.
     pub tests_passed: Option<u32>,
+    /// Tests failed.
     pub tests_failed: Option<u32>,
+    /// Compatibility.
     pub compatibility: CompatStatus,
 }
 
 #[derive(Debug, Default)]
+/// Test Options.
 pub struct TestOptions {
+    /// Headless.
     pub headless: bool,
+    /// Junit.
     pub junit: Option<std::path::PathBuf>,
+    /// Coverage.
     pub coverage: bool,
 }
 
@@ -56,6 +79,7 @@ enum TestKind {
     Meson,
 }
 
+/// Test.
 pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<TestReport> {
     const MAX_TEST_OUTPUT: u64 = 64 * 1024 * 1024;
     if opts.coverage && env.manifest.toolchain.provider != "llvm-mingw" {

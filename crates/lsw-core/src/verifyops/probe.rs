@@ -10,18 +10,26 @@ use super::{default_remote_dir, expand_tilde, validate_windows_dir};
 use crate::buildops::which;
 
 #[derive(Debug, Serialize)]
+/// Dll Probe.
 pub struct DllProbe {
+    /// Name.
     pub name: String,
+    /// Loaded.
     pub loaded: bool,
+    /// Missing functions.
     pub missing_functions: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
+/// Import Probe.
 pub struct ImportProbe {
+    /// Host.
     pub host: String,
+    /// Dlls.
     pub dlls: Vec<DllProbe>,
 }
 
+/// Probe imports.
 pub fn probe_imports(project: &Project, program: &std::path::Path) -> Result<Option<ImportProbe>> {
     let cfg = &project.manifest.verify;
     let Some(host) = cfg.host.clone() else {

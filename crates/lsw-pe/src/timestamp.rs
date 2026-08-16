@@ -22,6 +22,7 @@ fn pe_signature_offset(path: &Path, data: &[u8]) -> Result<usize, PeError> {
     Ok(e_lfanew)
 }
 
+/// Reads the COFF timestamp from a PE file's header.
 pub fn coff_timestamp(path: &Path) -> Result<u32, PeError> {
     let data = crate::error::read_pe(path)?;
     let off = pe_signature_offset(path, &data)? + 8;
@@ -33,6 +34,7 @@ pub fn coff_timestamp(path: &Path) -> Result<u32, PeError> {
     ]))
 }
 
+/// Overwrites the COFF timestamp in a PE file's header.
 pub fn set_coff_timestamp(path: &Path, value: u32) -> Result<(), PeError> {
     let mut data = crate::error::read_pe(path)?;
     let off = pe_signature_offset(path, &data)? + 8;

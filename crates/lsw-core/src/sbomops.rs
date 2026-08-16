@@ -57,6 +57,7 @@ fn build_sbom(
     })
 }
 
+/// Sbom.
 pub fn sbom(path: &Path) -> Result<Value> {
     if !path.is_file() {
         return Err(Error::NotExecutable {

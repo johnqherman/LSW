@@ -1,6 +1,8 @@
 //! Wine runtime provider: environment creation, process execution with
 //! sandboxing (rlimits, network isolation), and GPU passthrough detection.
 
+#![deny(missing_docs)]
+
 mod env;
 mod gpu;
 mod sandbox;

@@ -6,6 +6,7 @@ use crate::error::{LLVM_MINGW_ID, MINGW_GCC_ID, ToolchainError};
 use crate::provider::{ToolchainProvider, unavailable};
 use crate::util::{compiler_version, derive_sysroot, which};
 
+/// LLVM MinGW cross-compilation toolchain provider.
 pub struct LlvmMingw;
 
 impl ToolchainProvider for LlvmMingw {
@@ -106,6 +107,7 @@ fn latest_gcc_lib_dir(triple: &str) -> Option<PathBuf> {
     versions.pop()
 }
 
+/// MinGW GCC cross-compilation toolchain provider.
 pub struct MingwGcc;
 
 impl ToolchainProvider for MingwGcc {

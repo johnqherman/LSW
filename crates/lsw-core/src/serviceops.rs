@@ -21,11 +21,15 @@ fn sc(env: &Environment, args: Vec<String>) -> Result<std::process::Output> {
 }
 
 #[derive(Debug, Serialize)]
+/// Service Status.
 pub struct ServiceStatus {
+    /// Name.
     pub name: String,
+    /// State.
     pub state: String,
 }
 
+/// Create.
 pub fn create(env: &Environment, name: &str, bin_path: &str) -> Result<()> {
     let out = sc(
         env,
@@ -34,21 +38,25 @@ pub fn create(env: &Environment, name: &str, bin_path: &str) -> Result<()> {
     finish("create", name, &out)
 }
 
+/// Start.
 pub fn start(env: &Environment, name: &str) -> Result<()> {
     let out = sc(env, vec!["start".into(), name.into()])?;
     finish("start", name, &out)
 }
 
+/// Stop.
 pub fn stop(env: &Environment, name: &str) -> Result<()> {
     let out = sc(env, vec!["stop".into(), name.into()])?;
     finish("stop", name, &out)
 }
 
+/// Delete.
 pub fn delete(env: &Environment, name: &str) -> Result<()> {
     let out = sc(env, vec!["delete".into(), name.into()])?;
     finish("delete", name, &out)
 }
 
+/// Query.
 pub fn query(env: &Environment, name: &str) -> Result<ServiceStatus> {
     let out = sc(env, vec!["query".into(), name.into()])?;
     let stdout = String::from_utf8_lossy(&out.stdout);

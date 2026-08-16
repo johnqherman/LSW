@@ -9,57 +9,82 @@ use crate::PROJECT_MANIFEST;
 use crate::error::{ConfigError, Result};
 use crate::types::{CaseSensitivity, LinkMode, TargetArch};
 
+/// Top-level project manifest (`lsw.toml`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectManifest {
+    /// Project identity.
     pub project: ProjectSection,
+    /// Target platform settings.
     #[serde(default, skip_serializing_if = "is_default_section")]
     pub target: TargetSection,
+    /// Cross-compilation toolchain settings.
     #[serde(default, skip_serializing_if = "is_default_section")]
     pub toolchain: ToolchainSection,
+    /// Windows runtime settings.
     #[serde(default, skip_serializing_if = "is_default_section")]
     pub runtime: RuntimeSection,
+    /// Default environment preferences.
     #[serde(default, skip_serializing_if = "EnvironmentSection::is_empty")]
     pub environment: EnvironmentSection,
+    /// Filesystem validation settings.
     #[serde(default, skip_serializing_if = "is_default_section")]
     pub filesystem: FilesystemSection,
+    /// Custom build command override.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub build: Option<CommandSection>,
+    /// Custom test command override.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test: Option<CommandSection>,
+    /// Sandbox resource limits and network policy.
     #[serde(default, skip_serializing_if = "is_default_section")]
     pub sandbox: SandboxSection,
+    /// Native Windows verification settings.
     #[serde(default, skip_serializing_if = "VerifySection::is_empty")]
     pub verify: VerifySection,
+    /// Environment variables and secrets.
     #[serde(default, skip_serializing_if = "EnvSection::is_empty")]
     pub env: EnvSection,
+    /// Windows registry seed entries.
     #[serde(default, skip_serializing_if = "RegistrySection::is_empty")]
     pub registry: RegistrySection,
+    /// Installer packaging settings.
     #[serde(default, skip_serializing_if = "PackageSection::is_empty")]
     pub package: PackageSection,
+    /// Third-party dependency version pins.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub dependencies: BTreeMap<String, String>,
 }
 
+/// Installer packaging metadata.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PackageSection {
+    /// Application version string.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// Publisher name for installer metadata.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub publisher: Option<String>,
+    /// Short description for installer metadata.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Path to an icon file (.ico).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
+    /// MSI/MSIX upgrade code GUID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub upgrade_code: Option<String>,
+    /// Whether to create start-menu shortcuts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shortcuts: Option<bool>,
+    /// URL shown in Add/Remove Programs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub installer_url: Option<String>,
+    /// Whether the application is DPI-aware.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dpi_aware: Option<bool>,
+    /// Whether the installer requires admin elevation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub requires_admin: Option<bool>,
 }
@@ -70,9 +95,11 @@ impl PackageSection {
     }
 }
 
+/// Windows registry seed entries applied at environment creation.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RegistrySection {
+    /// Registry values to seed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub seed: Vec<RegistrySeed>,
 }
@@ -83,12 +110,17 @@ impl RegistrySection {
     }
 }
 
+/// A single registry value to seed during environment creation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RegistrySeed {
+    /// Registry key path (e.g. `HKCU\Software\App`).
     pub key: String,
+    /// Value name.
     pub name: String,
+    /// Value data.
     pub value: String,
+    /// Value type (defaults to `"string"`).
     #[serde(default = "default_registry_type", rename = "type")]
     pub kind: String,
 }
@@ -97,11 +129,14 @@ fn default_registry_type() -> String {
     "string".to_owned()
 }
 
+/// Environment variables and host-mapped secrets.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnvSection {
+    /// Static environment variables.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub vars: BTreeMap<String, String>,
+    /// Host environment variables mapped as secrets.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub secret: BTreeMap<String, String>,
 }
@@ -112,17 +147,23 @@ impl EnvSection {
     }
 }
 
+/// Native Windows verification settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct VerifySection {
+    /// Transport protocol (ssh, winrm, https).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transport: Option<String>,
+    /// Remote host address.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
+    /// Remote working directory.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_dir: Option<String>,
+    /// SSH identity file path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identity_file: Option<String>,
+    /// Remote crash dump directory.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dump_dir: Option<String>,
 }
@@ -137,13 +178,17 @@ impl VerifySection {
     }
 }
 
+/// Sandbox resource limits and network isolation policy.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SandboxSection {
+    /// Network access mode (host, isolated, none).
     #[serde(default = "default_sandbox_network")]
     pub network: String,
+    /// CPU time limit in seconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cpu_seconds: Option<u64>,
+    /// Memory limit in megabytes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory_mb: Option<u64>,
 }
@@ -162,19 +207,25 @@ impl Default for SandboxSection {
     }
 }
 
+/// Project identity section.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectSection {
+    /// Project name used in paths and installer metadata.
     pub name: String,
 }
 
+/// Target platform section.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TargetSection {
+    /// Target operating system (always `"windows"`).
     #[serde(default = "default_target_os")]
     pub os: String,
+    /// Target CPU architecture.
     #[serde(default = "default_target_arch")]
     pub arch: TargetArch,
+    /// Minimum Windows API version.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api: Option<String>,
 }
@@ -197,17 +248,23 @@ impl Default for TargetSection {
     }
 }
 
+/// Cross-compilation toolchain preferences.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ToolchainSection {
+    /// Toolchain provider name (e.g. `llvm-mingw`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
+    /// Toolchain version constraint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// Static or dynamic linking preference.
     #[serde(default)]
     pub link: LinkMode,
+    /// Enable `NativeAOT` compilation for .NET.
     #[serde(default, skip_serializing_if = "is_false")]
     pub aot: bool,
+    /// Enable ccache for compilation.
     #[serde(default, skip_serializing_if = "is_false")]
     pub ccache: bool,
 }
@@ -220,11 +277,14 @@ fn is_default_section<T: Default + PartialEq>(value: &T) -> bool {
     *value == T::default()
 }
 
+/// Windows runtime provider settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeSection {
+    /// Runtime provider name (default: `"wine"`).
     #[serde(default = "default_runtime_provider")]
     pub provider: String,
+    /// Runtime version constraint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
 }
@@ -242,9 +302,11 @@ impl Default for RuntimeSection {
     }
 }
 
+/// Default environment name preference.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnvironmentSection {
+    /// Preferred environment name for `lsw env create`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 }
@@ -255,8 +317,10 @@ impl EnvironmentSection {
     }
 }
 
+/// Filesystem validation settings.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct FilesystemSection {
+    /// Case-sensitivity mode for cross-compilation validation.
     #[serde(
         default,
         rename = "case",
@@ -265,9 +329,11 @@ pub struct FilesystemSection {
     pub case: CaseSensitivity,
 }
 
+/// A shell command sequence.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CommandSection {
+    /// Command and arguments.
     pub command: Vec<String>,
 }
 
@@ -285,14 +351,17 @@ impl ProjectManifest {
         }
     }
 
+    /// Loads a project manifest from a TOML file.
     pub fn load(path: &Path) -> Result<Self> {
         read_toml(path)
     }
 
+    /// Writes this manifest to disk as TOML (atomic rename).
     pub fn save(&self, path: &Path) -> Result<()> {
         write_toml(path, self, "lsw.toml")
     }
 
+    /// Creates a new manifest file, failing if the file already exists.
     pub fn save_new(&self, path: &Path) -> Result<()> {
         let text = toml::to_string_pretty(self).map_err(|source| ConfigError::Serialize {
             what: "lsw.toml",
@@ -312,6 +381,7 @@ impl ProjectManifest {
         create_new_file(path, &text)
     }
 
+    /// Walks upward from `start` to find and load the nearest `lsw.toml`.
     pub fn discover(start: &Path) -> Result<(PathBuf, Self)> {
         let mut dir = Some(start);
         while let Some(d) = dir {

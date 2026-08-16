@@ -14,6 +14,7 @@ const ELF_MAGIC: &[u8; 4] = b"\x7fELF";
 const SHEBANG_MAGIC: &[u8; 2] = b"#!";
 const DETECT_HEADER_BYTES: usize = 64 * 1024;
 
+/// Detects the binary format of a file (PE, ELF, script, or unknown).
 pub fn detect(path: &Path) -> Result<BinaryKind, PeError> {
     let prefix = read_prefix(path, DETECT_HEADER_BYTES)?;
 
@@ -48,6 +49,7 @@ pub fn detect(path: &Path) -> Result<BinaryKind, PeError> {
 }
 
 impl PeImage {
+    /// Parses core PE header fields from the loaded image.
     pub fn info(&self) -> Result<PeInfo, PeError> {
         parse_pe_info(&self.path, &self.data)
     }

@@ -7,31 +7,49 @@ use crate::error::Result;
 use crate::traceops::{self, TraceOptions};
 
 #[derive(Debug, Serialize)]
+/// Compat Report.
 pub struct CompatReport {
+    /// Imported dlls.
     pub imported_dlls: usize,
+    /// Imported functions.
     pub imported_functions: usize,
+    /// Loaded dlls.
     pub loaded_dlls: usize,
+    /// Supported locally.
     pub supported_locally: usize,
+    /// Potentially unsupported.
     pub potentially_unsupported: Vec<String>,
+    /// Unsupported apis.
     pub unsupported_apis: Vec<String>,
+    /// Capabilities.
     pub capabilities: Vec<Capability>,
+    /// Note.
     pub note: String,
 }
 
 #[derive(Debug, Serialize)]
+/// Capability.
 pub struct Capability {
+    /// Feature.
     pub feature: String,
+    /// Local.
     pub local: Support,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Native.
     pub native: Option<Support>,
 }
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+/// Support.
 pub enum Support {
+    /// Yes.
     Yes,
+    /// Partial.
     Partial,
+    /// No.
     No,
+    /// Unused.
     Unused,
 }
 
@@ -79,6 +97,7 @@ const FEATURES: &[Feature] = &[
     },
 ];
 
+/// Compat.
 pub fn compat(
     env: &Environment,
     program: &std::path::Path,
@@ -87,6 +106,7 @@ pub fn compat(
     compat_inner(env, program, args, None)
 }
 
+/// Compat recording.
 pub fn compat_recording(
     env: &Environment,
     program: &std::path::Path,
@@ -188,6 +208,7 @@ fn classify(imported: &[String]) -> Vec<Capability> {
         .collect()
 }
 
+/// Apply native.
 pub fn apply_native(report: &mut CompatReport, probe: &crate::verifyops::ImportProbe) {
     let loaded: std::collections::BTreeMap<String, &crate::verifyops::DllProbe> = probe
         .dlls

@@ -14,27 +14,40 @@ use lsw_config::Dirs;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+/// Step Status.
 pub enum StepStatus {
+    /// Pass.
     Pass,
+    /// Fail.
     Fail,
+    /// Skip.
     Skip,
 }
 
 #[derive(Debug, Serialize)]
+/// Check Step.
 pub struct CheckStep {
+    /// Name.
     pub name: &'static str,
+    /// Status.
     pub status: StepStatus,
+    /// Detail.
     pub detail: String,
 }
 
 #[derive(Debug, Serialize)]
+/// Check Report.
 pub struct CheckReport {
+    /// Steps.
     pub steps: Vec<CheckStep>,
+    /// Ok.
     pub ok: bool,
 }
 
 #[derive(Debug, Default)]
+/// Check Options.
 pub struct CheckOptions {
+    /// Headless.
     pub headless: bool,
 }
 
@@ -83,6 +96,7 @@ impl Recorder<'_> {
     }
 }
 
+/// Check.
 pub fn check(
     dirs: &Dirs,
     start: &Path,

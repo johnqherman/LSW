@@ -1,6 +1,8 @@
 //! Bidirectional Linux/Windows path translation (Unix paths to
 //! `Z:\`-rooted Windows paths and back) for cross-compilation tooling.
 
+#![deny(missing_docs)]
+
 mod error;
 mod linux;
 mod types;

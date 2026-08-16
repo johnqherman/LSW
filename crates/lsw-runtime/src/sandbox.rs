@@ -130,10 +130,12 @@ pub(crate) fn sandbox_base_env() -> Vec<(String, String)> {
     out
 }
 
+/// Locates the bubblewrap (`bwrap`) executable on PATH.
 pub fn find_bwrap() -> Option<PathBuf> {
     find_on_path("bwrap")
 }
 
+/// Locates the `xvfb-run` virtual display wrapper on PATH.
 pub fn find_xvfb_run() -> Option<PathBuf> {
     find_on_path("xvfb-run")
 }

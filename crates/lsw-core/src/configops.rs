@@ -7,14 +7,20 @@ use crate::error::Result;
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+/// Severity.
 pub enum Severity {
+    /// Warn.
     Warn,
+    /// Error.
     Error,
 }
 
 #[derive(Debug, Serialize)]
+/// Finding.
 pub struct Finding {
+    /// Severity.
     pub severity: Severity,
+    /// Message.
     pub message: String,
 }
 
@@ -44,6 +50,7 @@ const KNOWN_REG_TYPE: &[&str] = &[
     "reg_expand_sz",
 ];
 
+/// Lint.
 pub fn lint(manifest: &ProjectManifest) -> Vec<Finding> {
     let mut out = Vec::new();
     let warn = |out: &mut Vec<Finding>, m: String| {
@@ -134,6 +141,7 @@ pub fn lint(manifest: &ProjectManifest) -> Vec<Finding> {
     out
 }
 
+/// Check.
 pub fn check(project_root: &Path) -> Result<Vec<Finding>> {
     let manifest = ProjectManifest::load(&project_root.join(lsw_config::PROJECT_MANIFEST))?;
     Ok(lint(&manifest))

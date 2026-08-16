@@ -9,18 +9,26 @@ use lsw_config::Dirs;
 const LLVM_MINGW_REPO: &str = "https://github.com/mstorsjo/llvm-mingw";
 
 #[derive(Debug, Serialize)]
+/// Install Report.
 pub struct InstallReport {
+    /// Name.
     pub name: String,
+    /// Version.
     pub version: String,
+    /// Path.
     pub path: String,
 }
 
 #[derive(Debug, Serialize)]
+/// Installed Toolchain.
 pub struct InstalledToolchain {
+    /// Name.
     pub name: String,
+    /// Path.
     pub path: String,
 }
 
+/// List.
 pub fn list(dirs: &Dirs) -> Vec<InstalledToolchain> {
     let Ok(entries) = std::fs::read_dir(dirs.toolchains()) else {
         return Vec::new();
@@ -37,6 +45,7 @@ pub fn list(dirs: &Dirs) -> Vec<InstalledToolchain> {
     out
 }
 
+/// Remove.
 pub fn remove(dirs: &Dirs, name: &str) -> Result<bool> {
     if name.contains('/') || name.contains('\\') || name.contains("..") {
         return Ok(false);
@@ -49,6 +58,7 @@ pub fn remove(dirs: &Dirs, name: &str) -> Result<bool> {
     Ok(true)
 }
 
+/// Install.
 pub fn install(dirs: &Dirs, spec: &str) -> Result<InstallReport> {
     let (name, version) = match spec.split_once('@') {
         Some((n, v)) => (n, v.to_owned()),

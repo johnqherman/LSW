@@ -48,27 +48,41 @@ fn bucket_for(section: &str) -> &'static str {
 }
 
 #[derive(Debug, Serialize)]
+/// Bucket.
 pub struct Bucket {
+    /// Name.
     pub name: String,
+    /// Bytes.
     pub bytes: u64,
+    /// Percent.
     pub percent: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Baseline bytes.
     pub baseline_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Delta.
     pub delta: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Growth percent.
     pub growth_percent: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]
+/// Size Report.
 pub struct SizeReport {
+    /// File.
     pub file: String,
+    /// File size.
     pub file_size: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Baseline.
     pub baseline: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Baseline size.
     pub baseline_size: Option<u64>,
+    /// Buckets.
     pub buckets: Vec<Bucket>,
+    /// Exceeded.
     pub exceeded: Vec<String>,
 }
 
@@ -96,6 +110,7 @@ fn bucket_sizes(pe: &Path) -> Result<(u64, BTreeMap<String, u64>)> {
     Ok((file_size, buckets))
 }
 
+/// Size.
 pub fn size(pe: &Path, baseline: Option<&Path>, max_growth: Option<f64>) -> Result<SizeReport> {
     let (file_size, current) = bucket_sizes(pe)?;
     let base = baseline.map(bucket_sizes).transpose()?;

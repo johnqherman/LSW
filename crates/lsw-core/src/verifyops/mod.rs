@@ -33,41 +33,62 @@ pub use probe::{DllProbe, ImportProbe, probe_imports};
 
 use dumps::{collect_dump, newest_dump};
 
+/// Supported transports.
 pub const SUPPORTED_TRANSPORTS: &[&str] = &["ssh", "winrm", "https"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+/// Verify Status.
 pub enum VerifyStatus {
+    /// Windows Verified.
     WindowsVerified,
+    /// Windows Failed.
     WindowsFailed,
+    /// Windows Unavailable.
     WindowsUnavailable,
 }
 
 #[derive(Debug, Serialize)]
+/// Agent Result.
 pub struct AgentResult {
+    /// Artifact.
     pub artifact: String,
+    /// Exit code.
     pub exit_code: Option<i32>,
+    /// Stdout.
     pub stdout: String,
+    /// Stderr.
     pub stderr: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Dump.
     pub dump: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
+/// Verify Report.
 pub struct VerifyReport {
+    /// Status.
     pub status: VerifyStatus,
+    /// Host.
     pub host: Option<String>,
+    /// Results.
     pub results: Vec<AgentResult>,
+    /// Detail.
     pub detail: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Agent Plan.
 pub struct AgentPlan {
+    /// Uploads.
     pub uploads: Vec<(PathBuf, String)>,
+    /// Run.
     pub run: Vec<String>,
+    /// Remote dir.
     pub remote_dir: String,
 }
 
+/// Plan.
 pub fn plan(project: &Project, artifacts: &[PathBuf], remote_dir: &str) -> AgentPlan {
     let mut uploads = Vec::new();
     let mut run = Vec::new();
@@ -91,6 +112,7 @@ pub fn plan(project: &Project, artifacts: &[PathBuf], remote_dir: &str) -> Agent
     }
 }
 
+/// Verify.
 pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
     if project.manifest.verify.host.is_none() {
         return run_on_host(project, &[], &[]);
@@ -99,6 +121,7 @@ pub fn verify(project: &Project, env: &Environment) -> Result<VerifyReport> {
     run_on_host(project, &build.artifacts, &[])
 }
 
+/// Run on host.
 pub fn run_on_host(
     project: &Project,
     artifacts: &[PathBuf],
@@ -164,6 +187,7 @@ pub fn run_on_host(
     )
 }
 
+/// Crash reason.
 pub fn crash_reason(exit_code: i32) -> Option<&'static str> {
     let status = exit_code as u32;
     let reason = match status {

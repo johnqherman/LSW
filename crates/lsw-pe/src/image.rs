@@ -3,12 +3,14 @@ use std::path::{Path, PathBuf};
 use crate::MZ_MAGIC;
 use crate::error::PeError;
 
+/// A loaded PE image ready for inspection.
 pub struct PeImage {
     pub(crate) path: PathBuf,
     pub(crate) data: Vec<u8>,
 }
 
 impl PeImage {
+    /// Opens and reads a PE file into memory.
     pub fn open(path: &Path) -> Result<Self, PeError> {
         let data = crate::error::read_pe(path)?;
         if !data.starts_with(MZ_MAGIC) {

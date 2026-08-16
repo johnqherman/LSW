@@ -16,11 +16,15 @@ const SKIP_DIRS: &[&str] = &[
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Case Hazard.
 pub struct CaseHazard {
+    /// Dir.
     pub dir: String,
+    /// Names.
     pub names: Vec<String>,
 }
 
+/// Hazards.
 pub fn hazards(root: &Path) -> Vec<CaseHazard> {
     let mut out = Vec::new();
     scan(root, root, &mut out);

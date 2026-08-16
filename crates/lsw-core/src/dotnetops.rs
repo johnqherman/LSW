@@ -24,11 +24,15 @@ const TEMPLATE_PROGRAM: &str = r#"Console.WriteLine("Hello from LSW (C#)");
 "#;
 
 #[derive(Debug)]
+/// Dotnet Init Report.
 pub struct DotnetInitReport {
+    /// Root.
     pub root: std::path::PathBuf,
+    /// Created.
     pub created: Vec<std::path::PathBuf>,
 }
 
+/// Init.
 pub fn init(parent: &std::path::Path, name: Option<&str>) -> Result<DotnetInitReport> {
     if let Some(n) = name {
         crate::envops::validate_name("project", n)?;
@@ -92,23 +96,36 @@ pub(crate) fn has_dotnet_project(root: &std::path::Path) -> bool {
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+/// Check.
 pub enum Check {
+    /// Ok.
     Ok,
+    /// Not Configured.
     NotConfigured,
+    /// Missing.
     Missing,
 }
 
 #[derive(Debug, Serialize)]
+/// Dotnet Doctor.
 pub struct DotnetDoctor {
+    /// Target.
     pub target: String,
+    /// Sdk.
     pub sdk: Check,
+    /// Runtime identifier.
     pub runtime_identifier: Check,
+    /// Self contained.
     pub self_contained: Check,
+    /// Runtime execution.
     pub runtime_execution: Check,
+    /// Native aot.
     pub native_aot: Check,
+    /// Native validation.
     pub native_validation: Check,
 }
 
+/// Doctor.
 pub fn doctor(env: &Environment) -> Result<DotnetDoctor> {
     let arch = env.manifest.target_arch;
     let rid = dotnet_rid(arch);
@@ -145,6 +162,7 @@ pub fn doctor(env: &Environment) -> Result<DotnetDoctor> {
     })
 }
 
+/// Dotnet rid.
 pub fn dotnet_rid(arch: TargetArch) -> Option<&'static str> {
     match arch {
         TargetArch::X86_64 => Some("win-x64"),

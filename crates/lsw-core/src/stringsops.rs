@@ -6,6 +6,7 @@ fn is_printable(b: u8) -> bool {
     (0x20..=0x7e).contains(&b) || b == b'\t'
 }
 
+/// Extract strings.
 pub fn extract_strings(data: &[u8], min_len: usize) -> Vec<String> {
     let mut out = Vec::new();
 
@@ -46,6 +47,7 @@ pub fn extract_strings(data: &[u8], min_len: usize) -> Vec<String> {
     out
 }
 
+/// Strings.
 pub fn strings(path: &Path, min_len: usize) -> Result<Vec<String>> {
     use std::io::Read;
     const MAX_INPUT: u64 = 256 * 1024 * 1024;

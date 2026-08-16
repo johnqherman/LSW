@@ -33,6 +33,7 @@ fn run_registry_tool(env: &Environment, program: &str, args: Vec<String>) -> Res
     Ok(())
 }
 
+/// Get.
 pub fn get(env: &Environment, key: &str, value: Option<&str>) -> Result<()> {
     let mut args = vec!["query".to_owned(), key.to_owned()];
     if let Some(v) = value {
@@ -42,6 +43,7 @@ pub fn get(env: &Environment, key: &str, value: Option<&str>) -> Result<()> {
     run_registry_tool(env, "reg.exe", args)
 }
 
+/// Get captured.
 pub fn get_captured(env: &Environment, key: &str, value: Option<&str>) -> Result<String> {
     let wine = lsw_runtime::WineRuntime.resolve()?.executable;
     let mut command = std::process::Command::new(wine);
@@ -64,6 +66,7 @@ pub fn get_captured(env: &Environment, key: &str, value: Option<&str>) -> Result
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// Set.
 pub fn set(env: &Environment, key: &str, value: &str, data: &str, kind: &str) -> Result<()> {
     run_registry_tool(
         env,
@@ -82,6 +85,7 @@ pub fn set(env: &Environment, key: &str, value: &str, data: &str, kind: &str) ->
     )
 }
 
+/// Delete.
 pub fn delete(env: &Environment, key: &str, value: Option<&str>) -> Result<()> {
     let mut args = vec!["delete".to_owned(), key.to_owned()];
     if let Some(v) = value {
@@ -100,6 +104,7 @@ fn reg_type(kind: &str) -> &'static str {
     }
 }
 
+/// Seed.
 pub fn seed(env: &Environment, project: &crate::project::Project) -> Result<usize> {
     let seeds = &project.manifest.registry.seed;
     for entry in seeds {
@@ -108,6 +113,7 @@ pub fn seed(env: &Environment, project: &crate::project::Project) -> Result<usiz
     Ok(seeds.len())
 }
 
+/// Export.
 pub fn export(env: &Environment, key: &str, file: &Path) -> Result<()> {
     run_registry_tool(
         env,
@@ -121,6 +127,7 @@ pub fn export(env: &Environment, key: &str, file: &Path) -> Result<()> {
     )
 }
 
+/// Import.
 pub fn import(env: &Environment, file: &Path) -> Result<()> {
     if !file.is_file() {
         return Err(Error::NotExecutable {
@@ -131,6 +138,7 @@ pub fn import(env: &Environment, file: &Path) -> Result<()> {
     run_registry_tool(env, "regedit", vec!["/S".to_owned(), z_path(file)?])
 }
 
+/// Reset.
 pub fn reset(env: &Environment) -> Result<()> {
     let prefix = env.layout.prefix();
     WineRuntime.shutdown_prefix(&prefix)?;

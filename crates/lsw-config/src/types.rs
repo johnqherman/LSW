@@ -1,15 +1,21 @@
 use serde::{Deserialize, Serialize};
 
+/// Windows target CPU architecture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TargetArch {
+    /// 64-bit x86.
     #[serde(rename = "x86_64")]
     X86_64,
+    /// 32-bit x86.
     #[serde(rename = "x86")]
     X86,
+    /// 64-bit ARM.
     #[serde(rename = "aarch64")]
     Aarch64,
+    /// 32-bit ARM (Thumb-2).
     #[serde(rename = "armv7")]
     Armv7,
+    /// ARM64EC (emulation-compatible ABI).
     #[serde(rename = "arm64ec")]
     Arm64Ec,
 }
@@ -29,6 +35,7 @@ impl TargetArch {
         }
     }
 
+    /// Returns the MSVC target triple for this architecture.
     pub fn msvc_triple(self) -> &'static str {
         match self {
             TargetArch::X86_64 => "x86_64-pc-windows-msvc",
@@ -53,6 +60,7 @@ impl TargetArch {
         }
     }
 
+    /// Returns MSVC SDK library directory name candidates.
     pub fn msvc_lib_dirs(self) -> &'static [&'static str] {
         match self {
             TargetArch::X86_64 => &["x64", "x86_64"],
@@ -62,6 +70,7 @@ impl TargetArch {
         }
     }
 
+    /// Returns the Rust GNU-ABI triple, if one exists for this architecture.
     pub fn rust_gnu_triple(self) -> Option<&'static str> {
         match self {
             TargetArch::X86_64 => Some("x86_64-pc-windows-gnu"),
@@ -83,19 +92,25 @@ impl std::fmt::Display for TargetArch {
     }
 }
 
+/// Static vs dynamic linking preference for the cross toolchain.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LinkMode {
+    /// Prefer static linking (default).
     #[default]
     Static,
+    /// Prefer dynamic linking.
     Dynamic,
 }
 
+/// Filesystem case-sensitivity mode for cross-compilation validation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CaseSensitivity {
+    /// Use the host filesystem's native behavior (default).
     #[default]
     Native,
+    /// Enforce strict case-insensitive collision checks.
     Strict,
 }
 

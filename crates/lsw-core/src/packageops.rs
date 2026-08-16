@@ -20,29 +20,48 @@ fn strip_existing(path: &std::path::Path) -> Result<()> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Package Target.
 pub enum PackageTarget {
+    /// Portable Directory.
     PortableDirectory,
+    /// Zip.
     Zip,
+    /// Msi.
     Msi,
+    /// Msix.
     Msix,
+    /// Nsis.
     Nsis,
+    /// Winget.
     Winget,
 }
 
 #[derive(Debug, Serialize)]
+/// Package Report.
 pub struct PackageReport {
+    /// Directory.
     pub directory: PathBuf,
+    /// Zip.
     pub zip: Option<PathBuf>,
+    /// Msi.
     pub msi: Option<PathBuf>,
+    /// Msix.
     pub msix: Option<PathBuf>,
+    /// Nsis.
     pub nsis: Option<PathBuf>,
+    /// Winget.
     pub winget: Option<PathBuf>,
+    /// Files.
     pub files: Vec<String>,
+    /// Bundled.
     pub bundled: Vec<String>,
+    /// Assumed system.
     pub assumed_system: Vec<String>,
+    /// Missing.
     pub missing: Vec<String>,
 }
 
+/// Package.
 pub fn package(
     project: &Project,
     env: &Environment,

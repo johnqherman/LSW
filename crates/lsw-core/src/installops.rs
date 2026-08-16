@@ -8,13 +8,19 @@ use crate::error::{Error, Result};
 use lsw_config::Dirs;
 
 #[derive(Debug, Serialize)]
+/// Install Verify Report.
 pub struct InstallVerifyReport {
+    /// Msi.
     pub msi: PathBuf,
+    /// Install dir.
     pub install_dir: PathBuf,
+    /// Files.
     pub files: Vec<String>,
+    /// Uninstall clean.
     pub uninstall_clean: bool,
 }
 
+/// Verify msi.
 pub fn verify_msi(
     dirs: &Dirs,
     env: &Environment,

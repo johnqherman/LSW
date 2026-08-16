@@ -81,20 +81,31 @@ impl DllIndex {
 
 #[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+/// Dep Kind.
 pub enum DepKind {
+    /// Root.
     Root,
+    /// System.
     System,
+    /// Resolved.
     Resolved,
+    /// Missing.
     Missing,
+    /// Seen.
     Seen,
 }
 
 #[derive(Debug, Serialize)]
+/// Dep Node.
 pub struct DepNode {
+    /// Name.
     pub name: String,
+    /// Kind.
     pub kind: DepKind,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// Path.
     pub path: Option<String>,
+    /// Children.
     pub children: Vec<DepNode>,
 }
 
@@ -184,10 +195,12 @@ fn node(
     }
 }
 
+/// Tree.
 pub fn tree(env: Option<&Environment>, pe: &Path) -> Result<DepNode> {
     tree_with_dirs(&search_dirs(env, pe), pe)
 }
 
+/// Tree with dirs.
 pub fn tree_with_dirs(dirs: &[PathBuf], pe: &Path) -> Result<DepNode> {
     if !pe.is_file() {
         return Err(Error::NotExecutable {
@@ -259,16 +272,24 @@ fn scan_vc_dirs(dir: &Path, depth: usize, budget: &mut usize, out: &mut BTreeSet
 const MIRROR: &str = "https://repo.msys2.org/mingw";
 
 #[derive(Debug, Clone, Serialize)]
+/// Pkg Ref.
 pub struct PkgRef {
+    /// Name.
     pub name: String,
+    /// Version.
     pub version: String,
+    /// Filename.
     pub filename: String,
+    /// Sha256.
     pub sha256: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// Installed Dep.
 pub struct InstalledDep {
+    /// Name.
     pub name: String,
+    /// Version.
     pub version: String,
 }
 
@@ -423,6 +444,7 @@ fn is_safe_filename(name: &str) -> bool {
         && !Path::new(name).is_absolute()
 }
 
+/// Add.
 pub fn add(
     project: &crate::project::Project,
     arch: lsw_config::TargetArch,
@@ -547,6 +569,7 @@ pub fn add(
     Ok(pkg)
 }
 
+/// Vendor.
 pub fn vendor(
     project: &crate::project::Project,
     arch: lsw_config::TargetArch,
@@ -633,6 +656,7 @@ fn copy_dir_capped(src: &Path, dst: &Path, depth: usize, visited: &mut usize) ->
     Ok(copied)
 }
 
+/// Remove.
 pub fn remove(
     project: &crate::project::Project,
     arch: lsw_config::TargetArch,
@@ -691,6 +715,7 @@ pub fn remove(
     Ok(true)
 }
 
+/// List.
 pub fn list(project: &crate::project::Project) -> Vec<InstalledDep> {
     project
         .manifest
@@ -703,6 +728,7 @@ pub fn list(project: &crate::project::Project) -> Vec<InstalledDep> {
         .collect()
 }
 
+/// Dep dirs.
 pub fn dep_dirs(
     project: &crate::project::Project,
     arch: lsw_config::TargetArch,

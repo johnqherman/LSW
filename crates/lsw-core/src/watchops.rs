@@ -47,8 +47,11 @@ fn rebuild(project: &Project, env: &Environment) -> Option<Vec<PathBuf>> {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
+/// Watch Options.
 pub struct WatchOptions {
+    /// Run.
     pub run: bool,
+    /// Test.
     pub test: bool,
 }
 
@@ -91,6 +94,7 @@ fn after_build(
     }
 }
 
+/// Watch.
 pub fn watch(project: &Project, env: &Environment, opts: WatchOptions) -> Result<()> {
     const MAX_PATHS: usize = 4096;
     println!(

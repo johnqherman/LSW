@@ -14,19 +14,23 @@ fn decode_name(raw: &[u8]) -> String {
     String::from_utf8_lossy(&raw[..raw.len().min(MAX_NAME_LEN)]).into_owned()
 }
 
+/// Returns the list of DLL names imported by the PE at the given path.
 pub fn imports(path: &Path) -> Result<Vec<String>, PeError> {
     PeImage::open(path)?.imports()
 }
 
 impl PeImage {
+    /// Returns imported DLL names.
     pub fn imports(&self) -> Result<Vec<String>, PeError> {
         dispatch_pe!(&self.path, &self.data, imports_typed)
     }
 
+    /// Returns exported symbol names.
     pub fn exports(&self) -> Result<Vec<String>, PeError> {
         dispatch_pe!(&self.path, &self.data, exports_typed)
     }
 
+    /// Returns (DLL, symbol) pairs for all imported symbols.
     pub fn imported_symbols(&self) -> Result<Vec<(String, String)>, PeError> {
         dispatch_pe!(&self.path, &self.data, imported_symbols_typed)
     }
@@ -86,6 +90,7 @@ fn imports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
     Ok(dlls)
 }
 
+/// Returns the list of exported symbol names from the PE at the given path.
 pub fn exports(path: &Path) -> Result<Vec<String>, PeError> {
     PeImage::open(path)?.exports()
 }
@@ -121,6 +126,7 @@ fn exports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
     Ok(out)
 }
 
+/// Returns (DLL, symbol) pairs for all imported symbols from a file on disk.
 pub fn imported_symbols(path: &Path) -> Result<Vec<(String, String)>, PeError> {
     PeImage::open(path)?.imported_symbols()
 }

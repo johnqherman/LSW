@@ -9,8 +9,11 @@ use crate::envops::Environment;
 use crate::error::{Error, Result};
 
 #[derive(Debug, Serialize)]
+/// Process Info.
 pub struct ProcessInfo {
+    /// Pid.
     pub pid: u32,
+    /// Command.
     pub command: String,
 }
 
@@ -25,6 +28,7 @@ const WINE_INFRASTRUCTURE: &[&str] = &[
     "tabtip.exe",
 ];
 
+/// Returns whether wine infrastructure.
 pub fn is_wine_infrastructure(command: &str) -> bool {
     let head = command.split_whitespace().next().unwrap_or_default();
     let base = head.rsplit(['/', '\\']).next().unwrap_or_default();
@@ -34,6 +38,7 @@ pub fn is_wine_infrastructure(command: &str) -> bool {
             .contains("explorer.exe /desktop")
 }
 
+/// Ps.
 pub fn ps(env: &Environment) -> Result<Vec<ProcessInfo>> {
     let prefix = env.layout.prefix();
     let mut out = Vec::new();
@@ -75,6 +80,7 @@ fn process_uses_prefix(pid: u32, prefix: &Path) -> bool {
         .any(|entry| entry == needle.as_bytes())
 }
 
+/// Kill.
 pub fn kill(env: &Environment, pid: u32) -> Result<()> {
     let prefix = env.layout.prefix();
     lsw_runtime::WineRuntime
@@ -85,6 +91,7 @@ pub fn kill(env: &Environment, pid: u32) -> Result<()> {
         })
 }
 
+/// Kill all.
 pub fn kill_all(env: &Environment) -> Result<()> {
     Ok(lsw_runtime::WineRuntime.shutdown_prefix(&env.layout.prefix())?)
 }

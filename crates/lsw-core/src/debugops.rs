@@ -5,11 +5,15 @@ use crate::envops::Environment;
 use crate::error::{Error, Result};
 
 #[derive(Debug, Default)]
+/// Debug Options.
 pub struct DebugOptions {
+    /// Gdb.
     pub gdb: bool,
+    /// No start.
     pub no_start: bool,
 }
 
+/// Attach.
 pub fn attach(env: &Environment, pid: u32, gdb: bool) -> Result<ExitStatus> {
     let known = crate::psops::ps(env)?.iter().any(|p| p.pid == pid);
     if !known {
@@ -33,6 +37,7 @@ pub fn attach(env: &Environment, pid: u32, gdb: bool) -> Result<ExitStatus> {
     command.status().map_err(|e| Error::io(winedbg.clone(), e))
 }
 
+/// Debug.
 pub fn debug(
     env: &Environment,
     project: Option<&crate::project::Project>,

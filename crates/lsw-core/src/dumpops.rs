@@ -9,18 +9,29 @@ use crate::error::{Error, Result};
 const DUMP_TIMEOUT: Duration = Duration::from_mins(2);
 
 #[derive(Debug, Clone)]
+/// Dump Summary.
 pub struct DumpSummary {
+    /// Reason.
     pub reason: String,
+    /// Crash address.
     pub crash_address: u64,
+    /// Instruction pointer.
     pub instruction_pointer: Option<u64>,
+    /// Faulting module.
     pub faulting_module: Option<String>,
+    /// Faulting offset.
     pub faulting_offset: Option<u64>,
+    /// Crashing thread.
     pub crashing_thread: Option<u32>,
+    /// Os.
     pub os: String,
+    /// Cpu.
     pub cpu: String,
+    /// Module count.
     pub module_count: usize,
 }
 
+/// Analyze.
 pub fn analyze(path: &Path) -> Result<DumpSummary> {
     let dump = Minidump::read_path(path).map_err(|e| dump_err(path, &e))?;
     let system: MinidumpSystemInfo = dump.get_stream().map_err(|e| dump_err(path, &e))?;
@@ -67,6 +78,7 @@ pub fn analyze(path: &Path) -> Result<DumpSummary> {
     })
 }
 
+/// Dump path for.
 pub fn dump_path_for(pe: &Path) -> PathBuf {
     let name = pe.file_name().map_or_else(
         || "program".to_owned(),
@@ -75,6 +87,7 @@ pub fn dump_path_for(pe: &Path) -> PathBuf {
     pe.with_file_name(format!("{name}.dmp"))
 }
 
+/// Capture wine dump.
 pub fn capture_wine_dump(
     env: &Environment,
     program: &Path,

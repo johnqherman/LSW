@@ -6,12 +6,18 @@ use object::read::pe::{ImageNtHeaders, PeFile};
 use crate::error::PeError;
 use crate::image::{PeImage, dispatch_pe};
 
+/// Extracted PE resource data.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Resources {
+    /// Application manifest XML, if present.
     pub manifest: Option<String>,
+    /// Requested execution level from the manifest.
     pub execution_level: Option<String>,
+    /// DPI awareness setting from the manifest.
     pub dpi_aware: Option<String>,
+    /// Version info string table entries.
     pub version: std::collections::BTreeMap<String, String>,
+    /// Whether the image contains an icon resource.
     pub has_icon: bool,
 }
 
@@ -22,11 +28,13 @@ const MAX_RESOURCE_VISITS: u32 = 100_000;
 const MAX_RESOURCE_DATA: usize = 4 * 1024 * 1024;
 const MAX_RESOURCE_PAYLOAD_TOTAL: usize = 64 * 1024 * 1024;
 
+/// Extracts resources from a PE file on disk.
 pub fn resources(path: &Path) -> Result<Resources, PeError> {
     PeImage::open(path)?.resources()
 }
 
 impl PeImage {
+    /// Extracts resources from the loaded image.
     pub fn resources(&self) -> Result<Resources, PeError> {
         dispatch_pe!(&self.path, &self.data, resources_typed)
     }

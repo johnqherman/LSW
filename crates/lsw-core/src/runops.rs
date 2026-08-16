@@ -11,15 +11,22 @@ use crate::error::{Error, Result};
 use crate::project::Project;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Domain.
 pub enum Domain {
+    /// Host.
     Host,
+    /// Windows.
     Windows,
+    /// Auto.
     Auto,
 }
 
 #[derive(Debug)]
+/// Run Report.
 pub struct RunReport {
+    /// Domain.
     pub domain: Domain,
+    /// Status.
     pub status: ExitStatus,
 }
 
@@ -30,9 +37,12 @@ enum ResolvedProgram {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Sandbox.
 pub enum Sandbox {
     #[default]
+    /// None.
     None,
+    /// Strict.
     Strict,
 }
 
@@ -105,10 +115,14 @@ fn sandbox_spec(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Display.
 pub enum Display {
     #[default]
+    /// Auto.
     Auto,
+    /// Inherit.
     Inherit,
+    /// Headless.
     Headless,
 }
 
@@ -128,6 +142,7 @@ fn display_mode(control: Display, is_gui: Option<bool>) -> lsw_runtime::DisplayM
     }
 }
 
+/// Run.
 pub fn run(
     env: &Environment,
     project: Option<&Project>,
@@ -230,6 +245,7 @@ pub fn run(
     })
 }
 
+/// Windows user.
 pub fn windows_user() -> String {
     let raw = std::env::var("USER")
         .or_else(|_| std::env::var("LOGNAME"))
@@ -532,6 +548,7 @@ fn wait_interactive(mut child: std::process::Child) -> std::io::Result<ExitStatu
     child.wait()
 }
 
+/// Shell.
 pub fn shell(env: &Environment, project: Option<&Project>, windows: bool) -> Result<ExitStatus> {
     let _session = SHELL_SESSION_LOCK
         .lock()
