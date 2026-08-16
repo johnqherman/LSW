@@ -1,0 +1,1562 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Build, run, debug, and ship Windows software without leaving Linux.">
+      
+      
+      
+        <link rel="canonical" href="https://johnqherman.github.io/LSW/reference/commands/">
+      
+      
+        <link rel="prev" href="../../guide/editors/">
+      
+      
+        <link rel="next" href="../configuration/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Commands - LSW</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#command-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="LSW" class="md-header__button md-logo" aria-label="LSW" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LSW
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Commands
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/johnqherman/LSW" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    johnqherman/LSW
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="LSW" class="md-nav__button md-logo" aria-label="LSW" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    LSW
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/johnqherman/LSW" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    johnqherman/LSW
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/languages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Languages and build systems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/targets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target ABIs and architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing and debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Binary analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/compat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility and tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/verify/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native Windows verification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/windows-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shell, paths, and Windows state
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/packaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packaging and signing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/environments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environments and reproducibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandboxing and security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/ci/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/editors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Editor integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#getting-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting started
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build / run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#binary-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary analysis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compatibility-and-tracing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compatibility and tracing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#packaging-and-signing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packaging and signing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#native-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment state
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Languages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-and-tooling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration and tooling
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting and error codes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#getting-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting started
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build / run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#binary-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary analysis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compatibility-and-tracing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compatibility and tracing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#packaging-and-signing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packaging and signing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#native-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment state
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Languages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-and-tooling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration and tooling
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="command-reference">Command reference<a class="headerlink" href="#command-reference" title="Permanent link">&para;</a></h1>
+<p>Most report commands accept <code>--format json</code> for machine consumption. Global
+flags: <code>--verbose</code>, <code>--trace</code>, <code>--format human|json|csv</code>, and
+<code>--env &lt;name&gt;</code> (use a named environment instead of the project's active one;
+lets <code>ps</code>, <code>kill</code>, <code>registry</code>, and <code>service</code> run outside a project
+directory). Commands with no machine format print a note to stderr when
+<code>--format json|csv</code> is requested.</p>
+<p>The <code>lsw.toml</code> schema and every <code>LSW_*</code> environment variable are in
+<a href="../configuration/">configuration.md</a>. Failure codes are catalogued in
+<a href="../../troubleshooting/">../troubleshooting.md</a>.</p>
+<h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>lsw setup</code> detects the project (CMake, Meson, Cargo, Zig, Make, .NET),
+  creates a default environment for the <code>[target]</code> arch if none is active
+  (<code>windows-x64</code> for the default <code>x86_64</code>), writes <code>lsw.toml</code> and a
+  <code>.gitignore</code> if missing, and prints the next command.</li>
+<li><code>lsw init [name] [--template console|cpp|gui|dll|service]</code> scaffolds a new
+  project (<code>lsw.toml</code> + CMake template). The default is <code>console</code> (C).
+  <code>cpp</code> is a C++ console app, <code>gui</code> uses WinMain, <code>dll</code> makes a shared
+  library, and <code>service</code> is a Windows service skeleton that pairs with
+  <code>lsw service create|start|stop</code>.</li>
+<li><code>lsw doctor</code> diagnoses host, runtime, toolchain, and project health.</li>
+<li><code>lsw check [--headless]</code> validates the project in one pass: configuration,
+  environment, build, wine execution (tests or a console smoke run),
+  DLL-dependency resolution, and baseline PE hardening. Nonzero exit on any
+  failure.</li>
+</ul>
+<h2 id="build-run">Build / run<a class="headerlink" href="#build-run" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>lsw build [--system cmake|cargo|make|ninja|meson|zig|dotnet|explicit]
+  [--reproducible] [--update-lock] [--aot] [--all]</code> builds the project;
+  <code>explicit</code> forces the <code>[build]</code> command from <code>lsw.toml</code>. An unknown
+  <code>--system</code> value is an error (LSW2046), never silently ignored. <code>--all</code>
+  builds every member of a <code>[workspace]</code> (see configuration reference).</li>
+<li><code>lsw run [--host|--windows] [--sandbox strict] [--headless]
+  [--dump-on-crash] [program]</code> starts a program; omit the program to build and
+  run the project's single executable.</li>
+<li><code>lsw exec [--host|--windows] &lt;cmd&gt;</code> runs one command in an explicit domain.</li>
+<li><code>lsw test [--headless] [--junit &lt;file&gt;] [--coverage] [--all]</code> runs the
+  tests and shows the true compatibility status. ctest, <code>cargo test</code> (run
+  under Wine via a target runner), <code>meson test</code>, .NET (published
+  self-contained exe under Wine), and an explicit <code>[test]</code> command are
+  supported; <code>--junit</code> writes a JUnit XML report for ctest and meson runs;
+  <code>--coverage</code> instruments with clang source coverage and prints an
+  llvm-cov report (llvm-mingw toolchain only). <code>--all</code> tests every member
+  of a <code>[workspace]</code>.</li>
+<li><code>lsw shell [--windows]</code> opens a shell (cmd.exe with <code>--windows</code>).</li>
+<li><code>lsw watch [--run|--test]</code> rebuilds automatically when source files change;
+  <code>--run</code> restarts the project executable after each build, <code>--test</code> reruns
+  the suite.</li>
+<li><code>lsw clean [--deps]</code> removes <code>build/</code> and <code>dist/</code> (and <code>deps/</code> with
+  <code>--deps</code>).</li>
+</ul>
+<h2 id="binary-analysis">Binary analysis<a class="headerlink" href="#binary-analysis" title="Permanent link">&para;</a></h2>
+<p>Analysis commands accept an explicit file, or omit it to build and use the
+project's artifact.</p>
+<ul>
+<li><code>lsw inspect [pe]</code> shows format, architecture, subsystem, entry point,
+  sections, embedded manifest/version-info/icon, and imports.</li>
+<li><code>lsw audit [pe]</code> reports hardening (ASLR, DEP, CFG, SafeSEH, signing) as
+  enabled, disabled, or not applicable to the target architecture.</li>
+<li><code>lsw exports [dll]</code> lists exported symbols.</li>
+<li><code>lsw deps tree [pe]</code> shows the transitive DLL tree.</li>
+<li><code>lsw diff &lt;a.exe&gt; &lt;b.exe&gt;</code> compares imports, exports, sections, and size.</li>
+<li><code>lsw size [pe] [--baseline &lt;pe&gt;] [--max-growth &lt;pct&gt;]</code> breaks down size by
+  section bucket.</li>
+<li><code>lsw strings [file] [--min &lt;n&gt;]</code> lists printable ASCII/UTF-16 strings.</li>
+<li><code>lsw sbom [pe]</code> writes a CycloneDX SBOM.</li>
+<li><code>lsw crash &lt;dump.dmp&gt;</code> decodes a Windows minidump (exception, module,
+  address). <code>lsw crash --force &lt;pe&gt;</code> launches the program and forces a dump.</li>
+</ul>
+<h2 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>lsw deps add|remove &lt;name&gt;</code> installs or removes prebuilt mingw-w64
+  libraries (headers, import/static libraries, DLLs) in the project <code>deps/</code>
+  sysroot and records them in <code>[dependencies]</code>; <code>lsw deps list</code> shows what is
+  installed. Builds find the include and library paths automatically.
+  <code>lsw deps tree [pe]</code> (under Binary analysis) is unrelated: it shows a
+  binary's DLL import tree.</li>
+<li><code>lsw deps vcpkg &lt;packages...&gt;</code> installs vcpkg packages for the target
+  architecture. LSW bootstraps vcpkg into <code>~/.local/share/lsw/vcpkg/</code> on
+  first use (pinned to release <code>2024.12.16</code>). Installed packages are wired
+  into the build automatically via include/library path flags.</li>
+</ul>
+<h2 id="compatibility-and-tracing">Compatibility and tracing<a class="headerlink" href="#compatibility-and-tracing" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>lsw compat [--db] [--native] [pe]</code> produces a measured report of imported
+  DLLs, imported API functions, and the runtime trace. <code>--native</code> adds a real
+  Windows verdict from the <code>[verify]</code> host. Results are scoped: local numbers
+  reflect the Wine runtime, not native Windows.</li>
+<li><code>lsw compat-query &lt;dll|module!func&gt;</code> queries the persistent compatibility
+  database.</li>
+<li><code>lsw trace [--relay] [--filter &lt;glob&gt;] [pe]</code> shows DLL loads, registry and
+  filesystem access, and any unsupported APIs observed in that Wine execution,
+  plus an event timeline (<code>--format csv|json</code>).</li>
+</ul>
+<h2 id="debugging">Debugging<a class="headerlink" href="#debugging" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>lsw debug &lt;pe&gt; [--gdb [--no-start]]</code> starts winedbg or a gdb-remote stub
+  that gdb/lldb can attach to. <code>lsw debug --attach &lt;pid&gt; [--gdb]</code> attaches to
+  a process already running in the environment (<code>lsw ps</code> lists pids).</li>
+<li><code>lsw debug --native &lt;pe&gt; [--analyze|--interactive]</code> runs the binary under
+  cdb on the <code>[verify]</code> Windows host for a real backtrace, <code>!analyze -v</code>
+  automation, or an interactive session.</li>
+<li><code>lsw dap</code> runs a Debug Adapter Protocol server on stdio for IDEs.</li>
+</ul>
+<h2 id="packaging-and-signing">Packaging and signing<a class="headerlink" href="#packaging-and-signing" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>lsw package [--target portable-directory|zip|msi|msix|nsis|inno|winget]
+  [--verify] [--bundle-deps]</code> assembles a distributable. <code>--bundle-deps</code>
+  copies each artifact's non-system DLL closure into the package.
+  <code>--target msi --verify</code> install-tests the MSI in a scratch environment.
+  <code>nsis</code> builds an NSIS setup.exe (needs <code>makensis</code>); <code>inno</code> builds an Inno
+  Setup installer (needs <code>iscc</code> under Wine); <code>winget</code> builds the MSI plus a
+  winget manifest trio (needs <code>[package] installer_url</code>). With
+  <code>[package] shortcuts = true</code> the MSI, NSIS, and Inno installers create
+  Start-menu shortcuts.</li>
+<li><code>lsw sign &lt;pe&gt; [--publisher &lt;subject&gt;] [--pfx &lt;path&gt; --pfx-pass-env &lt;VAR&gt;]
+  [--timestamp-url &lt;url&gt;]</code> adds an Authenticode signature (self-signed dev
+  identity by default). <code>lsw sign &lt;pe&gt; --verify</code> checks an existing
+  signature with osslsigncode.</li>
+</ul>
+<h2 id="native-verification">Native verification<a class="headerlink" href="#native-verification" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>lsw verify [--native]</code> builds, then runs the artifacts on a real
+  Windows host configured in <code>[verify]</code> (SSH or WinRM over HTTPS;
+  WinRM reads <code>LSW_WINRM_PASSWORD</code>). Native verification is the
+  default; <code>--native</code> (alias <code>--native-windows</code>) is accepted for
+  explicitness. Result is <code>WINDOWS_VERIFIED</code> or <code>WINDOWS_UNAVAILABLE</code> -
+  deliberately distinct from local Wine results.</li>
+<li><code>lsw verify --reproducible [artifact]</code> builds twice and proves the artifacts
+  are byte-identical, reporting diverging sections on mismatch.</li>
+</ul>
+<h2 id="environment-state">Environment state<a class="headerlink" href="#environment-state" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>lsw env create &lt;name&gt; [--arch &lt;arch&gt;] [--toolchain &lt;id&gt;] [--sdk &lt;name&gt;]
+  [--force] [--expose-home]</code> creates an isolated environment (Wine prefix +
+  toolchain probe); <code>lsw env list|clone|restore|remove</code> manage them.
+  <code>lsw use &lt;name&gt;</code> selects the active one.</li>
+<li><code>lsw registry get|set|seed|export|import|reset</code> (alias <code>reg</code>) manages the
+  environment's isolated registry.</li>
+<li><code>lsw ps [--all]</code>, <code>lsw kill &lt;pid&gt;|--all</code> manage runtime processes.</li>
+<li><code>lsw service create|start|stop|query|delete</code> manages Windows services.</li>
+<li><code>lsw sdk import|list|remove</code> manages user-supplied Windows SDK sysroots for
+  MSVC-ABI builds. <code>lsw sdk acquire &lt;name&gt; --accept-license</code> downloads one
+  via xwin under the Microsoft license.</li>
+<li><code>lsw deps vendor &lt;dir&gt;</code> copies a prebuilt <code>include/</code>/<code>lib/</code>/<code>bin/</code> tree
+  (e.g. a vcpkg or Conan export) into the project <code>deps/</code> sysroot.</li>
+<li><code>lsw env export &lt;name&gt; &lt;file.tar.zst&gt;</code> / <code>lsw env import-archive &lt;name&gt;
+  &lt;file&gt; [--force]</code> pack and restore whole environments (CI cache handoff).</li>
+<li><code>lsw toolchain install llvm-mingw[@version]</code> downloads a self-contained
+  llvm-mingw release into <code>~/.local/share/lsw/toolchains</code> (default: latest);
+  managed toolchains are found automatically by <code>lsw env create</code>, newest
+  first. <code>lsw toolchain list|remove</code> manage them.</li>
+<li><code>lsw wine install &lt;version&gt; --from &lt;path&gt;</code> imports a local Wine build
+  (directory or tarball) into <code>~/.local/share/lsw/wine/&lt;version&gt;/</code>.
+  <code>lsw wine list</code> shows installed versions. <code>lsw wine remove &lt;version&gt;</code>
+  deletes one. Managed versions are used via <code>LSW_WINE</code> or referenced by
+  path when creating environments.</li>
+<li><code>lsw env provision winetricks &lt;verbs...&gt;</code> runs winetricks against the
+  environment's prefix (e.g. <code>dxvk</code>, <code>vkd3d</code>, <code>corefonts</code>).</li>
+<li><code>lsw path --to-windows &lt;linux-path&gt;|--to-linux &lt;windows-path&gt;</code> converts a path between views (old <code>--windows</code>/<code>--linux</code> spellings remain as aliases).</li>
+</ul>
+<h2 id="languages">Languages<a class="headerlink" href="#languages" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>lsw rust init|doctor</code> scaffolds and diagnoses Rust-&gt;Windows projects.</li>
+<li><code>lsw dotnet init|doctor</code> scaffolds and diagnoses C#/.NET projects.</li>
+</ul>
+<h2 id="integration-and-tooling">Integration and tooling<a class="headerlink" href="#integration-and-tooling" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>lsw ide env</code> prints the environment description IDE plugins consume. The
+  VS Code, Neovim, and JetBrains front-ends are in <code>editors/</code>.
+  <code>lsw ide launch-config</code> writes a ready <code>.vscode/launch.json</code>.</li>
+<li><code>lsw plugin list</code> discovers out-of-process <code>lsw-provider-*</code> JSON-RPC
+  providers on <code>PATH</code> (reference implementation in
+  <code>crates/lsw-provider-example</code>). Providers speak JSON-RPC 2.0 over
+  stdin/stdout with handshake, version, resolve, and shutdown methods.
+  See the <code>pluginops</code> module docs for the protocol specification.</li>
+<li><code>lsw ci init [github|gitlab]</code> writes a GitHub Actions workflow or a
+  GitLab CI pipeline.</li>
+<li><code>lsw config check</code> lints <code>lsw.toml</code>.</li>
+<li><code>lsw explain LSW2004</code> explains an error code.</li>
+<li><code>lsw completions bash|zsh|fish|powershell|elvish</code> writes shell completions;
+  <code>lsw man [--dir &lt;out&gt;]</code> writes man pages; <code>lsw install [--prefix &lt;dir&gt;]</code>
+  installs bash/zsh/fish completions and man pages (default prefix
+  <code>$PREFIX</code>, else <code>~/.local</code>).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../../guide/editors/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Editor integration">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Editor integration
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../configuration/" class="md-footer__link md-footer__link--next" aria-label="Next: Configuration">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Configuration
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.instant", "navigation.top", "navigation.footer", "search.suggest", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

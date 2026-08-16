@@ -1,0 +1,3081 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Build, run, debug, and ship Windows software without leaving Linux.">
+      
+      
+      
+        <link rel="canonical" href="https://johnqherman.github.io/LSW/troubleshooting/">
+      
+      
+        <link rel="prev" href="../reference/configuration/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Troubleshooting and error codes - LSW</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#troubleshooting" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="LSW" class="md-header__button md-logo" aria-label="LSW" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LSW
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Troubleshooting and error codes
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/johnqherman/LSW" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    johnqherman/LSW
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="LSW" class="md-nav__button md-logo" aria-label="LSW" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    LSW
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/johnqherman/LSW" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    johnqherman/LSW
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/languages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Languages and build systems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/targets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target ABIs and architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing and debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Binary analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/compat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility and tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/verify/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native Windows verification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/windows-state/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shell, paths, and Windows state
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/packaging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packaging and signing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/environments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environments and reproducibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandboxing and security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/ci/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/editors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Editor integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting and error codes
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting and error codes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-common-first-run-failures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The common first-run failures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-lsw-compares" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How LSW compares
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-code-catalogue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error code catalogue
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Error code catalogue">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lsw0000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW0000
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1001" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1001
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1002" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1002
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1003" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1003
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1004" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1004
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1005" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1005
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1006" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1006
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1007" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1007
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1201" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1201
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1202" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1202
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1203" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1203
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1204" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1204
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1301" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1301
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1302" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1302
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1303" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1303
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1401" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1401
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1402" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1402
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1403" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1403
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1404" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1404
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1501" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1501
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1502" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1502
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1503" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1503
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1504" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1504
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1505" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1505
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1506" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1506
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1507" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1507
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1508" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1508
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2001" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2001
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2002" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2002
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2003" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2003
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2004" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2004
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2005" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2005
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2006" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2006
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2007" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2007
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2008" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2008
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2009" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2009
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2010" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2010
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2011" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2011
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2012" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2012
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2013" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2013
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2014" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2014
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2015" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2015
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2016" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2016
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2017" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2017
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2018" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2018
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2019" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2019
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2020" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2020
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2021" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2021
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2022" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2022
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2024" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2024
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2025" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2025
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2026
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2027" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2027
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2028" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2028
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2029" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2029
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2030" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2030
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2031" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2031
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2032" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2032
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2033" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2033
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2034" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2034
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2035" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2035
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2036" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2036
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2037" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2037
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2038" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2038
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2039" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2039
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2040" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2040
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2041" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2041
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2042" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2042
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2043" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2043
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2044" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2044
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2045" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2045
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2046" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2046
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-common-first-run-failures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The common first-run failures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-lsw-compares" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How LSW compares
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-code-catalogue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error code catalogue
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Error code catalogue">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lsw0000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW0000
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1001" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1001
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1002" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1002
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1003" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1003
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1004" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1004
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1005" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1005
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1006" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1006
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1007" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1007
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1201" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1201
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1202" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1202
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1203" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1203
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1204" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1204
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1301" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1301
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1302" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1302
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1303" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1303
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1401" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1401
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1402" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1402
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1403" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1403
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1404" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1404
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1501" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1501
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1502" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1502
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1503" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1503
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1504" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1504
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1505" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1505
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1506" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1506
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1507" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1507
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw1508" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW1508
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2001" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2001
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2002" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2002
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2003" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2003
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2004" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2004
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2005" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2005
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2006" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2006
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2007" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2007
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2008" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2008
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2009" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2009
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2010" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2010
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2011" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2011
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2012" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2012
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2013" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2013
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2014" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2014
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2015" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2015
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2016" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2016
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2017" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2017
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2018" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2018
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2019" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2019
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2020" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2020
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2021" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2021
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2022" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2022
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2024" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2024
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2025" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2025
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2026
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2027" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2027
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2028" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2028
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2029" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2029
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2030" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2030
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2031" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2031
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2032" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2032
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2033" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2033
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2034" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2034
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2035" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2035
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2036" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2036
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2037" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2037
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2038" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2038
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2039" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2039
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2040" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2040
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2041" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2041
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2042" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2042
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2043" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2043
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2044" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2044
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2045" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2045
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lsw2046" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LSW2046
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h1>
+<p>Every LSW failure carries an <code>LSW####</code> code. <code>lsw explain &lt;code&gt;</code> prints the
+same summary and fix as this page. Start with <code>lsw doctor</code>: it checks the
+host, Wine, the cross toolchain, your build tools, and the active
+environment, and names anything missing.</p>
+<h2 id="the-common-first-run-failures">The common first-run failures<a class="headerlink" href="#the-common-first-run-failures" title="Permanent link">&para;</a></h2>
+<p><strong><code>LSW1501</code> - wine not found.</strong> Install Wine from your package manager, or
+point <code>LSW_WINE</code> at a wine binary that is not on <code>PATH</code> (WineHQ <code>/opt</code>
+builds, Proton, Nix profiles).</p>
+<p><strong><code>LSW1403</code> - no working cross toolchain.</strong> Install <code>mingw-w64</code> from your
+package manager, or download an <a href="https://github.com/mstorsjo/llvm-mingw">llvm-mingw</a>
+release, extract it, and set <code>LSW_TOOLCHAIN_DIRS=/path/to/llvm-mingw/bin</code>.</p>
+<p><strong><code>LSW2011</code> - a build tool is missing.</strong> LSW drives your build system; for
+the default C/C++ path install <code>cmake</code> and <code>ninja</code>. <code>lsw doctor</code> lists
+exactly which tool a project needs.</p>
+<p><strong>My existing CMake project will not configure.</strong> LSW hands CMake a cross
+toolchain file with <code>CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER</code> /
+<code>LIBRARY ONLY</code> / <code>INCLUDE ONLY</code>. <code>find_package</code> calls that expect host Linux
+libraries will (correctly) stop finding them; vendor Windows builds of those
+libraries with <code>lsw deps add</code>, or gate them out for the Windows target.</p>
+<p><strong>A GUI test hangs in CI.</strong> Use <code>lsw test --headless</code> (runs under a virtual
+display via <code>xvfb-run</code>) and install <code>xvfb</code>.</p>
+<h2 id="how-lsw-compares">How LSW compares<a class="headerlink" href="#how-lsw-compares" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>LSW</th>
+<th>cargo-xwin</th>
+<th>Docker + Wine image</th>
+<th>raw mingw + wine</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Languages</td>
+<td>C, C++, Rust, C#, Zig</td>
+<td>Rust only</td>
+<td>whatever the image has</td>
+<td>anything, by hand</td>
+</tr>
+<tr>
+<td>ABI</td>
+<td>GNU default, MSVC with your SDK</td>
+<td>MSVC</td>
+<td>image-dependent</td>
+<td>GNU</td>
+</tr>
+<tr>
+<td>Runs the result</td>
+<td>yes, isolated Wine prefixes</td>
+<td>no</td>
+<td>yes, in-container</td>
+<td>by hand</td>
+</tr>
+<tr>
+<td>Test/verify story</td>
+<td><code>lsw test</code>, <code>lsw check</code>, native <code>lsw verify</code></td>
+<td>none</td>
+<td>ad hoc</td>
+<td>ad hoc</td>
+</tr>
+<tr>
+<td>Packaging/signing</td>
+<td>zip, MSI, MSIX, sign</td>
+<td>none</td>
+<td>ad hoc</td>
+<td>ad hoc</td>
+</tr>
+<tr>
+<td>Reproducibility</td>
+<td><code>lsw.lock</code> pins toolchain + wine</td>
+<td>Cargo.lock only</td>
+<td>image digest</td>
+<td>none</td>
+</tr>
+<tr>
+<td>Isolation</td>
+<td>prefixes + optional bwrap sandbox</td>
+<td>n/a</td>
+<td>container</td>
+<td>none</td>
+</tr>
+</tbody>
+</table>
+<p>LSW does not replace your build system or toolchain; it configures the ones
+you already have behind one CLI.</p>
+<h2 id="error-code-catalogue">Error code catalogue<a class="headerlink" href="#error-code-catalogue" title="Permanent link">&para;</a></h2>
+<h3 id="lsw0000">LSW0000<a class="headerlink" href="#lsw0000" title="Permanent link">&para;</a></h3>
+<p>A command-line usage error (bad flags or arguments), not a build or environment failure.</p>
+<p><strong>Fix:</strong> run the command with --help to see its accepted flags and arguments</p>
+<h3 id="lsw1001">LSW1001<a class="headerlink" href="#lsw1001" title="Permanent link">&para;</a></h3>
+<p>A configuration or state file could not be read.</p>
+<p><strong>Fix:</strong> check that the path named in the error exists and is readable</p>
+<h3 id="lsw1002">LSW1002<a class="headerlink" href="#lsw1002" title="Permanent link">&para;</a></h3>
+<p>A configuration or state file could not be written.</p>
+<p><strong>Fix:</strong> check permissions and free space for the path named in the error</p>
+<h3 id="lsw1003">LSW1003<a class="headerlink" href="#lsw1003" title="Permanent link">&para;</a></h3>
+<p>A TOML file failed to parse.</p>
+<p><strong>Fix:</strong> fix the syntax error at the file and position named in the error</p>
+<h3 id="lsw1004">LSW1004<a class="headerlink" href="#lsw1004" title="Permanent link">&para;</a></h3>
+<p>Internal serialization of a configuration structure failed.</p>
+<p><strong>Fix:</strong> this is an LSW bug; please report it with the full error message</p>
+<h3 id="lsw1005">LSW1005<a class="headerlink" href="#lsw1005" title="Permanent link">&para;</a></h3>
+<p>No lsw.toml was found in this directory or any parent.</p>
+<p><strong>Fix:</strong> run <code>lsw init</code> to scaffold a project, or cd into an existing one</p>
+<h3 id="lsw1006">LSW1006<a class="headerlink" href="#lsw1006" title="Permanent link">&para;</a></h3>
+<p>The home directory could not be determined.</p>
+<p><strong>Fix:</strong> set $HOME, or run as a user that has a home directory</p>
+<h3 id="lsw1007">LSW1007<a class="headerlink" href="#lsw1007" title="Permanent link">&para;</a></h3>
+<p>The environment was created by a newer LSW than this build supports.</p>
+<p><strong>Fix:</strong> upgrade LSW, or recreate the environment with <code>lsw env create --force</code></p>
+<h3 id="lsw1201">LSW1201<a class="headerlink" href="#lsw1201" title="Permanent link">&para;</a></h3>
+<p>A host path passed to path translation was not absolute.</p>
+<p><strong>Fix:</strong> canonicalize the path first, or join it onto the project root</p>
+<h3 id="lsw1202">LSW1202<a class="headerlink" href="#lsw1202" title="Permanent link">&para;</a></h3>
+<p>No path mapping covers the given path.</p>
+<p><strong>Fix:</strong> keep files under the project root or the environment's drive_c</p>
+<h3 id="lsw1203">LSW1203<a class="headerlink" href="#lsw1203" title="Permanent link">&para;</a></h3>
+<p>The string is not a drive-letter Windows path.</p>
+<p><strong>Fix:</strong> pass a form like C:\dir\file, as produced by <code>lsw path</code> or Windows tools</p>
+<h3 id="lsw1204">LSW1204<a class="headerlink" href="#lsw1204" title="Permanent link">&para;</a></h3>
+<p>The path contains a non-UTF-8 component.</p>
+<p><strong>Fix:</strong> rename the offending file or directory to valid UTF-8</p>
+<h3 id="lsw1301">LSW1301<a class="headerlink" href="#lsw1301" title="Permanent link">&para;</a></h3>
+<p>The file could not be read for PE inspection.</p>
+<p><strong>Fix:</strong> check that the file exists and is readable</p>
+<h3 id="lsw1302">LSW1302<a class="headerlink" href="#lsw1302" title="Permanent link">&para;</a></h3>
+<p>The file has an MZ header but is not a valid PE image.</p>
+<p><strong>Fix:</strong> the binary is corrupt or truncated; rebuild or re-download it</p>
+<h3 id="lsw1303">LSW1303<a class="headerlink" href="#lsw1303" title="Permanent link">&para;</a></h3>
+<p>The file is not a PE executable.</p>
+<p><strong>Fix:</strong> pass a Windows .exe or .dll, such as one produced by <code>lsw build</code></p>
+<h3 id="lsw1401">LSW1401<a class="headerlink" href="#lsw1401" title="Permanent link">&para;</a></h3>
+<p>The requested toolchain provider is unavailable on this system.</p>
+<p><strong>Fix:</strong> install the provider named in the error, or choose another with --toolchain</p>
+<h3 id="lsw1402">LSW1402<a class="headerlink" href="#lsw1402" title="Permanent link">&para;</a></h3>
+<p>The toolchain provider failed its probe compile.</p>
+<p><strong>Fix:</strong> read the probe output in the error; the toolchain cannot produce PE binaries</p>
+<h3 id="lsw1403">LSW1403<a class="headerlink" href="#lsw1403" title="Permanent link">&para;</a></h3>
+<p>No toolchain provider produced a working Windows PE binary.</p>
+<p><strong>Fix:</strong> install llvm-mingw or mingw-w64, then re-run <code>lsw env create</code></p>
+<h3 id="lsw1404">LSW1404<a class="headerlink" href="#lsw1404" title="Permanent link">&para;</a></h3>
+<p>An unknown toolchain provider was requested.</p>
+<p><strong>Fix:</strong> use a provider named in the error message, or omit --toolchain</p>
+<h3 id="lsw1501">LSW1501<a class="headerlink" href="#lsw1501" title="Permanent link">&para;</a></h3>
+<p>The wine runtime was not found on PATH.</p>
+<p><strong>Fix:</strong> install wine (e.g. <code>pacman -S wine</code> or <code>apt install wine</code>)</p>
+<h3 id="lsw1502">LSW1502<a class="headerlink" href="#lsw1502" title="Permanent link">&para;</a></h3>
+<p>Wine prefix initialization failed.</p>
+<p><strong>Fix:</strong> recreate the environment, or run <code>wineboot -u</code> with WINEPREFIX set to inspect</p>
+<h3 id="lsw1503">LSW1503<a class="headerlink" href="#lsw1503" title="Permanent link">&para;</a></h3>
+<p>The runtime could not spawn a program.</p>
+<p><strong>Fix:</strong> check that the binary named in the error exists and is executable</p>
+<h3 id="lsw1504">LSW1504<a class="headerlink" href="#lsw1504" title="Permanent link">&para;</a></h3>
+<p>Runtime execution failed.</p>
+<p><strong>Fix:</strong> read the detail in the error; adjust WINEDEBUG for more diagnostics</p>
+<h3 id="lsw1505">LSW1505<a class="headerlink" href="#lsw1505" title="Permanent link">&para;</a></h3>
+<p>A strict sandbox was requested but bubblewrap is not installed.</p>
+<p><strong>Fix:</strong> install bubblewrap, or drop --sandbox</p>
+<h3 id="lsw1506">LSW1506<a class="headerlink" href="#lsw1506" title="Permanent link">&para;</a></h3>
+<p>A virtual display was requested but xvfb-run is not installed.</p>
+<p><strong>Fix:</strong> install xvfb, or run with a real $DISPLAY</p>
+<h3 id="lsw1507">LSW1507<a class="headerlink" href="#lsw1507" title="Permanent link">&para;</a></h3>
+<p>The process is not running in this environment.</p>
+<p><strong>Fix:</strong> list processes with <code>lsw ps</code> to get a valid pid</p>
+<h3 id="lsw1508">LSW1508<a class="headerlink" href="#lsw1508" title="Permanent link">&para;</a></h3>
+<p>The LSW_WINE override does not point at an executable wine binary.</p>
+<p><strong>Fix:</strong> set LSW_WINE to a real wine executable, or unset it to use wine from PATH</p>
+<h3 id="lsw2001">LSW2001<a class="headerlink" href="#lsw2001" title="Permanent link">&para;</a></h3>
+<p>No active environment is selected for this project.</p>
+<p><strong>Fix:</strong> run <code>lsw use &lt;name&gt;</code> (or <code>lsw env create &lt;name&gt;</code> first)</p>
+<h3 id="lsw2002">LSW2002<a class="headerlink" href="#lsw2002" title="Permanent link">&para;</a></h3>
+<p>The named environment does not exist.</p>
+<p><strong>Fix:</strong> create it with <code>lsw env create &lt;name&gt;</code>, or list with <code>lsw env list</code></p>
+<h3 id="lsw2003">LSW2003<a class="headerlink" href="#lsw2003" title="Permanent link">&para;</a></h3>
+<p>An environment with that name already exists.</p>
+<p><strong>Fix:</strong> remove it with <code>lsw env remove &lt;name&gt;</code>, or choose another name</p>
+<h3 id="lsw2004">LSW2004<a class="headerlink" href="#lsw2004" title="Permanent link">&para;</a></h3>
+<p>The target is not something LSW can execute.</p>
+<p><strong>Fix:</strong> pass a PE/ELF/script, or force a domain with --host or --windows</p>
+<h3 id="lsw2005">LSW2005<a class="headerlink" href="#lsw2005" title="Permanent link">&para;</a></h3>
+<p>The build command failed.</p>
+<p><strong>Fix:</strong> re-run <code>lsw build --verbose</code> and read the compiler output above</p>
+<h3 id="lsw2006">LSW2006<a class="headerlink" href="#lsw2006" title="Permanent link">&para;</a></h3>
+<p>Lsw.lock does not match the active environment.</p>
+<p><strong>Fix:</strong> refresh the pins with <code>lsw build --update-lock</code>, or <code>lsw env restore</code></p>
+<h3 id="lsw2007">LSW2007<a class="headerlink" href="#lsw2007" title="Permanent link">&para;</a></h3>
+<p>No build system was detected.</p>
+<p><strong>Fix:</strong> add CMakeLists.txt, Cargo.toml, meson.build, build.zig, a .csproj, or set [build] command in lsw.toml</p>
+<h3 id="lsw2008">LSW2008<a class="headerlink" href="#lsw2008" title="Permanent link">&para;</a></h3>
+<p>The target os in lsw.toml is not supported.</p>
+<p><strong>Fix:</strong> set os = "windows"; LSW only targets Windows</p>
+<h3 id="lsw2009">LSW2009<a class="headerlink" href="#lsw2009" title="Permanent link">&para;</a></h3>
+<p>Project scaffolding failed.</p>
+<p><strong>Fix:</strong> read the detail in the error; check the directory is writable</p>
+<h3 id="lsw2010">LSW2010<a class="headerlink" href="#lsw2010" title="Permanent link">&para;</a></h3>
+<p>An io operation failed.</p>
+<p><strong>Fix:</strong> check the named path: existence, permissions, free space</p>
+<h3 id="lsw2011">LSW2011<a class="headerlink" href="#lsw2011" title="Permanent link">&para;</a></h3>
+<p>A required external tool was not found on PATH.</p>
+<p><strong>Fix:</strong> install the tool named in the error message</p>
+<h3 id="lsw2012">LSW2012<a class="headerlink" href="#lsw2012" title="Permanent link">&para;</a></h3>
+<p>An invalid environment or project name was given.</p>
+<p><strong>Fix:</strong> use a name without slashes, dots-only, or control characters</p>
+<h3 id="lsw2013">LSW2013<a class="headerlink" href="#lsw2013" title="Permanent link">&para;</a></h3>
+<p>The build produced a host binary instead of a Windows PE binary.</p>
+<p><strong>Fix:</strong> use the generated CMake toolchain, or make [build] honor CC/CXX/CFLAGS/LDFLAGS</p>
+<h3 id="lsw2014">LSW2014<a class="headerlink" href="#lsw2014" title="Permanent link">&para;</a></h3>
+<p>No tests were found to run.</p>
+<p><strong>Fix:</strong> add add_test(...) to CMakeLists.txt, or set [test] command in lsw.toml</p>
+<h3 id="lsw2015">LSW2015<a class="headerlink" href="#lsw2015" title="Permanent link">&para;</a></h3>
+<p>A registry operation failed.</p>
+<p><strong>Fix:</strong> check the key path (e.g. HKCU\Software\Example\App) and the output above</p>
+<h3 id="lsw2016">LSW2016<a class="headerlink" href="#lsw2016" title="Permanent link">&para;</a></h3>
+<p>The process does not belong to this environment or already exited.</p>
+<p><strong>Fix:</strong> list this environment's processes with <code>lsw ps</code></p>
+<h3 id="lsw2017">LSW2017<a class="headerlink" href="#lsw2017" title="Permanent link">&para;</a></h3>
+<p>The build directory was configured without the Windows test emulator.</p>
+<p><strong>Fix:</strong> remove the build/ directory and re-run <code>lsw test</code></p>
+<h3 id="lsw2018">LSW2018<a class="headerlink" href="#lsw2018" title="Permanent link">&para;</a></h3>
+<p>Two build artifacts share the same file name.</p>
+<p><strong>Fix:</strong> rename a target, or package a single configuration</p>
+<h3 id="lsw2019">LSW2019<a class="headerlink" href="#lsw2019" title="Permanent link">&para;</a></h3>
+<p>An SDK with that name is already imported.</p>
+<p><strong>Fix:</strong> re-import with <code>lsw sdk import &lt;name&gt; --force</code>, or <code>lsw sdk remove &lt;name&gt;</code></p>
+<h3 id="lsw2020">LSW2020<a class="headerlink" href="#lsw2020" title="Permanent link">&para;</a></h3>
+<p>The named SDK is not imported.</p>
+<p><strong>Fix:</strong> list imported SDKs with <code>lsw sdk list</code></p>
+<h3 id="lsw2021">LSW2021<a class="headerlink" href="#lsw2021" title="Permanent link">&para;</a></h3>
+<p>An unsupported verification transport was configured.</p>
+<p><strong>Fix:</strong> set transport to "ssh", "winrm", or "https" in [verify]</p>
+<h3 id="lsw2022">LSW2022<a class="headerlink" href="#lsw2022" title="Permanent link">&para;</a></h3>
+<p>A provider plugin violated the plugin protocol.</p>
+<p><strong>Fix:</strong> update or fix the plugin named in the error</p>
+<h3 id="lsw2024">LSW2024<a class="headerlink" href="#lsw2024" title="Permanent link">&para;</a></h3>
+<p>An unsafe path or name was passed to native verification.</p>
+<p><strong>Fix:</strong> use a drive-letter path with segments of [A-Za-z0-9._+-] only</p>
+<h3 id="lsw2025">LSW2025<a class="headerlink" href="#lsw2025" title="Permanent link">&para;</a></h3>
+<p>Rust has no GNU-ABI Windows target for this arch.</p>
+<p><strong>Fix:</strong> use x86_64, x86, or aarch64 for Rust projects</p>
+<h3 id="lsw2026">LSW2026<a class="headerlink" href="#lsw2026" title="Permanent link">&para;</a></h3>
+<p>A Windows service operation failed.</p>
+<p><strong>Fix:</strong> read the operation detail in the error message</p>
+<h3 id="lsw2027">LSW2027<a class="headerlink" href="#lsw2027" title="Permanent link">&para;</a></h3>
+<p>The compatibility database could not be read or queried.</p>
+<p><strong>Fix:</strong> read the detail in the error message</p>
+<h3 id="lsw2028">LSW2028<a class="headerlink" href="#lsw2028" title="Permanent link">&para;</a></h3>
+<p>The debug adapter hit a protocol error.</p>
+<p><strong>Fix:</strong> restart the debug session; read the detail in the error message</p>
+<h3 id="lsw2029">LSW2029<a class="headerlink" href="#lsw2029" title="Permanent link">&para;</a></h3>
+<p>MSIX signing failed.</p>
+<p><strong>Fix:</strong> check the signing certificate and key; read the detail in the error</p>
+<h3 id="lsw2030">LSW2030<a class="headerlink" href="#lsw2030" title="Permanent link">&para;</a></h3>
+<p>An invalid [sandbox] network value was set.</p>
+<p><strong>Fix:</strong> use network = "host", "isolated", or "none"</p>
+<h3 id="lsw2031">LSW2031<a class="headerlink" href="#lsw2031" title="Permanent link">&para;</a></h3>
+<p>The crash dump could not be parsed.</p>
+<p><strong>Fix:</strong> pass a Windows minidump (.dmp), such as one written by the runtime</p>
+<h3 id="lsw2032">LSW2032<a class="headerlink" href="#lsw2032" title="Permanent link">&para;</a></h3>
+<p>The native import probe failed on the remote host.</p>
+<p><strong>Fix:</strong> check ssh connectivity to the host named in the error</p>
+<h3 id="lsw2033">LSW2033<a class="headerlink" href="#lsw2033" title="Permanent link">&para;</a></h3>
+<p>The package was not found in the mingw-w64 package set.</p>
+<p><strong>Fix:</strong> use the upstream library name (e.g. zlib, sqlite3, libpng)</p>
+<h3 id="lsw2034">LSW2034<a class="headerlink" href="#lsw2034" title="Permanent link">&para;</a></h3>
+<p>A download failed.</p>
+<p><strong>Fix:</strong> check network access and the URL in the error, then retry</p>
+<h3 id="lsw2035">LSW2035<a class="headerlink" href="#lsw2035" title="Permanent link">&para;</a></h3>
+<p>A downloaded file failed checksum verification.</p>
+<p><strong>Fix:</strong> retry the download; if it persists the mirror is serving a bad file</p>
+<h3 id="lsw2036">LSW2036<a class="headerlink" href="#lsw2036" title="Permanent link">&para;</a></h3>
+<p>An archive could not be unpacked.</p>
+<p><strong>Fix:</strong> retry the download; the archive may be corrupt</p>
+<h3 id="lsw2037">LSW2037<a class="headerlink" href="#lsw2037" title="Permanent link">&para;</a></h3>
+<p>No mingw-w64 package repository exists for this arch.</p>
+<p><strong>Fix:</strong> use an arch with a mingw-w64 repo, or vendor the dependency manually</p>
+<h3 id="lsw2038">LSW2038<a class="headerlink" href="#lsw2038" title="Permanent link">&para;</a></h3>
+<p>Cross-architecture execution needs a Wine build for the target arch.</p>
+<p><strong>Fix:</strong> set the env var named in the error to a matching wine (under qemu)</p>
+<h3 id="lsw2039">LSW2039<a class="headerlink" href="#lsw2039" title="Permanent link">&para;</a></h3>
+<p>Case = "strict" found case-insensitive file name collisions.</p>
+<p><strong>Fix:</strong> rename the colliding files, or set [filesystem] case = "native"</p>
+<h3 id="lsw2040">LSW2040<a class="headerlink" href="#lsw2040" title="Permanent link">&para;</a></h3>
+<p>The MSI failed install/uninstall verification in a scratch environment.</p>
+<p><strong>Fix:</strong> inspect the msiexec output in the error; rerun <code>lsw package --target msi --verify</code></p>
+<h3 id="lsw2041">LSW2041<a class="headerlink" href="#lsw2041" title="Permanent link">&para;</a></h3>
+<p>C# NativeAOT cross-compilation prerequisites are missing.</p>
+<p><strong>Fix:</strong> needs x86_64 target, clang, lld-link, and a mingw-w64 sysroot; see the error detail</p>
+<h3 id="lsw2042">LSW2042<a class="headerlink" href="#lsw2042" title="Permanent link">&para;</a></h3>
+<p>The SDK import failed.</p>
+<p><strong>Fix:</strong> pass --from \<dir> pointing at an SDK directory; see the error detail</p>
+<h3 id="lsw2043">LSW2043<a class="headerlink" href="#lsw2043" title="Permanent link">&para;</a></h3>
+<p>A custom [filesystem] project_drive/mount_project was set but is not supported.</p>
+<p><strong>Fix:</strong> use project_drive = "C:" and mount_project = "/src" (the project mounts at C:\src\<name>)</p>
+<h3 id="lsw2044">LSW2044<a class="headerlink" href="#lsw2044" title="Permanent link">&para;</a></h3>
+<p>Env restore cannot reconstruct an SDK/MSVC toolchain (lsw.lock has no SDK identity).</p>
+<p><strong>Fix:</strong> re-import the SDK and recreate the environment with <code>lsw env create &lt;name&gt; --sdk &lt;name&gt;</code></p>
+<h3 id="lsw2045">LSW2045<a class="headerlink" href="#lsw2045" title="Permanent link">&para;</a></h3>
+<p>The project or environment path resolves to a system directory, so strict sandbox isolation refuses to bind it.</p>
+<p><strong>Fix:</strong> move the project out of the filesystem root or a system path, or relax [sandbox] isolation</p>
+<h3 id="lsw2046">LSW2046<a class="headerlink" href="#lsw2046" title="Permanent link">&para;</a></h3>
+<p>The --system value is not a build system LSW knows.</p>
+<p><strong>Fix:</strong> use cmake, cargo, make, ninja, meson, zig, dotnet, or explicit with a [build] command</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../reference/configuration/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Configuration">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Configuration
+              </div>
+            </div>
+          </a>
+        
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.instant", "navigation.top", "navigation.footer", "search.suggest", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
