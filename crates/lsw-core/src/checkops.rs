@@ -348,3 +348,138 @@ fn hardening(project: &Project, artifacts: &[PathBuf]) -> (StepStatus, String) {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn first_line_extracts_first() {
+        let e = Error::NoBuildSystem;
+        let fl = first_line(&e);
+        assert!(fl.starts_with("LSW2007"));
+        assert!(!fl.contains('\n'));
+    }
+
+    #[test]
+    fn first_line_multiline_error() {
+        let e = Error::NoActiveEnvironment;
+        let full = e.to_string();
+        assert!(full.contains('\n'));
+        let fl = first_line(&e);
+        assert!(!fl.contains('\n'));
+        assert!(fl.contains("LSW2001"));
+    }
+
+    #[test]
+    fn pe_artifacts_filters_extensions() {
+        let files = vec![
+            PathBuf::from("app.exe"),
+            PathBuf::from("lib.dll"),
+            PathBuf::from("readme.txt"),
+            PathBuf::from("helper.DLL"),
+            PathBuf::from("main.EXE"),
+            PathBuf::from("data.json"),
+        ];
+        let pe: Vec<_> = pe_artifacts(&files).collect();
+        assert_eq!(pe.len(), 4);
+        assert!(pe.contains(&&PathBuf::from("app.exe")));
+        assert!(pe.contains(&&PathBuf::from("lib.dll")));
+        assert!(pe.contains(&&PathBuf::from("helper.DLL")));
+        assert!(pe.contains(&&PathBuf::from("main.EXE")));
+    }
+
+    #[test]
+    fn pe_artifacts_empty_list() {
+        let files: Vec<PathBuf> = vec![];
+        assert_eq!(pe_artifacts(&files).count(), 0);
+    }
+
+    #[test]
+    fn missing_deps_collects_missing() {
+        let tree = DepNode {
+            name: "root.dll".into(),
+            kind: DepKind::System,
+            path: None,
+            children: vec![
+                DepNode {
+                    name: "found.dll".into(),
+                    kind: DepKind::System,
+                    path: None,
+                    children: vec![],
+                },
+                DepNode {
+                    name: "gone.dll".into(),
+                    kind: DepKind::Missing,
+                    path: None,
+                    children: vec![],
+                },
+                DepNode {
+                    name: "parent.dll".into(),
+                    kind: DepKind::System,
+                    path: None,
+                    children: vec![DepNode {
+                        name: "nested_gone.dll".into(),
+                        kind: DepKind::Missing,
+                        path: None,
+                        children: vec![],
+                    }],
+                },
+            ],
+        };
+        let mut out = Vec::new();
+        missing_deps(&tree, &mut out);
+        assert_eq!(out, vec!["gone.dll", "nested_gone.dll"]);
+    }
+
+    #[test]
+    fn missing_deps_none_missing() {
+        let tree = DepNode {
+            name: "root.dll".into(),
+            kind: DepKind::System,
+            path: None,
+            children: vec![],
+        };
+        let mut out = Vec::new();
+        missing_deps(&tree, &mut out);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn recorder_skip_remaining_fills_rest() {
+        let mut r = Recorder {
+            steps: Vec::new(),
+            progress: &mut |_| {},
+        };
+        r.record("configuration", StepStatus::Fail, "bad".into());
+        r.skip_remaining();
+        let report = r.finish();
+        assert!(!report.ok);
+        assert_eq!(report.steps.len(), STEP_NAMES.len());
+        assert_eq!(report.steps[0].status, StepStatus::Fail);
+        for step in &report.steps[1..] {
+            assert_eq!(step.status, StepStatus::Skip);
+        }
+    }
+
+    #[test]
+    fn recorder_all_pass() {
+        let mut r = Recorder {
+            steps: Vec::new(),
+            progress: &mut |_| {},
+        };
+        for name in STEP_NAMES {
+            r.record(name, StepStatus::Pass, "ok".into());
+        }
+        let report = r.finish();
+        assert!(report.ok);
+        assert_eq!(report.steps.len(), STEP_NAMES.len());
+    }
+
+    #[test]
+    fn step_status_serializes() {
+        assert_eq!(serde_json::to_string(&StepStatus::Pass).unwrap(), "\"pass\"");
+        assert_eq!(serde_json::to_string(&StepStatus::Fail).unwrap(), "\"fail\"");
+        assert_eq!(serde_json::to_string(&StepStatus::Skip).unwrap(), "\"skip\"");
+    }
+}

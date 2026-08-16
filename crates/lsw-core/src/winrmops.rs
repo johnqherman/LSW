@@ -417,3 +417,137 @@ fn collect_streams(resp: &str, name: &str, out: &mut Vec<u8>) {
         cursor = content_end + "</rsp:Stream>".len();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_finds_value_between_markers() {
+        let xml = "<root><rsp:ShellId>abc-123</rsp:ShellId></root>";
+        assert_eq!(extract(xml, "<rsp:ShellId>", "<"), Some("abc-123".into()));
+    }
+
+    #[test]
+    fn extract_returns_none_when_start_missing() {
+        assert_eq!(extract("<a>b</a>", "<c>", "<"), None);
+    }
+
+    #[test]
+    fn extract_returns_none_when_end_missing() {
+        assert_eq!(extract("<a>b", "<a>", "<z>"), None);
+    }
+
+    #[test]
+    fn extract_empty_value() {
+        assert_eq!(extract("<a><b></b>", "<b>", "<"), Some(String::new()));
+    }
+
+    #[test]
+    fn first_fault_prefers_message() {
+        let resp = "<f:Message>access denied</f:Message><s:Text>other</s:Text>";
+        assert_eq!(first_fault(resp), "access denied");
+    }
+
+    #[test]
+    fn first_fault_falls_back_to_text() {
+        let resp = "<s:Text>connection refused</s:Text>";
+        assert_eq!(first_fault(resp), "connection refused");
+    }
+
+    #[test]
+    fn first_fault_no_detail() {
+        assert_eq!(first_fault("<ok/>"), "no fault detail");
+    }
+
+    #[test]
+    fn collect_streams_decodes_stdout() {
+        let encoded = B64.encode(b"hello world");
+        let resp = format!(
+            "<rsp:Stream Name=\"stdout\" CommandId=\"c1\">{encoded}</rsp:Stream>"
+        );
+        let mut out = Vec::new();
+        collect_streams(&resp, "stdout", &mut out);
+        assert_eq!(out, b"hello world");
+    }
+
+    #[test]
+    fn collect_streams_ignores_other_name() {
+        let encoded = B64.encode(b"err data");
+        let resp = format!(
+            "<rsp:Stream Name=\"stderr\" CommandId=\"c1\">{encoded}</rsp:Stream>"
+        );
+        let mut out = Vec::new();
+        collect_streams(&resp, "stdout", &mut out);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn collect_streams_multiple_chunks() {
+        let e1 = B64.encode(b"aaa");
+        let e2 = B64.encode(b"bbb");
+        let resp = format!(
+            "<rsp:Stream Name=\"stdout\" CommandId=\"c1\">{e1}</rsp:Stream>\
+             <rsp:Stream Name=\"stdout\" CommandId=\"c1\">{e2}</rsp:Stream>"
+        );
+        let mut out = Vec::new();
+        collect_streams(&resp, "stdout", &mut out);
+        assert_eq!(out, b"aaabbb");
+    }
+
+    #[test]
+    fn collect_streams_skips_empty_content() {
+        let resp = "<rsp:Stream Name=\"stdout\" CommandId=\"c1\"></rsp:Stream>";
+        let mut out = Vec::new();
+        collect_streams(resp, "stdout", &mut out);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn selector_formats_shell_id() {
+        let sel = Winrm::selector("shell-42");
+        assert!(sel.contains("ShellId"));
+        assert!(sel.contains("shell-42"));
+    }
+
+    #[test]
+    fn message_id_increments() {
+        let w = Winrm {
+            addr: "http://host:5985/wsman".into(),
+            user: "admin".into(),
+            password: "pass".into(),
+            counter: std::cell::Cell::new(0),
+        };
+        let id1 = w.message_id();
+        let id2 = w.message_id();
+        assert_ne!(id1, id2);
+        assert!(id1.contains("000000000001"));
+        assert!(id2.contains("000000000002"));
+    }
+
+    #[test]
+    fn header_contains_action_and_address() {
+        let w = Winrm {
+            addr: "http://host:5985/wsman".into(),
+            user: "admin".into(),
+            password: "pass".into(),
+            counter: std::cell::Cell::new(0),
+        };
+        let hdr = w.header("http://example.com/Action");
+        assert!(hdr.contains("http://host:5985/wsman"));
+        assert!(hdr.contains("http://example.com/Action"));
+        assert!(hdr.contains("PT120S"));
+    }
+
+    #[test]
+    fn header_escapes_address() {
+        let w = Winrm {
+            addr: "http://host&co:5985/wsman".into(),
+            user: "admin".into(),
+            password: "pass".into(),
+            counter: std::cell::Cell::new(0),
+        };
+        let hdr = w.header("test");
+        assert!(hdr.contains("host&amp;co"));
+    }
+}

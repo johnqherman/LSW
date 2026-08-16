@@ -102,3 +102,59 @@ fn libstdcxx_dirs(env: &Environment) -> Vec<String> {
         None => Vec::new(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clang_triple_x86_64() {
+        assert_eq!(clang_triple(TargetArch::X86_64), "x86_64-pc-windows-gnu");
+    }
+
+    #[test]
+    fn clang_triple_x86() {
+        assert_eq!(clang_triple(TargetArch::X86), "i686-pc-windows-gnu");
+    }
+
+    #[test]
+    fn clang_triple_aarch64() {
+        assert_eq!(clang_triple(TargetArch::Aarch64), "aarch64-pc-windows-gnu");
+    }
+
+    #[test]
+    fn clang_triple_armv7() {
+        assert_eq!(clang_triple(TargetArch::Armv7), "armv7-pc-windows-gnu");
+    }
+
+    #[test]
+    fn clang_triple_arm64ec() {
+        assert_eq!(
+            clang_triple(TargetArch::Arm64Ec),
+            "arm64ec-pc-windows-gnu"
+        );
+    }
+
+    #[test]
+    fn ide_env_struct_serializes() {
+        let env = IdeEnv {
+            target: "x86_64-pc-windows-gnu".into(),
+            environment: "windows-x64".into(),
+            compiler: "/usr/bin/x86_64-w64-mingw32-gcc".into(),
+            cxx_compiler: "/usr/bin/x86_64-w64-mingw32-g++".into(),
+            sysroot: "/usr/x86_64-w64-mingw32".into(),
+            include_paths: vec!["/usr/x86_64-w64-mingw32/include".into()],
+            defines: vec!["_WIN32".into()],
+            c_flags: vec![],
+            cxx_flags: vec![],
+            link_flags: vec![],
+            wine_prefix: "/home/user/.local/share/lsw/envs/windows-x64/pfx".into(),
+            project_windows_root: Some("C:\\src\\hello".into()),
+        };
+        let json = serde_json::to_string(&env).unwrap();
+        assert!(json.contains("\"cxxCompiler\""));
+        assert!(json.contains("\"includePaths\""));
+        assert!(json.contains("\"winePrefix\""));
+        assert!(json.contains("_WIN32"));
+    }
+}

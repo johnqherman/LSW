@@ -149,3 +149,63 @@ fn dump_err(path: &Path, e: &dyn std::fmt::Display) -> Error {
         detail: e.to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn basename_extracts_filename_from_backslash_path() {
+        assert_eq!(basename("C:\\Windows\\System32\\ntdll.dll"), "ntdll.dll");
+    }
+
+    #[test]
+    fn basename_extracts_filename_from_forward_slash_path() {
+        assert_eq!(basename("/usr/lib/libc.so"), "libc.so");
+    }
+
+    #[test]
+    fn basename_returns_input_when_no_separator() {
+        assert_eq!(basename("kernel32.dll"), "kernel32.dll");
+    }
+
+    #[test]
+    fn basename_handles_mixed_separators() {
+        assert_eq!(basename("C:\\dir/sub\\file.exe"), "file.exe");
+    }
+
+    #[test]
+    fn basename_handles_empty_string() {
+        assert_eq!(basename(""), "");
+    }
+
+    #[test]
+    fn dump_path_appends_dmp_extension() {
+        let p = dump_path_for(Path::new("/tmp/hello.exe"));
+        assert_eq!(p, PathBuf::from("/tmp/hello.exe.dmp"));
+    }
+
+    #[test]
+    fn dump_path_for_bare_filename() {
+        let p = dump_path_for(Path::new("prog.exe"));
+        assert_eq!(p, PathBuf::from("prog.exe.dmp"));
+    }
+
+    #[test]
+    fn dump_path_for_no_filename() {
+        let p = dump_path_for(Path::new("/"));
+        assert_eq!(p, PathBuf::from("/program.dmp"));
+    }
+
+    #[test]
+    fn dump_err_captures_display() {
+        let e = dump_err(Path::new("test.dmp"), &"stream missing");
+        match e {
+            Error::DumpParse { path, detail } => {
+                assert_eq!(path, PathBuf::from("test.dmp"));
+                assert_eq!(detail, "stream missing");
+            }
+            _ => panic!("wrong error variant"),
+        }
+    }
+}

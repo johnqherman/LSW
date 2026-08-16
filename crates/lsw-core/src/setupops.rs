@@ -110,3 +110,56 @@ fn discover_or_create(start: &Path) -> Result<(Project, bool)> {
         Err(e) => Err(e),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_env_name_x86_64() {
+        assert_eq!(default_env_name(TargetArch::X86_64), "windows-x64");
+    }
+
+    #[test]
+    fn default_env_name_x86() {
+        assert_eq!(default_env_name(TargetArch::X86), "windows-x86");
+    }
+
+    #[test]
+    fn default_env_name_aarch64() {
+        assert_eq!(default_env_name(TargetArch::Aarch64), "windows-arm64");
+    }
+
+    #[test]
+    fn default_env_name_armv7() {
+        assert_eq!(default_env_name(TargetArch::Armv7), "windows-arm");
+    }
+
+    #[test]
+    fn default_env_name_arm64ec() {
+        assert_eq!(default_env_name(TargetArch::Arm64Ec), "windows-arm64ec");
+    }
+
+    #[test]
+    fn default_env_name_constant_matches_x64() {
+        assert_eq!(DEFAULT_ENV_NAME, default_env_name(TargetArch::X86_64));
+    }
+
+    #[test]
+    fn setup_report_serializes() {
+        let r = SetupReport {
+            project_name: "test".into(),
+            project_root: "/tmp/test".into(),
+            build_system: Some("cmake".into()),
+            manifest_created: true,
+            environment: "windows-x64".into(),
+            environment_created: true,
+            toolchain: "llvm-mingw 20241231".into(),
+            runtime: "wine 10.0".into(),
+            arch_mismatch: None,
+        };
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(json.contains("\"project_name\":\"test\""));
+        assert!(json.contains("\"manifest_created\":true"));
+    }
+}

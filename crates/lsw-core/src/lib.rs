@@ -85,3 +85,57 @@ pub use runops::{Display, Domain, RunReport, Sandbox, run, shell};
 pub use testops::{CompatStatus, Outcome, TestOptions, TestReport, test};
 
 pub use lsw_config::{Dirs, TargetArch};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn xml_escape_plain_text_unchanged() {
+        assert_eq!(xml_escape("hello world"), "hello world");
+    }
+
+    #[test]
+    fn xml_escape_all_special_chars() {
+        assert_eq!(
+            xml_escape("<tag attr=\"val\" & 'q'>"),
+            "&lt;tag attr=&quot;val&quot; &amp; &apos;q&apos;&gt;"
+        );
+    }
+
+    #[test]
+    fn xml_escape_empty_string() {
+        assert_eq!(xml_escape(""), "");
+    }
+
+    #[test]
+    fn xml_escape_only_ampersands() {
+        assert_eq!(xml_escape("&&&"), "&amp;&amp;&amp;");
+    }
+
+    #[test]
+    fn xml_escape_double_escape() {
+        assert_eq!(xml_escape("&amp;"), "&amp;amp;");
+    }
+
+    #[test]
+    fn xml_escape_unicode_preserved() {
+        assert_eq!(xml_escape("caf\u{00e9} <\u{2603}>"), "caf\u{00e9} &lt;\u{2603}&gt;");
+    }
+
+    #[test]
+    fn diagnostic_stdio_returns_valid_handle() {
+        let stdio = diagnostic_stdio();
+        let child = std::process::Command::new("true")
+            .stderr(stdio)
+            .output()
+            .unwrap();
+        assert!(child.status.success());
+    }
+
+    #[test]
+    fn sha256_file_checked_nonexistent_path() {
+        let err = sha256_file_checked(std::path::Path::new("/nonexistent/file.bin"));
+        assert!(err.is_err());
+    }
+}

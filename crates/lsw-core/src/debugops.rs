@@ -72,3 +72,54 @@ pub fn debug(
 
     command.status().map_err(|e| Error::io(winedbg.clone(), e))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn debug_options_defaults() {
+        let opts = DebugOptions::default();
+        assert!(!opts.gdb);
+        assert!(!opts.no_start);
+    }
+
+    #[test]
+    fn debug_rejects_nonexistent_program() {
+        use std::path::PathBuf;
+        use lsw_config::*;
+        let env = crate::envops::Environment {
+            name: "test".into(),
+            manifest: EnvironmentManifest {
+                name: "test".into(),
+                format: 1,
+                target_arch: TargetArch::X86_64,
+                toolchain: ResolvedToolchain {
+                    provider: "gcc".into(),
+                    version: "14".into(),
+                    cc: PathBuf::from("/usr/bin/cc"),
+                    cxx: PathBuf::from("/usr/bin/c++"),
+                    sysroot: PathBuf::from("/usr"),
+                    c_flags: vec![],
+                    cxx_flags: vec![],
+                    link_flags: vec![],
+                },
+                runtime: ResolvedRuntime {
+                    provider: "wine".into(),
+                    version: "9.0".into(),
+                    executable: PathBuf::from("/usr/bin/wine"),
+                },
+            },
+            layout: EnvironmentLayout::new(PathBuf::from("/tmp/lsw-test-debug")),
+        };
+        let result = debug(
+            &env,
+            None,
+            Path::new("/nonexistent/program.exe"),
+            &[],
+            &DebugOptions::default(),
+        );
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::NotExecutable { .. }));
+    }
+}

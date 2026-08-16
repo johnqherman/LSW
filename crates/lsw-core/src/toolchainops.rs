@@ -169,3 +169,116 @@ fn curl_download(url: &str, dest: &std::path::Path) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_dirs(base: &std::path::Path) -> Dirs {
+        Dirs {
+            data: base.join("share"),
+            config: base.join("config"),
+            cache: base.join("cache"),
+        }
+    }
+
+    #[test]
+    fn list_empty_when_dir_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(tmp.path());
+        assert!(list(&dirs).is_empty());
+    }
+
+    #[test]
+    fn list_finds_toolchains_with_bin_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(tmp.path());
+        let tc_dir = dirs.toolchains().join("llvm-mingw-20241231");
+        std::fs::create_dir_all(tc_dir.join("bin")).unwrap();
+        let found = list(&dirs);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].name, "llvm-mingw-20241231");
+    }
+
+    #[test]
+    fn list_skips_entries_without_bin_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(tmp.path());
+        let tc_dir = dirs.toolchains().join("incomplete-toolchain");
+        std::fs::create_dir_all(&tc_dir).unwrap();
+        assert!(list(&dirs).is_empty());
+    }
+
+    #[test]
+    fn list_sorted_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(tmp.path());
+        for name in ["zzz-tc", "aaa-tc", "mmm-tc"] {
+            std::fs::create_dir_all(dirs.toolchains().join(name).join("bin")).unwrap();
+        }
+        let found = list(&dirs);
+        assert_eq!(found.len(), 3);
+        assert_eq!(found[0].name, "aaa-tc");
+        assert_eq!(found[1].name, "mmm-tc");
+        assert_eq!(found[2].name, "zzz-tc");
+    }
+
+    #[test]
+    fn remove_returns_false_for_nonexistent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(tmp.path());
+        std::fs::create_dir_all(dirs.toolchains()).unwrap();
+        assert!(!remove(&dirs, "nope").unwrap());
+    }
+
+    #[test]
+    fn remove_rejects_path_traversal_slash() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(tmp.path());
+        assert!(!remove(&dirs, "../../etc").unwrap());
+    }
+
+    #[test]
+    fn remove_rejects_path_traversal_backslash() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(tmp.path());
+        assert!(!remove(&dirs, "foo\\bar").unwrap());
+    }
+
+    #[test]
+    fn remove_rejects_dotdot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(tmp.path());
+        assert!(!remove(&dirs, "..").unwrap());
+    }
+
+    #[test]
+    fn remove_deletes_existing_toolchain() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(tmp.path());
+        let tc_dir = dirs.toolchains().join("my-tc");
+        std::fs::create_dir_all(tc_dir.join("bin")).unwrap();
+        assert!(remove(&dirs, "my-tc").unwrap());
+        assert!(!tc_dir.exists());
+    }
+
+    #[test]
+    fn install_rejects_unknown_toolchain() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(tmp.path());
+        let result = install(&dirs, "unknown-tc@1.0");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::ToolMissing { .. }));
+    }
+
+    #[test]
+    fn install_returns_cached_if_already_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = test_dirs(tmp.path());
+        let tc_dir = dirs.toolchains().join("llvm-mingw-20241231");
+        std::fs::create_dir_all(tc_dir.join("bin")).unwrap();
+        let report = install(&dirs, "llvm-mingw@20241231").unwrap();
+        assert_eq!(report.name, "llvm-mingw");
+        assert_eq!(report.version, "20241231");
+    }
+}

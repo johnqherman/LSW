@@ -13,6 +13,7 @@ pub struct SignOptions {
     pub timestamp_url: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct VerifyOutcome {
     pub valid: bool,
     pub detail: String,
@@ -96,4 +97,47 @@ pub fn sign(path: &Path, opts: &SignOptions) -> Result<()> {
     )?;
     std::fs::rename(&signed, path).map_err(|e| Error::io(path.to_path_buf(), e))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sign_options_default_has_no_publisher() {
+        let opts = SignOptions::default();
+        assert!(opts.publisher.is_none());
+        assert!(opts.pfx.is_none());
+        assert!(opts.pfx_pass_env.is_none());
+        assert!(opts.timestamp_url.is_none());
+    }
+
+    #[test]
+    fn default_publisher_is_lsw_self_signed() {
+        assert!(DEFAULT_PUBLISHER.contains("LSW Self-Signed"));
+        assert!(DEFAULT_PUBLISHER.starts_with("CN="));
+    }
+
+    #[test]
+    fn verify_signature_nonexistent_file_returns_error() {
+        let result = verify_signature(Path::new("/nonexistent/binary.exe"));
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::NotExecutable { .. }));
+    }
+
+    #[test]
+    fn sign_nonexistent_file_returns_error() {
+        let result = sign(Path::new("/nonexistent/binary.exe"), &SignOptions::default());
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::NotExecutable { .. }));
+    }
+
+    #[test]
+    fn sign_rejects_non_pe_file() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), b"not a PE file").unwrap();
+        let result = sign(tmp.path(), &SignOptions::default());
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::NotExecutable { .. }));
+    }
 }

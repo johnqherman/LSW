@@ -277,3 +277,23 @@ pub(crate) fn run_shell_in_pty(mut command: Command, exit_hint: &str) -> Result<
         .wait()
         .map_err(|e| Error::io(std::path::PathBuf::from(program), e))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stdin_is_tty_returns_bool() {
+        let _result: bool = stdin_is_tty();
+    }
+
+    #[test]
+    fn ctrl_c_constant_is_etx() {
+        assert_eq!(CTRL_C, 0x03);
+    }
+
+    #[test]
+    fn double_press_window_is_two_seconds() {
+        assert_eq!(DOUBLE_PRESS_WINDOW, Duration::from_secs(2));
+    }
+}
