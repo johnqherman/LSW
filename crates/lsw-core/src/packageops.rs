@@ -390,7 +390,7 @@ fn render_wxs(name: &str, package: &lsw_config::PackageSection, files: &[String]
             for (i, exe) in exes.iter().enumerate() {
                 let stem = std::path::Path::new(exe.as_str())
                     .file_stem()
-                    .map_or_else(|| exe.to_string(), |s| s.to_string_lossy().into_owned());
+                    .map_or_else(|| (*exe).clone(), |s| s.to_string_lossy().into_owned());
                 let _ = writeln!(
                     shortcuts,
                     "\x20       <Shortcut Id=\"menu{i}\" Name=\"{}\" Target=\"[INSTALLDIR]{}\" WorkingDirectory=\"INSTALLDIR\"/>",
@@ -458,14 +458,14 @@ fn build_nsis(
     let mut delete_files = String::new();
     for f in files {
         let win = f.replace('/', "\\");
-        install_files.push_str(&format!("  File \"/oname={win}\" \"{f}\"\n"));
-        delete_files.push_str(&format!("  Delete \"$INSTDIR\\{win}\"\n"));
+        let _ = writeln!(install_files, "  File \"/oname={win}\" \"{f}\"");
+        let _ = writeln!(delete_files, "  Delete \"$INSTDIR\\{win}\"");
     }
     let mut shortcuts = String::new();
     let mut delete_shortcuts = String::new();
     if pkg.shortcuts == Some(true) {
-        shortcuts.push_str(&format!("  CreateDirectory \"$SMPROGRAMS\\{name}\"\n"));
-        delete_shortcuts.push_str(&format!("  RMDir /r \"$SMPROGRAMS\\{name}\"\n"));
+        let _ = writeln!(shortcuts, "  CreateDirectory \"$SMPROGRAMS\\{name}\"");
+        let _ = writeln!(delete_shortcuts, "  RMDir /r \"$SMPROGRAMS\\{name}\"");
         for f in files {
             let p = std::path::Path::new(f);
             if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")) {
@@ -473,9 +473,10 @@ fn build_nsis(
                     .file_stem()
                     .map_or_else(|| f.clone(), |s| s.to_string_lossy().into_owned());
                 let win = f.replace('/', "\\");
-                shortcuts.push_str(&format!(
-                    "  CreateShortcut \"$SMPROGRAMS\\{name}\\{title}.lnk\" \"$INSTDIR\\{win}\"\n"
-                ));
+                let _ = writeln!(
+                    shortcuts,
+                    "  CreateShortcut \"$SMPROGRAMS\\{name}\\{title}.lnk\" \"$INSTDIR\\{win}\""
+                );
             }
         }
     }
@@ -597,9 +598,9 @@ fn build_winget(
     };
     let ident_publisher: String = publisher
         .chars()
-        .filter(|c| c.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .collect();
-    let ident_name: String = name.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    let ident_name: String = name.chars().filter(char::is_ascii_alphanumeric).collect();
     let identifier = format!("{ident_publisher}.{ident_name}");
     let arch = match env.manifest.target_arch {
         lsw_config::TargetArch::X86_64 => "x64",

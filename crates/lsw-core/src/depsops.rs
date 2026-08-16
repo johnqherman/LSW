@@ -213,7 +213,9 @@ pub fn tree_with_dirs(dirs: &[PathBuf], pe: &Path) -> Result<DepNode> {
 
 pub(crate) fn is_vc_runtime_dll(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
-    lower.ends_with(".dll")
+    std::path::Path::new(&lower)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("dll"))
         && (lower.starts_with("vcruntime")
             || lower.starts_with("msvcp")
             || lower.starts_with("concrt"))
@@ -271,7 +273,7 @@ pub struct InstalledDep {
 }
 
 pub(crate) fn repo_for(arch: lsw_config::TargetArch) -> Result<(&'static str, &'static str)> {
-    use lsw_config::TargetArch::*;
+    use lsw_config::TargetArch::{X86_64, X86, Aarch64};
     match arch {
         X86_64 => Ok(("mingw64", "mingw-w64-x86_64")),
         X86 => Ok(("mingw32", "mingw-w64-i686")),
@@ -614,9 +616,8 @@ fn copy_dir_capped(src: &Path, dst: &Path, depth: usize, visited: &mut usize) ->
                 detail: format!("vendor tree exceeds {MAX_ENTRIES} entries"),
             });
         }
-        let meta = match std::fs::symlink_metadata(entry.path()) {
-            Ok(m) => m,
-            Err(_) => continue,
+        let Ok(meta) = std::fs::symlink_metadata(entry.path()) else {
+            continue;
         };
         if meta.file_type().is_symlink() {
             continue;

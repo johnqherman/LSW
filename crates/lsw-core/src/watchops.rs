@@ -92,6 +92,7 @@ fn after_build(
 }
 
 pub fn watch(project: &Project, env: &Environment, opts: WatchOptions) -> Result<()> {
+    const MAX_PATHS: usize = 4096;
     println!(
         "[watch] watching {} (Ctrl-C to stop)",
         project.root.display()
@@ -111,7 +112,6 @@ pub fn watch(project: &Project, env: &Environment, opts: WatchOptions) -> Result
         .watch(&project.root, RecursiveMode::Recursive)
         .map_err(|e| notify_err(&project.root, e))?;
 
-    const MAX_PATHS: usize = 4096;
     loop {
         let first = rx
             .recv()

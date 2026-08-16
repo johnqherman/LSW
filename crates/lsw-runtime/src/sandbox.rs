@@ -85,14 +85,14 @@ pub(crate) fn apply_rlimits(command: &mut Command, spec: &SandboxSpec) {
                     rlim_cur: secs,
                     rlim_max: secs,
                 };
-                libc::setrlimit(libc::RLIMIT_CPU, &lim);
+                libc::setrlimit(libc::RLIMIT_CPU, &raw const lim);
             }
             if let Some(bytes) = mem {
                 let lim = libc::rlimit {
                     rlim_cur: bytes,
                     rlim_max: bytes,
                 };
-                libc::setrlimit(libc::RLIMIT_AS, &lim);
+                libc::setrlimit(libc::RLIMIT_AS, &raw const lim);
             }
             Ok(())
         });

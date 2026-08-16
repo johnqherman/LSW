@@ -50,13 +50,13 @@ pub fn lint(manifest: &ProjectManifest) -> Vec<Finding> {
         out.push(Finding {
             severity: Severity::Warn,
             message: m,
-        })
+        });
     };
     let error = |out: &mut Vec<Finding>, m: String| {
         out.push(Finding {
             severity: Severity::Error,
             message: m,
-        })
+        });
     };
 
     if manifest.project.name.trim().is_empty() {

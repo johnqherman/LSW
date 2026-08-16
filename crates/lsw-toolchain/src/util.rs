@@ -142,7 +142,7 @@ pub(crate) fn starts_with_mz(path: &Path) -> bool {
         .ok()
         .and_then(|mut f| {
             let mut magic = [0u8; 2];
-            f.read_exact(&mut magic).ok().map(|_| magic)
+            f.read_exact(&mut magic).ok().map(|()| magic)
         })
         .is_some_and(|m| &m == b"MZ")
 }

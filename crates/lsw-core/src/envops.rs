@@ -268,7 +268,7 @@ pub fn clone_env(dirs: &Dirs, src: &str, dst: &str, force: bool) -> Result<Envir
     }
     let layout = EnvironmentLayout::new(dst_root);
     let mut manifest = EnvironmentManifest::load(&layout.manifest())?;
-    manifest.name = dst.to_owned();
+    dst.clone_into(&mut manifest.name);
     manifest.save(&layout.manifest())?;
     let opened = Environment::open(dirs, dst)?;
     replacement.commit();
@@ -331,9 +331,8 @@ pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
     let drive_c = layout.drive_c();
     let users = drive_c.join("users");
     let mut trimmed = 0;
-    let entries = match fs::read_dir(&users) {
-        Ok(e) => e,
-        Err(_) => return Ok(0),
+    let Ok(entries) = fs::read_dir(&users) else {
+        return Ok(0);
     };
     for user in entries.flatten().take(1_000_000) {
         let udir = user.path();
@@ -343,9 +342,8 @@ pub fn harden_profiles(layout: &EnvironmentLayout) -> Result<usize> {
         if !meta.is_dir() {
             continue;
         }
-        let inner = match fs::read_dir(&udir) {
-            Ok(e) => e,
-            Err(_) => continue,
+        let Ok(inner) = fs::read_dir(&udir) else {
+            continue;
         };
         for entry in inner.flatten().take(1_000_000) {
             let link = entry.path();

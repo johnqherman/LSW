@@ -8,7 +8,7 @@ use serde::Serialize;
 use crate::envops::Environment;
 use crate::error::{Error, Result};
 
-const TRACE_TIMEOUT: Duration = Duration::from_secs(120);
+const TRACE_TIMEOUT: Duration = Duration::from_mins(2);
 const TRACE_MAX_OUTPUT: usize = 32 * 1024 * 1024;
 const TRACE_MAX_EVENTS: usize = 100_000;
 const TRACE_MAX_FIELD: usize = 512;
@@ -343,7 +343,10 @@ fn extract_module_name(line: &str) -> Option<String> {
         .take(TRACE_MAX_FIELD)
         .collect::<String>()
         .to_ascii_lowercase();
-    if base.ends_with(".dll") {
+    if std::path::Path::new(&base)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("dll"))
+    {
         Some(base)
     } else {
         None

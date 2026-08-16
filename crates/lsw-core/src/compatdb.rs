@@ -91,12 +91,12 @@ impl CompatDb {
         for key in supported {
             let e = self.entries.entry(normalize(key)).or_default();
             e.supported_count = e.supported_count.saturating_add(1);
-            e.last_runtime = runtime.to_owned();
+            runtime.clone_into(&mut e.last_runtime);
         }
         for key in unsupported {
             let e = self.entries.entry(normalize(key)).or_default();
             e.unsupported_count = e.unsupported_count.saturating_add(1);
-            e.last_runtime = runtime.to_owned();
+            runtime.clone_into(&mut e.last_runtime);
         }
     }
 

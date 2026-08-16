@@ -381,6 +381,7 @@ mod tests {
 
     #[test]
     fn mismatched_response_id_is_rejected() {
+        use std::os::unix::fs::PermissionsExt;
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join(format!("{PREFIX}liar"));
         let script = "#!/bin/sh\n\
@@ -392,7 +393,6 @@ mod tests {
              \x20 esac\n\
              done\n";
         std::fs::write(&path, script).unwrap();
-        use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
 
         let mut plugin = Plugin::connect("liar", &path).unwrap();
@@ -401,6 +401,7 @@ mod tests {
     }
 
     fn write_mock_plugin(dir: &std::path::Path, name: &str, protocol: u32) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
         let path = dir.join(format!("{PREFIX}{name}"));
         let script = format!(
             "#!/bin/sh\n\
@@ -414,7 +415,6 @@ mod tests {
              done\n"
         );
         std::fs::write(&path, script).unwrap();
-        use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
         path
     }

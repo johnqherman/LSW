@@ -13,12 +13,10 @@ pub fn extract_strings(data: &[u8], min_len: usize) -> Vec<String> {
     for &b in data {
         if is_printable(b) {
             cur.push(b as char);
+        } else if cur.len() >= min_len {
+            out.push(std::mem::take(&mut cur));
         } else {
-            if cur.len() >= min_len {
-                out.push(std::mem::take(&mut cur));
-            } else {
-                cur.clear();
-            }
+            cur.clear();
         }
     }
     if cur.len() >= min_len {

@@ -57,6 +57,7 @@ enum TestKind {
 }
 
 pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<TestReport> {
+    const MAX_TEST_OUTPUT: u64 = 64 * 1024 * 1024;
     if opts.coverage && env.manifest.toolchain.provider != "llvm-mingw" {
         return Err(Error::ToolMissing {
             tool: "llvm-mingw".into(),
@@ -129,7 +130,6 @@ pub fn test(project: &Project, env: &Environment, opts: &TestOptions) -> Result<
         command.env("LSW_HEADLESS", "1");
     }
 
-    const MAX_TEST_OUTPUT: u64 = 64 * 1024 * 1024;
     command
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())

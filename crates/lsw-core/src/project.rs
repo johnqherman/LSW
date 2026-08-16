@@ -102,7 +102,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show) {
 }
 "#;
 
-const DLL_MAIN: &str = r#"#include <windows.h>
+const DLL_MAIN: &str = r"#include <windows.h>
 
 __declspec(dllexport) int lsw_answer(void) {
     return 42;
@@ -112,7 +112,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
     (void)inst; (void)reason; (void)reserved;
     return TRUE;
 }
-"#;
+";
 
 const CPP_MAIN: &str = r#"#include <windows.h>
 #include <iostream>
@@ -166,35 +166,35 @@ int main(void) {
 }
 "#;
 
-const CONSOLE_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
+const CONSOLE_CMAKE: &str = r"cmake_minimum_required(VERSION 3.20)
 project({name} C)
 
 add_executable({name} src/main.c)
 
 enable_testing()
 add_test(NAME {name}_runs COMMAND {name})
-"#;
+";
 
-const CPP_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
+const CPP_CMAKE: &str = r"cmake_minimum_required(VERSION 3.20)
 project({name} CXX)
 
 add_executable({name} src/main.cpp)
 
 enable_testing()
 add_test(NAME {name}_runs COMMAND {name})
-"#;
+";
 
-const SERVICE_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
+const SERVICE_CMAKE: &str = r"cmake_minimum_required(VERSION 3.20)
 project({name} C)
 
 add_executable({name} src/main.c)
-"#;
+";
 
-const GUI_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
+const GUI_CMAKE: &str = r"cmake_minimum_required(VERSION 3.20)
 project({name} C)
 
 add_executable({name} WIN32 src/main.c)
-"#;
+";
 
 const DLL_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.20)
 project({name} C)
@@ -258,58 +258,6 @@ pub(crate) fn sanitize_project_name(raw: &str) -> String {
 }
 
 pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<InitReport> {
-    let named = name.is_some();
-    let (root, project_name) = match name {
-        Some(n) => {
-            let sanitized = sanitize_project_name(n);
-            (parent.join(&sanitized), sanitized)
-        }
-        None => {
-            let n = parent
-                .file_name()
-                .map(|s| s.to_string_lossy().into_owned())
-                .ok_or_else(|| Error::InitFailed {
-                    path: parent.to_path_buf(),
-                    detail: "cannot derive a project name from this directory".into(),
-                })?;
-            (parent.to_path_buf(), sanitize_project_name(&n))
-        }
-    };
-
-    if let Ok(meta) = fs::symlink_metadata(&root)
-        && meta.file_type().is_symlink()
-    {
-        return Err(Error::InitFailed {
-            path: root.clone(),
-            detail: format!(
-                "target '{}' is a symlink; refusing to initialize through it",
-                root.display()
-            ),
-        });
-    }
-
-    if named
-        && let Ok(mut entries) = fs::read_dir(&root)
-        && entries.next().is_some()
-    {
-        return Err(Error::InitFailed {
-            path: root.clone(),
-            detail: format!(
-                "target directory '{}' already exists and is not empty (a distinct name may have sanitized to the same directory); pick another name or `cd` in and run `lsw init`",
-                root.display()
-            ),
-        });
-    }
-
-    let manifest_path = root.join(PROJECT_MANIFEST);
-    let manifest_exists = manifest_path.exists();
-    if manifest_exists && crate::buildops::detect_build_system(&root).is_some() {
-        return Err(Error::InitFailed {
-            path: root,
-            detail: "lsw.toml already exists here and a build system is present".into(),
-        });
-    }
-
     fn write_file(
         path: &PathBuf,
         contents: &str,
@@ -352,6 +300,55 @@ pub fn init(parent: &Path, name: Option<&str>, template: Template) -> Result<Ini
         file.write_all(contents.as_bytes())
             .map_err(|e| Error::io(path.clone(), e))?;
         Ok(())
+    }
+
+    let named = name.is_some();
+    let (root, project_name) = if let Some(n) = name {
+        let sanitized = sanitize_project_name(n);
+        (parent.join(&sanitized), sanitized)
+    } else {
+        let n = parent
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .ok_or_else(|| Error::InitFailed {
+                path: parent.to_path_buf(),
+                detail: "cannot derive a project name from this directory".into(),
+            })?;
+        (parent.to_path_buf(), sanitize_project_name(&n))
+    };
+
+    if let Ok(meta) = fs::symlink_metadata(&root)
+        && meta.file_type().is_symlink()
+    {
+        return Err(Error::InitFailed {
+            path: root.clone(),
+            detail: format!(
+                "target '{}' is a symlink; refusing to initialize through it",
+                root.display()
+            ),
+        });
+    }
+
+    if named
+        && let Ok(mut entries) = fs::read_dir(&root)
+        && entries.next().is_some()
+    {
+        return Err(Error::InitFailed {
+            path: root.clone(),
+            detail: format!(
+                "target directory '{}' already exists and is not empty (a distinct name may have sanitized to the same directory); pick another name or `cd` in and run `lsw init`",
+                root.display()
+            ),
+        });
+    }
+
+    let manifest_path = root.join(PROJECT_MANIFEST);
+    let manifest_exists = manifest_path.exists();
+    if manifest_exists && crate::buildops::detect_build_system(&root).is_some() {
+        return Err(Error::InitFailed {
+            path: root,
+            detail: "lsw.toml already exists here and a build system is present".into(),
+        });
     }
 
     let mut created: Vec<PathBuf> = Vec::new();

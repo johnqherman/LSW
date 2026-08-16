@@ -311,7 +311,7 @@ mod tests {
 
     #[test]
     fn checksum_and_packet_framing() {
-        assert_eq!(checksum(b"OK"), (b'O' as u32 + b'K' as u32) as u8);
+        assert_eq!(checksum(b"OK"), (u32::from(b'O') + u32::from(b'K')) as u8);
         let pkt = encode_packet(b"g");
         assert_eq!(pkt, b"$g#67");
     }
@@ -351,10 +351,10 @@ mod tests {
     #[test]
     fn amd64_register_extraction() {
         let mut regs = vec![0u8; 20 * 8];
-        regs[amd64::RIP..amd64::RIP + 8].copy_from_slice(&0x1400013f4u64.to_le_bytes());
-        regs[amd64::RSP..amd64::RSP + 8].copy_from_slice(&0x33fd80u64.to_le_bytes());
-        assert_eq!(amd64::reg(&regs, amd64::RIP), Some(0x1400013f4));
-        assert_eq!(amd64::reg(&regs, amd64::RSP), Some(0x33fd80));
+        regs[amd64::RIP..amd64::RIP + 8].copy_from_slice(&0x1_4000_13f4_u64.to_le_bytes());
+        regs[amd64::RSP..amd64::RSP + 8].copy_from_slice(&0x33_fd80_u64.to_le_bytes());
+        assert_eq!(amd64::reg(&regs, amd64::RIP), Some(0x1_4000_13f4));
+        assert_eq!(amd64::reg(&regs, amd64::RSP), Some(0x33_fd80));
     }
 
     #[test]

@@ -167,16 +167,13 @@ pub(crate) fn embed_object(
         .is_some_and(|n| n.to_string_lossy().starts_with(triple));
     let mut command = Command::new(&windres);
     if !prefixed {
-        match bfd_target(arch) {
-            Some(target) => {
-                command.arg("-F").arg(target);
-            }
-            None => {
-                tracing::warn!(
-                    "[package] resources need {triple}-windres for {arch}; unprefixed windres cannot target it - skipping embedding"
-                );
-                return Ok(None);
-            }
+        if let Some(target) = bfd_target(arch) {
+            command.arg("-F").arg(target);
+        } else {
+            tracing::warn!(
+                "[package] resources need {triple}-windres for {arch}; unprefixed windres cannot target it - skipping embedding"
+            );
+            return Ok(None);
         }
     }
     let obj = dir.join("resources.o");

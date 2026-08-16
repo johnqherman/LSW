@@ -181,7 +181,7 @@ pub fn run(
                     }
                     Domain::Windows
                 }
-                d => d,
+                Domain::Host => Domain::Host,
             };
             (chosen, p)
         }
@@ -474,7 +474,7 @@ extern "C" fn shell_sigint(_: libc::c_int) {
         tv_nsec: 0,
     };
     unsafe {
-        libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts);
+        libc::clock_gettime(libc::CLOCK_MONOTONIC, &raw mut ts);
     }
     let now_ms = ts.tv_sec * 1000 + ts.tv_nsec / 1_000_000;
     let last = LAST_SIGINT_MS.swap(now_ms, Ordering::Relaxed);
@@ -505,9 +505,9 @@ impl ShellSignalGuard {
             let mut action: libc::sigaction = std::mem::zeroed();
             action.sa_sigaction = shell_sigint as extern "C" fn(libc::c_int) as usize;
             action.sa_flags = libc::SA_RESTART;
-            libc::sigemptyset(&mut action.sa_mask);
+            libc::sigemptyset(&raw mut action.sa_mask);
             let mut previous: libc::sigaction = std::mem::zeroed();
-            libc::sigaction(libc::SIGINT, &action, &mut previous);
+            libc::sigaction(libc::SIGINT, &raw const action, &raw mut previous);
             ShellSignalGuard { previous }
         }
     }
@@ -518,7 +518,7 @@ impl Drop for ShellSignalGuard {
         use std::sync::atomic::Ordering;
         SHELL_CHILD_PID.store(0, Ordering::Relaxed);
         unsafe {
-            libc::sigaction(libc::SIGINT, &self.previous, std::ptr::null_mut());
+            libc::sigaction(libc::SIGINT, &raw const self.previous, std::ptr::null_mut());
         }
     }
 }

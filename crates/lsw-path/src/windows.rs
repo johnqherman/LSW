@@ -21,7 +21,7 @@ impl PathMapper {
                 match component {
                     Component::Normal(part) => {
                         let part = part.to_str().ok_or_else(|| PathError::NonUtf8 {
-                            path: path.to_path_buf(),
+                            path: path.clone(),
                         })?;
                         if part.contains('\\') {
                             return Err(PathError::Unmapped {

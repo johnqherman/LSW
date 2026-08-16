@@ -47,7 +47,7 @@ pub(crate) fn verify(
                             s.reason, s.crash_address
                         ),
                         _ => {
-                            println!("      {} (address {:#x})", s.reason, s.crash_address)
+                            println!("      {} (address {:#x})", s.reason, s.crash_address);
                         }
                     }
                 }

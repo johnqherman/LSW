@@ -83,7 +83,7 @@ impl DebugInfo {
             })
         };
         let sections =
-            gimli::DwarfSections::load(load).map_err(|_: ()| dap("no DWARF sections"))?;
+            gimli::DwarfSections::load(load).map_err(|(): ()| dap("no DWARF sections"))?;
         let dwarf = sections.borrow(|section| gimli::EndianSlice::new(section, endian));
 
         let mut lines = LineTable::new();

@@ -30,7 +30,7 @@ pub(crate) struct Cli {
         help_heading = "Global options"
     )]
     pub(crate) env: Option<String>,
-    /// Colored output (default: auto via tty + NO_COLOR).
+    /// Colored output (default: auto via tty + `NO_COLOR`).
     #[arg(long, global = true, value_enum, default_value_t = ColorMode::Auto, help_heading = "Global options")]
     pub(crate) color: ColorMode,
     #[command(subcommand)]
@@ -84,7 +84,7 @@ pub(crate) enum Format {
 pub(crate) enum Cmd {
     /// Detect the project, create a default environment, and wire lsw.toml.
     Setup,
-    /// Scaffold a new project (lsw.toml + CMake template).
+    /// Scaffold a new project (lsw.toml + `CMake` template).
     Init {
         /// Project name; omit to initialize the current directory.
         name: Option<String>,
@@ -108,7 +108,7 @@ pub(crate) enum Cmd {
         /// Zero PE timestamps for reproducible, byte-identical artifacts.
         #[arg(long)]
         reproducible: bool,
-        /// Compile C# with NativeAOT to a native PE (dotnet projects only).
+        /// Compile C# with `NativeAOT` to a native PE (dotnet projects only).
         #[arg(long)]
         aot: bool,
     },
@@ -133,10 +133,10 @@ pub(crate) enum Cmd {
     },
     /// Build, then run tests under the local compatibility runtime.
     Test {
-        /// CI mode: no interactive display (exports LSW_HEADLESS=1).
+        /// CI mode: no interactive display (exports `LSW_HEADLESS=1`).
         #[arg(long)]
         headless: bool,
-        /// Write a JUnit XML report (ctest and meson runs).
+        /// Write a `JUnit` XML report (ctest and meson runs).
         #[arg(long, value_name = "FILE")]
         junit: Option<PathBuf>,
         /// Instrument with clang source coverage and print a report (llvm-mingw).
@@ -145,7 +145,7 @@ pub(crate) enum Cmd {
     },
     /// Validate the project: build, wine execution, deps, hardening.
     Check {
-        /// CI mode: no interactive display (exports LSW_HEADLESS=1).
+        /// CI mode: no interactive display (exports `LSW_HEADLESS=1`).
         #[arg(long)]
         headless: bool,
     },
@@ -179,7 +179,7 @@ pub(crate) enum Cmd {
         #[arg(long)]
         force: bool,
     },
-    /// Audit a PE's security hardening (ASLR, DEP, CFG, SafeSEH, signing).
+    /// Audit a PE's security hardening (ASLR, DEP, CFG, `SafeSEH`, signing).
     Audit {
         /// PE file; omit to build and use the project's artifact.
         file: Option<PathBuf>,
@@ -189,7 +189,7 @@ pub(crate) enum Cmd {
         /// PE file; omit to build and use the project's artifact.
         file: Option<PathBuf>,
     },
-    /// Generate a CycloneDX SBOM for a PE (imports + toolchain provenance).
+    /// Generate a `CycloneDX` SBOM for a PE (imports + toolchain provenance).
     Sbom {
         /// PE file; omit to build and use the project's artifact.
         file: Option<PathBuf>,
@@ -670,7 +670,7 @@ pub(crate) enum PackageTargetArg {
     Msix,
     #[value(name = "nsis")]
     Nsis,
-    /// MSI plus a winget manifest trio (needs [package] installer_url).
+    /// MSI plus a winget manifest trio (needs [package] `installer_url`).
     #[value(name = "winget")]
     Winget,
 }

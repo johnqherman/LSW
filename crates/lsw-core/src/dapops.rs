@@ -985,7 +985,7 @@ impl<'a> Adapter<'a> {
                 self.exited = true;
                 let exited = self.event(
                     "exited",
-                    serde_json::json!({ "exitCode": 128 + signal as i32 }),
+                    serde_json::json!({ "exitCode": 128 + i32::from(signal) }),
                 );
                 let terminated = self.event("terminated", serde_json::Value::Null);
                 out.push(exited);
@@ -1090,6 +1090,7 @@ enum ExecKind {
 }
 
 fn read_gdb_port<R: Read + Send + 'static>(stream: R) -> Result<u16> {
+    const MARKER: &str = "target remote localhost:";
     let (tx, rx) = std::sync::mpsc::sync_channel(64);
     std::thread::spawn(move || {
         let mut reader = BufReader::new(stream);
@@ -1103,7 +1104,6 @@ fn read_gdb_port<R: Read + Send + 'static>(stream: R) -> Result<u16> {
             }
         }
     });
-    const MARKER: &str = "target remote localhost:";
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
         let remaining = deadline.saturating_duration_since(std::time::Instant::now());
@@ -1176,7 +1176,7 @@ pub fn serve<R: BufRead, W: Write>(
         }
         let terminating = matches!(
             req.command.as_deref(),
-            Some("terminate") | Some("disconnect")
+            Some("terminate" | "disconnect")
         );
         let responses = adapter.handle(&req)?;
         for msg in &responses {
@@ -1197,7 +1197,7 @@ mod tests {
     #[test]
     fn q_offsets_textseg_yields_slide_relative_to_image_base() {
         assert_eq!(
-            parse_q_offsets("TextSeg=140001000", 0x140000000),
+            parse_q_offsets("TextSeg=140001000", 0x1_4000_0000),
             Some(0x1000)
         );
     }

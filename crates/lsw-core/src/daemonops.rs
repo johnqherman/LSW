@@ -138,6 +138,7 @@ fn run_accept_loop(listener: UnixListener, path: &Path, dirs: &Dirs) -> Result<(
 }
 
 fn bind_socket(path: &Path) -> Result<UnixListener> {
+    use std::os::unix::fs::PermissionsExt;
     let listener = match UnixListener::bind(path) {
         Ok(listener) => listener,
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
@@ -152,20 +153,18 @@ fn bind_socket(path: &Path) -> Result<UnixListener> {
         }
         Err(e) => return Err(Error::io(path.to_path_buf(), e)),
     };
-    use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
     Ok(listener)
 }
 
 fn handle_connection(stream: UnixStream, dirs: &Dirs, running: &Arc<AtomicBool>) {
-    let mut writer = match stream.try_clone() {
-        Ok(w) => w,
-        Err(_) => return,
+    const MAX_FRAME: u64 = 1 << 20;
+    let Ok(mut writer) = stream.try_clone() else {
+        return;
     };
     if writer.set_write_timeout(Some(CLIENT_IDLE_TIMEOUT)).is_err() {
         return;
     }
-    const MAX_FRAME: u64 = 1 << 20;
     let mut reader = BufReader::new(stream);
     loop {
         let mut buf = Vec::new();

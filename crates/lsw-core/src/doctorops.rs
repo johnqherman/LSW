@@ -114,39 +114,36 @@ fn vc_runtime_row(project: &Project, env: &envops::Environment) -> Option<Row> {
 
 fn build_tool_rows(project: Option<&Project>) -> Vec<Row> {
     let mut checks: Vec<(String, bool)> = Vec::new();
-    match project {
-        Some(p) => {
-            if let Some(build) = &p.manifest.build {
-                if let Some(program) = build.command.first() {
-                    checks.push((program.clone(), true));
-                }
-            } else if let Some(system) = crate::buildops::detect_build_system(&p.root) {
-                match system {
-                    crate::buildops::BuildSystem::Cmake => {
-                        checks.push(("cmake".into(), true));
-                        checks.push(("ninja".into(), false));
-                    }
-                    crate::buildops::BuildSystem::Cargo => checks.push(("cargo".into(), true)),
-                    crate::buildops::BuildSystem::Make => checks.push(("make".into(), true)),
-                    crate::buildops::BuildSystem::Ninja => checks.push(("ninja".into(), true)),
-                    crate::buildops::BuildSystem::Meson => {
-                        checks.push(("meson".into(), true));
-                        checks.push(("ninja".into(), true));
-                    }
-                    crate::buildops::BuildSystem::Zig => checks.push(("zig".into(), true)),
-                    crate::buildops::BuildSystem::Dotnet => checks.push(("dotnet".into(), true)),
-                    crate::buildops::BuildSystem::Explicit => {}
-                }
+    if let Some(p) = project {
+        if let Some(build) = &p.manifest.build {
+            if let Some(program) = build.command.first() {
+                checks.push((program.clone(), true));
             }
-            if !p.manifest.dependencies.is_empty() {
-                checks.push(("curl".into(), true));
-                checks.push(("tar".into(), true));
+        } else if let Some(system) = crate::buildops::detect_build_system(&p.root) {
+            match system {
+                crate::buildops::BuildSystem::Cmake => {
+                    checks.push(("cmake".into(), true));
+                    checks.push(("ninja".into(), false));
+                }
+                crate::buildops::BuildSystem::Cargo => checks.push(("cargo".into(), true)),
+                crate::buildops::BuildSystem::Make => checks.push(("make".into(), true)),
+                crate::buildops::BuildSystem::Ninja => checks.push(("ninja".into(), true)),
+                crate::buildops::BuildSystem::Meson => {
+                    checks.push(("meson".into(), true));
+                    checks.push(("ninja".into(), true));
+                }
+                crate::buildops::BuildSystem::Zig => checks.push(("zig".into(), true)),
+                crate::buildops::BuildSystem::Dotnet => checks.push(("dotnet".into(), true)),
+                crate::buildops::BuildSystem::Explicit => {}
             }
         }
-        None => {
-            checks.push(("cmake".into(), false));
-            checks.push(("ninja".into(), false));
+        if !p.manifest.dependencies.is_empty() {
+            checks.push(("curl".into(), true));
+            checks.push(("tar".into(), true));
         }
+    } else {
+        checks.push(("cmake".into(), false));
+        checks.push(("ninja".into(), false));
     }
     if checks.is_empty() {
         return vec![row(

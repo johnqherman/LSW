@@ -32,6 +32,8 @@ pub(crate) fn debug(
         .expect("clap requires program without --attach");
     let (p, env) = active_env(dirs)?;
     if flags.native {
+        const NO_HOST: &str =
+            "no [verify] host configured in lsw.toml; native debugging needs a Windows host";
         let cfg = &p.manifest.verify;
         if cfg.host.is_some() {
             match cfg.transport.as_deref().unwrap_or("ssh") {
@@ -49,8 +51,6 @@ pub(crate) fn debug(
                 }
             }
         }
-        const NO_HOST: &str =
-            "no [verify] host configured in lsw.toml; native debugging needs a Windows host";
         if flags.interactive {
             return match lsw_core::verifyops::native_interactive(&p, program)? {
                 None => Ok(crate::usage_failure(format, NO_HOST)),

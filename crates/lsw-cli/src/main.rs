@@ -143,16 +143,13 @@ fn with_pe<F>(
 where
     F: FnOnce(&std::path::Path) -> lsw_core::Result<ExitCode>,
 {
-    match cmd::resolve_pe(file, dirs)? {
-        Some(p) => f(&p),
-        None => {
-            if format == Format::Json {
-                cmd::emit_json(&serde_json::json!({
-                    "error": { "code": "LSW0000", "message": "no single artifact to analyze; pass a file explicitly" }
-                }));
-            }
-            Ok(ExitCode::FAILURE)
+    if let Some(p) = cmd::resolve_pe(file, dirs)? { f(&p) } else {
+        if format == Format::Json {
+            cmd::emit_json(&serde_json::json!({
+                "error": { "code": "LSW0000", "message": "no single artifact to analyze; pass a file explicitly" }
+            }));
         }
+        Ok(ExitCode::FAILURE)
     }
 }
 

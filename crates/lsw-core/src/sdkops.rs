@@ -199,9 +199,8 @@ fn copy_tree_depth(
         *visited += 1;
         let from = entry.path();
         let to = dst.join(entry.file_name());
-        let meta = match fs::symlink_metadata(&from) {
-            Ok(m) => m,
-            Err(_) => continue,
+        let Ok(meta) = fs::symlink_metadata(&from) else {
+            continue;
         };
         if meta.is_dir() {
             fs::create_dir_all(&to).map_err(|e| Error::io(to.clone(), e))?;

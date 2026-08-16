@@ -22,6 +22,11 @@ pub fn build_msix(
     stem: &str,
     files: &[String],
 ) -> Result<PathBuf> {
+    const RESERVED: &[&str] = &[
+        "AppxManifest.xml",
+        "AppxBlockMap.xml",
+        "[Content_Types].xml",
+    ];
     if which("zip").is_none() {
         return Err(Error::ToolMissing {
             tool: "zip".into(),
@@ -39,13 +44,7 @@ pub fn build_msix(
     let version = msix_version(pkg.version.as_deref());
     let display_publisher = pkg.publisher.as_deref().unwrap_or("LSW");
     let description = pkg.description.as_deref().unwrap_or(name);
-
     let logo = "lsw-appx-logo.png";
-    const RESERVED: &[&str] = &[
-        "AppxManifest.xml",
-        "AppxBlockMap.xml",
-        "[Content_Types].xml",
-    ];
     for f in files {
         let lower = f.to_ascii_lowercase();
         if RESERVED.iter().any(|r| r.eq_ignore_ascii_case(f)) || lower == logo {
@@ -332,8 +331,7 @@ fn cert_still_valid(cert: &Path) -> bool {
         .args(["x509", "-checkend", "2592000", "-noout", "-in"])
         .arg(cert)
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+        .is_ok_and(|o| o.status.success())
 }
 
 fn openssl_subj(dn: &str) -> String {
@@ -549,7 +547,7 @@ HashMethod=\"http://www.w3.org/2001/04/xmlenc#sha256\">\n",
 fn content_types_xml(files: &[String]) -> String {
     let mut exts: std::collections::BTreeSet<String> = files
         .iter()
-        .filter_map(|f| f.rsplit('.').next().map(|e| e.to_ascii_lowercase()))
+        .filter_map(|f| f.rsplit('.').next().map(str::to_ascii_lowercase))
         .collect();
     exts.insert("xml".to_owned());
     exts.insert("png".to_owned());

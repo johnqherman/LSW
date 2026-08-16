@@ -47,23 +47,20 @@ fn run_verify(
         });
     }
 
-    let install_dir = match find_install_dir(&prefix, name, files) {
-        Some(dir) => dir,
-        None => {
-            let candidates = install_dir_candidates(&prefix, name);
-            let _ = msiexec(scratch, &prefix, &["/x", &msi_win, "/qn"]);
-            return Err(Error::InstallVerifyFailed {
-                stage: "install".into(),
-                detail: format!(
-                    "installed files not found under {}",
-                    candidates
-                        .iter()
-                        .map(|c| c.display().to_string())
-                        .collect::<Vec<_>>()
-                        .join(" or ")
-                ),
-            });
-        }
+    let Some(install_dir) = find_install_dir(&prefix, name, files) else {
+        let candidates = install_dir_candidates(&prefix, name);
+        let _ = msiexec(scratch, &prefix, &["/x", &msi_win, "/qn"]);
+        return Err(Error::InstallVerifyFailed {
+            stage: "install".into(),
+            detail: format!(
+                "installed files not found under {}",
+                candidates
+                    .iter()
+                    .map(|c| c.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(" or ")
+            ),
+        });
     };
 
     let uninstall = msiexec(scratch, &prefix, &["/x", &msi_win, "/qn"])?;

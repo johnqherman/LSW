@@ -109,7 +109,7 @@ fn exports_typed<Pe: ImageNtHeaders>(path: &Path, data: &[u8]) -> Result<Vec<Str
         }
         if let Ok(name) = table.name_from_pointer(name_pointer) {
             scanned += name.len();
-            names.entry(ordinal_index as u32).or_insert(name);
+            names.entry(u32::from(ordinal_index)).or_insert(name);
         }
     }
     for i in 0..count {

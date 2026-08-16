@@ -6,7 +6,7 @@ use minidump::{Minidump, MinidumpException, MinidumpModuleList, MinidumpSystemIn
 use crate::envops::Environment;
 use crate::error::{Error, Result};
 
-const DUMP_TIMEOUT: Duration = Duration::from_secs(120);
+const DUMP_TIMEOUT: Duration = Duration::from_mins(2);
 
 #[derive(Debug, Clone)]
 pub struct DumpSummary {

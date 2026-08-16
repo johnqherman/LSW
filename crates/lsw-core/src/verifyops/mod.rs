@@ -3,7 +3,7 @@ use std::process::{Command, Output};
 use std::time::Duration;
 
 const SSH_MAX_OUTPUT: u64 = 16 * 1024 * 1024;
-const SSH_TIMEOUT: Duration = Duration::from_secs(300);
+const SSH_TIMEOUT: Duration = Duration::from_mins(5);
 
 pub(crate) fn capped_output(cmd: &mut Command) -> std::io::Result<Output> {
     let out = lsw_toolchain::capped_output_with(cmd, SSH_MAX_OUTPUT, Some(SSH_TIMEOUT))?;
@@ -167,15 +167,15 @@ pub fn run_on_host(
 pub fn crash_reason(exit_code: i32) -> Option<&'static str> {
     let status = exit_code as u32;
     let reason = match status {
-        0xC0000005 => "access violation",
-        0xC000001D => "illegal instruction",
-        0xC0000094 => "integer divide by zero",
-        0xC00000FD => "stack overflow",
-        0xC0000409 => "stack buffer overrun (fail-fast)",
-        0xC0000135 => "a required DLL was not found",
-        0xC0000139 => "an entry point was not found in a DLL",
-        0xC0000142 => "DLL initialization failed",
-        0xC000007B => "invalid image format (wrong architecture?)",
+        0xC000_0005 => "access violation",
+        0xC000_001D => "illegal instruction",
+        0xC000_0094 => "integer divide by zero",
+        0xC000_00FD => "stack overflow",
+        0xC000_0409 => "stack buffer overrun (fail-fast)",
+        0xC000_0135 => "a required DLL was not found",
+        0xC000_0139 => "an entry point was not found in a DLL",
+        0xC000_0142 => "DLL initialization failed",
+        0xC000_007B => "invalid image format (wrong architecture?)",
         _ => return None,
     };
     Some(reason)
@@ -454,9 +454,9 @@ mod tests {
 
     #[test]
     fn crash_reason_decodes_common_ntstatus() {
-        assert_eq!(crash_reason(-1073741819), Some("access violation"));
+        assert_eq!(crash_reason(-1_073_741_819), Some("access violation"));
         assert_eq!(
-            crash_reason(0xC0000135u32 as i32),
+            crash_reason(0xC000_0135u32 as i32),
             Some("a required DLL was not found")
         );
         assert_eq!(crash_reason(0), None);

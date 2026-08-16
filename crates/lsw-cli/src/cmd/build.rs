@@ -60,26 +60,23 @@ pub(crate) fn run(
     dirs: &Dirs,
 ) -> lsw_core::Result<ExitCode> {
     let (p, env) = active_env(dirs)?;
-    let program = match program {
-        Some(program) => program.clone(),
-        None => {
-            let build = lsw_core::build(&p, &env, &BuildOptions::default())?;
-            match pick_built(&build, true) {
-                Picked::None => {
-                    eprintln!("the build produced no .exe to run; pass a program explicitly");
-                    return Ok(ExitCode::FAILURE);
+    let program = if let Some(program) = program { program.clone() } else {
+        let build = lsw_core::build(&p, &env, &BuildOptions::default())?;
+        match pick_built(&build, true) {
+            Picked::None => {
+                eprintln!("the build produced no .exe to run; pass a program explicitly");
+                return Ok(ExitCode::FAILURE);
+            }
+            Picked::One(only) => {
+                eprintln!("Running {}", only.display());
+                only
+            }
+            Picked::Many(many) => {
+                eprintln!("the build produced multiple executables; pick one:");
+                for exe in &many {
+                    eprintln!("  lsw run {}", exe.display());
                 }
-                Picked::One(only) => {
-                    eprintln!("Running {}", only.display());
-                    only
-                }
-                Picked::Many(many) => {
-                    eprintln!("the build produced multiple executables; pick one:");
-                    for exe in &many {
-                        eprintln!("  lsw run {}", exe.display());
-                    }
-                    return Ok(ExitCode::FAILURE);
-                }
+                return Ok(ExitCode::FAILURE);
             }
         }
     };
@@ -117,7 +114,7 @@ fn capture_crash_dump(env: &lsw_core::Environment, program: &std::path::Path, ar
             }
         }
         Ok(false) => {
-            eprintln!("[lsw] no dump produced (the crash did not reproduce under winedbg)")
+            eprintln!("[lsw] no dump produced (the crash did not reproduce under winedbg)");
         }
         Err(e) => eprintln!("[lsw] dump capture failed: {e}"),
     }

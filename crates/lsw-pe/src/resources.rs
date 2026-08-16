@@ -156,15 +156,6 @@ fn between(text: &str, start: &str, end: &str) -> Option<String> {
 }
 
 pub(crate) fn parse_version(bytes: &[u8], out: &mut std::collections::BTreeMap<String, String>) {
-    let wide: Vec<u16> = bytes
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
-        .collect();
-    let tokens: Vec<String> = wide
-        .split(|&u| u == 0)
-        .filter(|s| !s.is_empty())
-        .map(String::from_utf16_lossy)
-        .collect();
     const KEYS: &[&str] = &[
         "FileVersion",
         "ProductVersion",
@@ -174,6 +165,15 @@ pub(crate) fn parse_version(bytes: &[u8], out: &mut std::collections::BTreeMap<S
         "OriginalFilename",
         "LegalCopyright",
     ];
+    let wide: Vec<u16> = bytes
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect();
+    let tokens: Vec<String> = wide
+        .split(|&u| u == 0)
+        .filter(|s| !s.is_empty())
+        .map(String::from_utf16_lossy)
+        .collect();
     let mut i = 0;
     while i + 1 < tokens.len() {
         if KEYS.contains(&tokens[i].as_str()) {

@@ -8,7 +8,7 @@ use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile};
 use crate::MZ_MAGIC;
 use crate::error::PeError;
 use crate::image::{PeImage, dispatch_pe};
-use crate::types::*;
+use crate::types::{BinaryKind, PeInfo, PeFormat, Machine, Subsystem};
 
 const ELF_MAGIC: &[u8; 4] = b"\x7fELF";
 const SHEBANG_MAGIC: &[u8; 2] = b"#!";

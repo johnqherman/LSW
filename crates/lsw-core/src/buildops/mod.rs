@@ -137,13 +137,12 @@ pub fn build(project: &Project, env: &Environment, opts: &BuildOptions) -> Resul
 
     let explicit = project.manifest.build.as_ref();
     let system = match (opts.system.as_deref(), explicit) {
-        (Some("explicit"), Some(_)) => BuildSystem::Explicit,
+        (Some("explicit") | None, Some(_)) => BuildSystem::Explicit,
         (Some(name), _) => {
             build_system_from_name(name).ok_or_else(|| Error::UnknownBuildSystem {
                 name: name.to_owned(),
             })?
         }
-        (None, Some(_)) => BuildSystem::Explicit,
         (None, None) => detect_build_system(&project.root).ok_or(Error::NoBuildSystem)?,
     };
 

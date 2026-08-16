@@ -73,14 +73,14 @@ fn load_config<Pe: ImageNtHeaders>(file: &PeFile<Pe>, data: &[u8], is_64: bool) 
     } else {
         Some(LoadCfg {
             size,
-            se_table: read_u32(
+            se_table: u64::from(read_u32(
                 bytes,
                 std::mem::offset_of!(pe::ImageLoadConfigDirectory32, sehandler_table),
-            ) as u64,
-            se_count: read_u32(
+            )),
+            se_count: u64::from(read_u32(
                 bytes,
                 std::mem::offset_of!(pe::ImageLoadConfigDirectory32, sehandler_count),
-            ) as u64,
+            )),
             guard_flags: read_u32(
                 bytes,
                 std::mem::offset_of!(pe::ImageLoadConfigDirectory32, guard_flags),
