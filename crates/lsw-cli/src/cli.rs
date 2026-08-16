@@ -412,6 +412,12 @@ pub(crate) enum DepsCmd {
     Remove { name: String },
     /// List installed libraries.
     List,
+    /// Install packages via vcpkg (bootstraps vcpkg on first use).
+    Vcpkg {
+        /// Package names to install (e.g. zlib, libpng).
+        #[arg(required = true)]
+        packages: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -679,6 +685,8 @@ pub(crate) enum PackageTargetArg {
     Msix,
     #[value(name = "nsis")]
     Nsis,
+    #[value(name = "inno")]
+    Inno,
     /// MSI plus a winget manifest trio (needs [package] `installer_url`).
     #[value(name = "winget")]
     Winget,

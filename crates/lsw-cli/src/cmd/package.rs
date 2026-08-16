@@ -28,6 +28,7 @@ pub(crate) fn package(
         PackageTargetArg::Msi => lsw_core::packageops::PackageTarget::Msi,
         PackageTargetArg::Msix => lsw_core::packageops::PackageTarget::Msix,
         PackageTargetArg::Nsis => lsw_core::packageops::PackageTarget::Nsis,
+        PackageTargetArg::Inno => lsw_core::packageops::PackageTarget::Inno,
         PackageTargetArg::Winget => lsw_core::packageops::PackageTarget::Winget,
     };
     let report = lsw_core::packageops::package(&p, &env, target, bundle_deps)?;

@@ -32,6 +32,8 @@ pub enum PackageTarget {
     Msix,
     /// Nsis.
     Nsis,
+    /// Inno Setup.
+    Inno,
     /// Winget.
     Winget,
 }
@@ -49,6 +51,8 @@ pub struct PackageReport {
     pub msix: Option<PathBuf>,
     /// Nsis.
     pub nsis: Option<PathBuf>,
+    /// Inno Setup.
+    pub inno: Option<PathBuf>,
     /// Winget.
     pub winget: Option<PathBuf>,
     /// Files.
@@ -156,6 +160,7 @@ pub fn package(
     let mut msi = None;
     let mut msix = None;
     let mut nsis = None;
+    let mut inno = None;
     let mut winget = None;
     match target {
         PackageTarget::PortableDirectory => {}
@@ -199,6 +204,9 @@ pub fn package(
         PackageTarget::Nsis => {
             nsis = Some(build_nsis(project, &dist, &dir, &stem, &files)?);
         }
+        PackageTarget::Inno => {
+            inno = Some(build_inno(project, env, &dist, &dir, &stem, &files)?);
+        }
         PackageTarget::Winget => {
             let installer = build_msi(project, env, &dist, &dir, &stem, &files)?;
             msi = Some(installer.clone());
@@ -212,6 +220,7 @@ pub fn package(
         msi,
         msix,
         nsis,
+        inno,
         winget,
         files,
         bundled,
@@ -558,6 +567,119 @@ fn build_nsis(
     Ok(out_path)
 }
 
+fn build_inno(
+    project: &Project,
+    env: &Environment,
+    dist: &std::path::Path,
+    dir: &std::path::Path,
+    stem: &str,
+    files: &[String],
+) -> Result<PathBuf> {
+    let wine = &env.manifest.runtime.executable;
+    let iscc = which("iscc").or_else(|| {
+        let pf = env.layout.drive_c().join("Program Files (x86)/Inno Setup 6/ISCC.exe");
+        pf.is_file().then_some(pf)
+    });
+    let Some(iscc) = iscc else {
+        return Err(Error::ToolMissing {
+            tool: "iscc".into(),
+            fix: "install Inno Setup 6 in the Wine prefix, or put iscc on PATH".into(),
+        });
+    };
+
+    let name = &project.manifest.project.name;
+    let pkg = &project.manifest.package;
+    let iss = render_iss(name, pkg, files);
+    let iss_path = dist.join(format!("{stem}.iss"));
+    strip_existing(&iss_path)?;
+    fs::write(&iss_path, &iss).map_err(|e| Error::io(iss_path.clone(), e))?;
+
+    let out_name = format!("{stem}-setup.exe");
+    let out_path = dist.join(&out_name);
+    strip_existing(&out_path)?;
+
+    let mapper = crate::envops::mapper(env, project);
+    let win_iss = mapper.to_windows(&std::path::absolute(&iss_path).map_err(|e| Error::io(iss_path.clone(), e))?)?;
+    let win_out = mapper.to_windows(&std::path::absolute(dist).map_err(|e| Error::io(dist.to_path_buf(), e))?)?;
+
+    let output = Command::new(wine)
+        .arg(&iscc)
+        .arg(&win_iss)
+        .arg(format!("/O{win_out}"))
+        .arg(format!("/F{}", stem_no_ext(&out_name)))
+        .arg("/Q")
+        .current_dir(dir)
+        .envs(lsw_runtime::base_env(&env.layout.prefix()))
+        .output()
+        .map_err(|e| Error::io(PathBuf::from("iscc"), e))?;
+    if !output.status.success() {
+        return Err(Error::BuildFailed {
+            command: format!(
+                "iscc {}: {}",
+                iss_path.display(),
+                String::from_utf8_lossy(&output.stdout).trim()
+            ),
+            code: output.status.code(),
+        });
+    }
+    Ok(out_path)
+}
+
+fn stem_no_ext(name: &str) -> &str {
+    name.strip_suffix(".exe").unwrap_or(name)
+}
+
+fn render_iss(name: &str, package: &lsw_config::PackageSection, files: &[String]) -> String {
+    let version = package.version.as_deref().unwrap_or("1.0.0");
+    let publisher = package.publisher.as_deref().unwrap_or("LSW");
+    let guid = deterministic_guid(&format!("lsw:{name}:inno"));
+
+    let mut file_entries = String::new();
+    for f in files {
+        let _ = writeln!(
+            file_entries,
+            "Source: \"{f}\"; DestDir: \"{{app}}\"; Flags: ignoreversion"
+        );
+    }
+
+    let mut icon_entries = String::new();
+    if package.shortcuts == Some(true) {
+        for f in files {
+            let p = std::path::Path::new(f);
+            if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")) {
+                let title = p
+                    .file_stem()
+                    .map_or_else(|| f.clone(), |s| s.to_string_lossy().into_owned());
+                let _ = writeln!(
+                    icon_entries,
+                    "Name: \"{{group}}\\{title}\"; Filename: \"{{app}}\\{f}\""
+                );
+            }
+        }
+    }
+
+    let mut sections = format!(
+        "[Setup]\n\
+         AppId={{{guid}}}\n\
+         AppName={name}\n\
+         AppVersion={version}\n\
+         AppPublisher={publisher}\n\
+         DefaultDirName={{autopf}}\\{name}\n\
+         DefaultGroupName={name}\n\
+         OutputDir=.\n\
+         Compression=lzma2\n\
+         SolidCompression=yes\n\
+         ArchitecturesInstallIn64BitMode=x64compatible\n\
+         \n\
+         [Files]\n\
+         {file_entries}"
+    );
+    if !icon_entries.is_empty() {
+        let _ = write!(sections, "\n[Icons]\n{icon_entries}");
+    }
+    sections
+}
+
 fn dist_relative_out(dist: &std::path::Path, dir: &std::path::Path, out_name: &str) -> String {
     let out = dist.join(out_name);
     pathdiff_display(&out, dir)
@@ -736,6 +858,44 @@ mod tests {
             vec!["kernel32.dll"]
         );
         assert_eq!(missing.into_iter().collect::<Vec<_>>(), vec!["gone.dll"]);
+    }
+
+    #[test]
+    fn render_iss_basic_template() {
+        let pkg = lsw_config::PackageSection::default();
+        let iss = render_iss("demo", &pkg, &["app.exe".into(), "lib.dll".into()]);
+        assert!(iss.contains("AppName=demo"));
+        assert!(iss.contains("AppVersion=1.0.0"));
+        assert!(iss.contains("AppPublisher=LSW"));
+        assert!(iss.contains("[Files]"));
+        assert!(iss.contains("Source: \"app.exe\""));
+        assert!(iss.contains("Source: \"lib.dll\""));
+        assert!(!iss.contains("[Icons]"));
+    }
+
+    #[test]
+    fn render_iss_with_shortcuts() {
+        let pkg = lsw_config::PackageSection {
+            shortcuts: Some(true),
+            ..Default::default()
+        };
+        let iss = render_iss("demo", &pkg, &["app.exe".into()]);
+        assert!(iss.contains("[Icons]"));
+        assert!(iss.contains("app"));
+    }
+
+    #[test]
+    fn render_iss_deterministic_guid() {
+        let pkg = lsw_config::PackageSection::default();
+        let a = render_iss("x", &pkg, &["a.exe".into()]);
+        let b = render_iss("x", &pkg, &["a.exe".into()]);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn stem_no_ext_strips_exe() {
+        assert_eq!(stem_no_ext("foo-setup.exe"), "foo-setup");
+        assert_eq!(stem_no_ext("bar.txt"), "bar.txt");
     }
 
     #[test]
