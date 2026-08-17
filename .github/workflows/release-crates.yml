@@ -14,29 +14,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo publish -p lsw-path --no-verify
+      - run: cargo publish -p lsw-path --no-verify 2>&1 | tee /tmp/cp.log || grep -q 'already uploaded' /tmp/cp.log
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - run: sleep 15
-      - run: cargo publish -p lsw-pe --no-verify
+      - run: cargo publish -p lsw-pe --no-verify 2>&1 | tee /tmp/cp.log || grep -q 'already uploaded' /tmp/cp.log
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - run: sleep 15
-      - run: cargo publish -p lsw-config --no-verify
+      - run: cargo publish -p lsw-config --no-verify 2>&1 | tee /tmp/cp.log || grep -q 'already uploaded' /tmp/cp.log
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - run: sleep 15
-      - run: cargo publish -p lsw-toolchain --no-verify
+      - run: cargo publish -p lsw-toolchain --no-verify 2>&1 | tee /tmp/cp.log || grep -q 'already uploaded' /tmp/cp.log
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - run: cargo publish -p lsw-runtime --no-verify
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - run: sleep 15
-      - run: cargo publish -p lsw-core --no-verify
+      - run: cargo publish -p lsw-runtime --no-verify 2>&1 | tee /tmp/cp.log || grep -q 'already uploaded' /tmp/cp.log
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - run: sleep 15
-      - run: cargo publish -p lsw --no-verify
+      - run: cargo publish -p lsw-core --no-verify 2>&1 | tee /tmp/cp.log || grep -q 'already uploaded' /tmp/cp.log
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - run: sleep 15
+      - run: cargo publish -p lsw --no-verify 2>&1 | tee /tmp/cp.log || grep -q 'already uploaded' /tmp/cp.log
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
