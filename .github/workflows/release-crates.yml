@@ -12,7 +12,7 @@ jobs:
     name: cargo publish
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo publish -p lsw-path --no-verify 2>&1 | tee /tmp/cp.log || grep -q 'already uploaded' /tmp/cp.log
         env:
